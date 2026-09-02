@@ -870,12 +870,15 @@ const CONFIG = {
   // Kui tihti laaditakse Eleringist uued hinnad (minutites). Ohutu muuta, soovitatav 5–30.
   uuendusMinutites: 10,
 
-  // Varuvariant, kui brauser blokeerib otsepäringu Eleringi API-le (CORS). Jäta tühjaks ("")
-  // seni, kuni rakendus töötab. Kui GitHub Pagesis tuleb ikka viga, pane siia proksi aadressi
-  // algus, mille lõppu lisatakse API aadress, näiteks:
-  //   "https://api.allorigins.win/raw?url="   või   "https://corsproxy.io/?url="
-  // NB! Proksi on kolmanda osapoole teenus: see võib olla aeglane või ajutiselt kättesaamatu.
-  // Rakendus proovib alati kõigepealt otsepäringut ja kasutab proksit ainult siis, kui see ebaõnnestub.
+  // Eleringi API ei saada CORS-päiseid, seega brauser blokeerib otsepäringu. Selle vältimiseks
+  // laadib GitHub Actions töövoog hinnad kord tunnis samasse repositooriumi faili ja rakendus
+  // loeb neid siit. Nimi peab kattuma töövoos salvestatava faili nimega. Tühi ("") lülitab välja.
+  kohalikAndmefail: "hinnad.json",
+
+  // Teine varuvariant: avalik CORS-proksi, mille lõppu lisatakse API aadress, näiteks
+  //   "https://api.allorigins.win/raw?url="   või   "https://api.codetabs.com/v1/proxy?quest="
+  // NB! Proksi on kolmanda osapoole teenus, mis võib olla aeglane või ajutiselt kättesaamatu.
+  // Jäta tühjaks (""), kui kasutad kohalikku andmefaili.
   varuProksi: "",
 
   // Elektriauto laadimise kalkulaatori eeldused. Ohutu muuta.
@@ -1137,35 +1140,61 @@ function loadErrorMessage() {
   if (location.protocol === 'file:') {
     return 'Elektrihindade laadimine ebaõnnestus. Leht on avatud otse failina (file://) ja brauser blokeerib sellises olekus enamasti välised päringud. Ava leht kohaliku veebiserveri või GitHub Pagesi aadressi kaudu.';
   }
-  return 'Elektrihindade laadimine ebaõnnestus. Kontrolli internetiühendust või proovi mõne hetke pärast uuesti.';
+  return 'Elektrihindade laadimine ebaõnnestus. Kontrolli internetiühendust ja seda, et hinnad.json oleks repositooriumis olemas (vt CONFIG.kohalikAndmefail).';
 }
 
+/** Andmeallikad eelistuse järjekorras: kohalik fail, otsepäring, varuproksi. */
+function buildSources() {
+  const range = buildApiRange(new Date());
+  const apiUrl = `${API_URL}?start=${encodeURIComponent(range.start)}&end=${encodeURIComponent(range.end)}`;
+  // file:// alt ei saa brauser kohalikku faili lugeda, seega jäetakse see allikas siis vahele
+  const localFile = location.protocol === 'file:' || typeof CONFIG.kohalikAndmefail !== 'string'
+    ? '' : CONFIG.kohalikAndmefail.trim();
+  const proxy = typeof CONFIG.varuProksi === 'string' ? CONFIG.varuProksi.trim() : '';
+  const sources = [];
+  if (localFile) sources.push({ name: 'kohalik andmefail', url: `${localFile}?v=${Date.now()}` });
+  sources.push({ name: 'Eleringi otsepäring', url: apiUrl });
+  if (proxy) sources.push({ name: 'varuproksi', url: proxy + encodeURIComponent(apiUrl) });
+  return sources;
+}
+
+/**
+ * Laadib hinnad esimesest allikast, mis annab praegust hetke katvad andmed.
+ * Kui ükski allikas pole ajakohane, kasutatakse parimat saadud vastust (vanad andmed on
+ * parem kui tühi leht) ja kasutajale näidatakse hoiatust.
+ */
 async function fetchPrices() {
   if (state.loading) return;
   state.loading = true;
   renderStatus();
 
-  const range = buildApiRange(new Date());
-  const url = `${API_URL}?start=${encodeURIComponent(range.start)}&end=${encodeURIComponent(range.end)}`;
-  const proxy = typeof CONFIG.varuProksi === 'string' ? CONFIG.varuProksi.trim() : '';
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+  let result = null;
+  let fresh = false;
+  let lastError = null;
 
   try {
-    let result;
-    try {
-      result = await requestPrices(url, controller.signal);
-    } catch (directError) {
-      if (!proxy || controller.signal.aborted) throw directError;
-      console.error('Otsepäring Eleringi API-le ebaõnnestus, proovin varuproksit:', directError);
-      result = await requestPrices(proxy + encodeURIComponent(url), controller.signal);
+    for (const source of buildSources()) {
+      if (controller.signal.aborted) break;
+      try {
+        const candidate = await requestPrices(source.url, controller.signal);
+        if (getCurrentPricePeriod(candidate.periods, new Date())) { result = candidate; fresh = true; break; }
+        console.error(`Allikas "${source.name}" ei kata praegust hetke, proovin järgmist.`);
+        if (!result) result = candidate;
+        lastError = new Error(`${source.name}: andmed on aegunud`);
+      } catch (error) {
+        lastError = error;
+        console.error(`Allikas "${source.name}" ebaõnnestus:`, error);
+      }
     }
+    if (!result) throw lastError || new Error('Ühtegi andmeallikat pole saadaval');
 
     state.periods = result.periods;
     state.intervalMinutes = result.intervalMinutes;
     state.lastUpdated = new Date();
     state.error = null;
-    state.refreshFailed = false;
+    state.refreshFailed = !fresh;
     state.dataVersion += 1;
   } catch (error) {
     console.error('Elektrihindade laadimine ebaõnnestus:', error);
@@ -1627,7 +1656,9 @@ function renderStatus() {
   } else if (state.refreshFailed && !state.loading) {
     banner.hidden = false;
     banner.classList.add('banner--warn');
-    message.textContent = 'Hindade uuendamine ebaõnnestus. Kontrolli internetiühendust või proovi mõne hetke pärast uuesti.';
+    message.textContent = state.periods.length && !getCurrentPricePeriod(state.periods, new Date())
+      ? 'Hinnaandmed on aegunud: praegust hetke katvaid hindu ei õnnestunud laadida. Kuvatakse viimased saadud hinnad.'
+      : 'Hindade uuendamine ebaõnnestus. Kontrolli internetiühendust või proovi mõne hetke pärast uuesti.';
   } else {
     banner.hidden = true;
   }
