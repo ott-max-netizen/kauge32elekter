@@ -1,0 +1,69 @@
+# GitHub Actions töövoog: laadib Eleringist elektrihinnad ja salvestab need
+# repositooriumi faili hinnad.json. Leht loeb neid samast repost, nii et brauser
+# ei tee ühtegi välist päringut ja CORS-piirang ei sega.
+#
+# Fail peab asuma repositooriumis kaustas .github/workflows/
+
+name: Uuenda elektrihinnad
+
+on:
+  schedule:
+    # Iga tunni 7. minutil (UTC). GitHub võib käivitust mõne minuti võrra edasi lükata.
+    - cron: "7 * * * *"
+  # Lubab töövoo käsitsi käivitada Actions vahelehelt (kasuta seda esimesel korral).
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: uuenda-hinnad
+  cancel-in-progress: false
+
+jobs:
+  uuenda:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Võta repositoorium
+        uses: actions/checkout@v4
+
+      - name: Lae hinnad Eleringist
+        run: |
+          set -euo pipefail
+          START=$(date -u -d '3 days ago' +%Y-%m-%dT%H:%M:%S.000Z)
+          END=$(date -u -d '2 days' +%Y-%m-%dT%H:%M:%S.999Z)
+          echo "Vahemik: $START kuni $END"
+          curl --fail --silent --show-error --retry 3 --retry-delay 5 --max-time 60 \
+            "https://dashboard.elering.ee/api/nps/price?start=${START}&end=${END}" \
+            -o hinnad.uus.json
+
+      - name: Kontrolli, et vastus on korras
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, sys
+          with open('hinnad.uus.json', encoding='utf-8') as f:
+              data = json.load(f)
+          if data.get('success') is not True:
+              sys.exit('API vastus: success ei ole true')
+          rows = data.get('data', {}).get('ee')
+          if not isinstance(rows, list) or not rows:
+              sys.exit('API vastuses puudub data.ee massiiv või see on tühi')
+          for row in rows:
+              float(row['price']); int(row['timestamp'])
+          print(f'Korras: {len(rows)} hinnaperioodi')
+          PY
+          mv hinnad.uus.json hinnad.json
+
+      - name: Salvesta muudatus
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- hinnad.json; then
+            echo "Hinnad ei muutunud, uut commit'i ei tehta."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add hinnad.json
+          git commit -m "Uuenda elektrihinnad"
+          git push
