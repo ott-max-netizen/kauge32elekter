@@ -58,12 +58,14 @@ jobs:
       - name: Salvesta muudatus
         run: |
           set -euo pipefail
-          if git diff --quiet -- hinnad.json; then
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # NB! git add peab tulema enne võrdlust, muidu jääb esimesel korral uus fail märkamata.
+          git add hinnad.json
+          if git diff --staged --quiet; then
             echo "Hinnad ei muutunud, uut commit'i ei tehta."
             exit 0
           fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add hinnad.json
           git commit -m "Uuenda elektrihinnad"
           git push
+          echo "hinnad.json on repositooriumis uuendatud."
