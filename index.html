@@ -903,7 +903,7 @@ const CONFIG = {
     { kuu: "2026-05", kwh: 7265, eur: 1209.47 },
     { kuu: "2026-06", kwh: 3893, eur: 763.67 },
     { kuu: "2026-07", kwh: 4516, eur: 764.73 },
-    { kuu: "2026-08", kwh: 4682, eur: 186.50 }
+    { kuu: "2026-08", kwh: 4682, eur: 718.45 }
   ]
 };
 
@@ -2123,7 +2123,7 @@ function renderFinalPrice(d) {
       row('Börsihind ilma KM-ta', calc.spot),
       row('Müüja marginaal', calc.marginaal),
       row(`Võrgutasu (${tariffLabel})`, calc.vorgutasu),
-      row('Taastuvenergia tasu', calc.taastuvenergia),
+      row('Taastuvenergia+Varustuskindluse tasu', calc.taastuvenergia),
       row('Elektriaktsiis', calc.aktsiis),
       row(`Käibemaks ${vatPercent}%`, calc.vat),
       row('Lõpphind', calc.total, { class: 'breakdown__total' })
