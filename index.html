@@ -219,6 +219,10 @@ body {
   border-radius: var(--radius-sm);
   background: var(--surface-2);
 }
+.notice--warn {
+  background: var(--cat-kollane-bg);
+  color: var(--cat-kollane-fg);
+}
 
 /* ---------- Plokk 1: praegune hind ---------- */
 .card--hero {
@@ -870,8 +874,15 @@ const CONFIG = {
   // Kui tihti laaditakse Eleringist uued hinnad (minutites). Ohutu muuta, soovitatav 5–30.
   uuendusMinutites: 10,
 
+  // Homsed börsihinnad avaldatakse iga päev sel kellaajal (Eesti aja järgi, kujul "HH:MM").
+  // Kasutatakse teadetes ja selleks, et leht kontrolliks pärast seda hindu tihedamini. Ohutu muuta.
+  homsedHinnad: {
+    avaldamiseKell: "15:00",
+    hilinemiseTeadeMinutites: 30   // kui hindu pole selle aja jooksul lehele jõudnud, kuvatakse hoiatus
+  },
+
   // Eleringi API ei saada CORS-päiseid, seega brauser blokeerib otsepäringu. Selle vältimiseks
-  // laadib GitHub Actions töövoog hinnad kord tunnis samasse repositooriumi faili ja rakendus
+  // laadib GitHub Actions töövoog hinnad (iga päev pärast avaldamist) samasse repositooriumi faili ja rakendus
   // loeb neid siit. Nimi peab kattuma töövoos salvestatava faili nimega. Tühi ("") lülitab välja.
   kohalikAndmefail: "hinnad.json",
 
@@ -918,6 +929,9 @@ const CHART_HEIGHT = 230;
 const MINUTE_MS = 60000;
 const HOUR_MS = 3600000;
 const DAY_MS = 86400000;
+const PUBLISH_PIPELINE_MS = 3 * MINUTE_MS;     // töövoog + GitHub Pagesi avaldamine pärast avaldamiskellaaega
+const FAST_REFRESH_MS = 2 * MINUTE_MS;         // kontrolli samm, kuni homsed hinnad on käes
+const FAST_REFRESH_WINDOW_MS = 90 * MINUTE_MS; // kui kaua pärast avaldamist tihedalt kontrollitakse
 
 /* ==========================================================================
    2. Olek — hoitakse ainult JavaScripti mälus
@@ -985,6 +999,15 @@ function tallinnLocalToUtc(year, month, day, hour = 0, minute = 0) {
 function getTallinnDayStart(date, dayOffset = 0) {
   const p = getTallinnDateParts(date);
   return tallinnLocalToUtc(p.year, p.month, p.day + dayOffset, 0, 0);
+}
+
+/** Tänane homsete hindade avaldamise hetk Tallinna aja järgi (CONFIG.homsedHinnad.avaldamiseKell). */
+function getTomorrowPublishTime(now) {
+  const match = /^(\d{1,2}):(\d{2})$/.exec(String(CONFIG.homsedHinnad?.avaldamiseKell ?? ''));
+  const hour = match ? Number(match[1]) : 15;
+  const minute = match ? Number(match[2]) : 0;
+  const p = getTallinnDateParts(now);
+  return tallinnLocalToUtc(p.year, p.month, p.day, hour, minute);
 }
 
 /** API vahemik: eile 00:00 kuni ülehomme 00:00 Tallinna aja järgi, UTC ISO kujul (lõpp kaasa arvatud). */
@@ -1221,6 +1244,37 @@ function getDayPrices(periods, now, dayOffset) {
   return periods.filter(p => p.start.getTime() >= start && p.start.getTime() < end);
 }
 
+/** Kas Tallinna päev (dayOffset) on andmetes tervenisti kaetud? Arvestab ka 23/25 h DST-päevi. */
+function isDayComplete(dayPeriods, now, dayOffset) {
+  const start = getTallinnDayStart(now, dayOffset).getTime();
+  const end = getTallinnDayStart(now, dayOffset + 1).getTime();
+  let covered = 0;
+  for (const p of dayPeriods) {
+    covered += Math.max(0, Math.min(p.end.getTime(), end) - Math.max(p.start.getTime(), start));
+  }
+  return covered >= end - start;
+}
+
+/** Homsete hindade olek: 'available' | 'upcoming' (enne avaldamist) | 'pending' (avaldamine + ooteaeg) | 'late'. */
+function getTomorrowStatus(now, hasTomorrow) {
+  if (hasTomorrow) return { state: 'available' };
+  const publish = getTomorrowPublishTime(now);
+  const graceMs = Number(CONFIG.homsedHinnad?.hilinemiseTeadeMinutites ?? 30) * MINUTE_MS;
+  const nowMs = now.getTime();
+  if (nowMs < publish.getTime()) return { state: 'upcoming', publish, minutesLeft: (publish.getTime() - nowMs) / MINUTE_MS };
+  if (nowMs < publish.getTime() + graceMs) return { state: 'pending', publish };
+  return { state: 'late', publish };
+}
+
+/** Kasutajale kuvatav lause homsete hindade kohta; tühi, kui hinnad on olemas. */
+function tomorrowNotice(status) {
+  const at = status.publish ? formatTime(status.publish) : '';
+  if (status.state === 'upcoming') return `Homse päeva börsihinnad avaldatakse täna kell ${at} (${formatDuration(Math.ceil(status.minutesLeft))} pärast).`;
+  if (status.state === 'pending') return `Homse päeva börsihinnad peaksid ilmuma kell ${at}. Leht laadib need automaatselt mõne minuti jooksul.`;
+  if (status.state === 'late') return `Homse päeva börsihinnad pidid ilmuma kell ${at}, kuid pole veel lehele jõudnud. Leht proovib automaatselt uuesti.`;
+  return '';
+}
+
 function getCurrentPricePeriod(periods, now) {
   const t = now.getTime();
   return periods.find(p => p.start.getTime() <= t && t < p.end.getTime()) || null;
@@ -1429,7 +1483,11 @@ function derive() {
   const now = new Date();
   const all = state.periods;
   const today = getDayPrices(all, now, 0);
-  const tomorrow = getDayPrices(all, now, 1);
+  // Nord Pooli päev on Kesk-Euroopa ajas, seega Tallinna homne 00:00–01:00 on teada juba eilsest
+  // oksjonist. Homne loetakse avaldatuks alles siis, kui kogu päev on kaetud; `all` jääb muutmata,
+  // nii et planeerija kasutab need perioodid endiselt ära.
+  const tomorrowRaw = getDayPrices(all, now, 1);
+  const tomorrow = isDayComplete(tomorrowRaw, now, 1) ? tomorrowRaw : [];
   const current = getCurrentPricePeriod(all, now);
   const todayAvg = calculateWeightedAverage(today);
   const horizonEnd = now.getTime() + DAY_MS;
@@ -1437,6 +1495,7 @@ function derive() {
   return {
     now, all, today, tomorrow, current, todayAvg, future, horizonEnd,
     hasTomorrow: tomorrow.length > 0,
+    tomorrowStatus: getTomorrowStatus(now, tomorrow.length > 0),
     best2h: findBestWindow(future, now, 120, horizonEnd),
     best3h: findBestWindow(future, now, 180, horizonEnd)
   };
@@ -1527,7 +1586,7 @@ function analyzeNow(d) {
 
 /** Üks lühike praktiline soovitus reeglite põhjal. usedKey = fakt, mida soovitus juba ütleb. */
 function buildRecommendation(d, a) {
-  const { now, current, hasTomorrow, best2h, best3h } = d;
+  const { now, current, hasTomorrow, tomorrowStatus, best2h, best3h } = d;
   const nowMs = now.getTime();
   const minutesUntil = date => (date.getTime() - nowMs) / MINUTE_MS;
 
@@ -1584,7 +1643,7 @@ function buildRecommendation(d, a) {
     title: 'Praegu on hind üle päeva keskmise',
     text: hasTomorrow
       ? 'Saadaolevate hindade põhjal odavamat perioodi lähiajal ei paista.'
-      : 'Homse päeva hinnad pole veel avaldatud. Soovitus põhineb praegu saadaolevatel hindadel.',
+      : `${tomorrowNotice(tomorrowStatus)} Soovitus põhineb praegu saadaolevatel hindadel.`,
     usedKey: null
   };
 }
@@ -1757,12 +1816,14 @@ function renderPriceChart(d) {
     state.chartKey = '';
     state.chartItems = [];
     notice.hidden = false;
+    notice.classList.toggle('notice--warn', !isToday && state.periods.length > 0 && d.tomorrowStatus.state === 'late');
     if (!state.periods.length) notice.textContent = placeholderText();
     else if (isToday) notice.textContent = 'Tänase päeva börsihinnad puuduvad andmetes.';
-    else notice.textContent = 'Homse päeva börsihinnad pole veel avaldatud. Need avaldatakse tavaliselt pärastlõunal.';
+    else notice.textContent = tomorrowNotice(d.tomorrowStatus);
     return;
   }
   notice.hidden = true;
+  notice.classList.remove('notice--warn');
 
   const resolution = getChartResolution();
   const bars = (resolution === 60 && state.intervalMinutes < 60) ? aggregateHourly(dayPeriods) : dayPeriods;
@@ -2065,7 +2126,7 @@ function renderPlanner(d) {
   if (!fullHorizon) {
     nodes.push(el('p', { class: 'notice', text: d.hasTomorrow
       ? `Järgmise 24 tunni hinnad on saadaval kuni ${dataEnd ? describeTime(dataEnd, d.now, true) : '—'}. Soovitus põhineb saadaolevatel hindadel.`
-      : `Homse päeva hinnad pole veel avaldatud, seetõttu saab soovituse arvutada ainult olemasoleva perioodi kohta (kuni ${dataEnd ? describeTime(dataEnd, d.now, true) : '—'}).` }));
+      : `${tomorrowNotice(d.tomorrowStatus)} Seni arvutatakse soovitus olemasolevate hindade põhjal (kuni ${dataEnd ? describeTime(dataEnd, d.now, true) : '—'}).` }));
   }
   host.replaceChildren(...nodes);
 }
@@ -2094,7 +2155,7 @@ function renderEv(d) {
   } else {
     nodes.push(el('p', { class: 'notice', text: d.hasTomorrow
       ? `Saadaolevad hinnad ei kata ${formatDuration(result.minutes)} pikkust järjestikust laadimisaega.`
-      : `Homse päeva hinnad pole veel avaldatud, seetõttu ei saa ${formatDuration(result.minutes)} pikkust laadimisaega veel planeerida.` }));
+      : `${tomorrowNotice(d.tomorrowStatus)} Siis saab ${formatDuration(result.minutes)} pikkuse laadimise planeerida.` }));
   }
   host.replaceChildren(...nodes);
 }
@@ -2389,13 +2450,35 @@ function refreshIntervalMs() {
   return (Number.isFinite(minutes) && minutes >= 1 ? minutes : 10) * MINUTE_MS;
 }
 
+/** Järgmise andmekontrolli viivitus: pärast avaldamiskellaaega tihedalt, kuni homsed hinnad on käes. */
+function nextFetchDelayMs(now, hasTomorrow) {
+  const base = refreshIntervalMs();
+  if (hasTomorrow) return base;
+  const nowMs = now.getTime();
+  const firstCheck = getTomorrowPublishTime(now).getTime() + PUBLISH_PIPELINE_MS;
+  if (nowMs < firstCheck) return Math.min(base, firstCheck - nowMs);
+  if (nowMs < firstCheck + FAST_REFRESH_WINDOW_MS) return FAST_REFRESH_MS;
+  return base;
+}
+
+function scheduleNextFetch() {
+  const hasTomorrow = Boolean(state.derived && state.derived.hasTomorrow);
+  setTimeout(async () => {
+    try {
+      if (document.visibilityState === 'visible') await fetchPrices();
+    } finally {
+      scheduleNextFetch();
+    }
+  }, nextFetchDelayMs(new Date(), hasTomorrow));
+}
+
 function init() {
   setupControls();
   renderChartLegend();
   renderBuildingElectricity();
   renderAll();
   fetchPrices();
-  setInterval(fetchPrices, refreshIntervalMs());
+  scheduleNextFetch();
   startMinuteTick();
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState !== 'visible' || state.loading) return;
