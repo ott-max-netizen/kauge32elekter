@@ -58,3 +58,9 @@ käibemaksuta.
 ## Piirangud
 
 - Lõpphind on hinnang; tegelik arve sõltub elektri- ja võrgulepingust.
+
+## Versioon ja muudatuste ajalugu
+
+- Praegune versioon: **v2.0.0** (määratud konstandis `APP_VERSION` failis `index.html`).
+- Üksikasjalik ülevaade UI/UX muudatustest, komponentide klassidest ja arhitektuurireeglitest (sh juhised Claude AI-le) asub failis [CHANGELOG.md](CHANGELOG.md).
+
