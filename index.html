@@ -12,7 +12,7 @@
 <title>Kauge 32 elektriinfo</title>
 <style>
 /* ==========================================================================
-   Kauge 32 elektriinfo — kujundus (v2.0.0)
+   Kauge 32 elektriinfo — kujundus (v2.1.0)
    Kõik värvid, raadiused ja vahed on defineeritud custom property'tena.
    ========================================================================== */
 :root {
@@ -408,12 +408,13 @@ body {
   font: inherit;
   font-weight: 600;
   min-height: 40px;
-  padding: 0 18px;
+  padding: 0 16px;
   border-radius: 999px;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  transition: background-color 0.12s ease, color 0.12s ease;
 }
 .tab[aria-selected="true"] {
   background: var(--text);
@@ -497,6 +498,19 @@ body {
   font-size: 15px;
 }
 
+@media (hover: hover) {
+  .tab:not([aria-selected="true"]):hover {
+    background: var(--surface);
+  }
+  .segmented input:not(:checked) + label:hover {
+    border-color: var(--muted);
+    background: var(--surface);
+  }
+  .ev__summary:hover .ev__summary-title {
+    color: var(--focus);
+  }
+}
+
 /* ---------- Graafik ---------- */
 .chart-status-bar {
   display: flex;
@@ -539,8 +553,10 @@ body {
   touch-action: pan-y;
   user-select: none;
   -webkit-user-select: none;
+  cursor: crosshair;
 }
 
+.bar { transition: opacity 0.1s ease; }
 .bar--past { opacity: 0.38; }
 .bar--active { stroke: var(--text); stroke-width: 2; opacity: 1 !important; }
 .bar-current { animation: pulse 2.4s ease-in-out infinite; }
@@ -617,6 +633,14 @@ body {
   grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
   gap: var(--s2);
   margin: var(--s3) 0 0;
+}
+.stats--day {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+@media (min-width: 640px) {
+  .stats--day {
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  }
 }
 .stat {
   min-width: 0;
@@ -883,7 +907,7 @@ body {
   outline-offset: 2px;
 }
 
-/* ---------- Laiem ekraan ---------- */
+/* ---------- Laiem ekraan (Desktop & tahvel) ---------- */
 @media (min-width: 768px) {
   .app { padding: var(--s5); }
   .layout {
@@ -893,6 +917,7 @@ body {
       "now planner"
       "chart chart"
       "final building";
+    align-items: stretch;
   }
   #section-now { grid-area: now; }
   #section-planner { grid-area: planner; }
@@ -900,9 +925,40 @@ body {
   #section-final { grid-area: final; }
   #section-building { grid-area: building; }
   .layout.no-building #section-final { grid-column: 1 / -1; }
-  .card { padding: var(--s5); }
+  .card {
+    padding: var(--s5);
+    display: flex;
+    flex-direction: column;
+  }
+  #now-body,
+  #final-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
+  #now-body .facts {
+    margin-top: auto;
+    padding-top: var(--s3);
+  }
+  #section-planner .ev {
+    margin-top: auto;
+  }
+  #section-building #building-body {
+    margin-top: auto;
+    padding-top: var(--s2);
+  }
   .hero-price__value { font-size: 60px; }
   .stat__value { font-size: 24px; }
+}
+
+@media (min-width: 1024px) {
+  .app {
+    max-width: 1180px;
+    padding: var(--s5) var(--s6);
+  }
+  .app-title { font-size: 22px; }
+  .layout { gap: 20px; }
+  .card__title { font-size: 18px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -932,14 +988,15 @@ body {
       <div id="now-body"><p class="placeholder">Elektrihindade laadimine…</p></div>
     </section>
 
-    <!-- 2. Täna / homme graafik -->
+    <!-- 2. Eile / täna / homme graafik -->
     <section class="card card--chart" id="section-chart" aria-labelledby="h-chart">
       <div class="card__head">
-        <h2 id="h-chart" class="card__title">Börsihind täna ja homme</h2>
+        <h2 id="h-chart" class="card__title">Börsihind eile, täna ja homme</h2>
         <p class="card__hint">s/kWh koos käibemaksuga</p>
       </div>
       <div class="chart-controls">
         <div class="tabs" role="tablist" aria-label="Päeva valik">
+          <button type="button" role="tab" id="tab-yesterday" class="tab" data-day="yesterday" aria-selected="false" aria-controls="chart-panel" tabindex="-1">Eile</button>
           <button type="button" role="tab" id="tab-today" class="tab" data-day="today" aria-selected="true" aria-controls="chart-panel">Täna</button>
           <button type="button" role="tab" id="tab-tomorrow" class="tab" data-day="tomorrow" aria-selected="false" aria-controls="chart-panel" tabindex="-1">Homme</button>
         </div>
@@ -960,7 +1017,7 @@ body {
         </div>
         <p id="chart-notice" class="notice" hidden></p>
         <div id="chart-legend" class="legend" aria-label="Graafiku selgitus"></div>
-        <div id="day-summary" class="stats" role="group" aria-label="Valitud päeva madalaim, keskmine ja kõrgeim hind"></div>
+        <div id="day-summary" class="stats stats--day" role="group" aria-label="Valitud päeva madalaim, keskmine ja kõrgeim hind"></div>
       </div>
     </section>
 
@@ -1127,7 +1184,7 @@ const CONFIG = {
 };
 
 /* Tehnilised konstandid — neid ei ole tavakasutuses vaja muuta. */
-const APP_VERSION = '2.0.0';
+const APP_VERSION = '2.1.0';
 const TIME_ZONE = 'Europe/Tallinn';
 const API_URL = 'https://dashboard.elering.ee/api/nps/price';
 const API_TIMEOUT_MS = 20000;
@@ -1135,6 +1192,7 @@ const PLANNER_DURATIONS = [60, 120, 180, 240, 300, 360]; // minutit
 const CATEGORY_ORDER = ['roheline', 'kollane', 'oranz', 'punane'];
 const MAX_PERIOD_MINUTES = 60;   // pikim lubatud hinnaperiood
 const CHART_HEIGHT = 230;
+const CHART_HEIGHT_DESKTOP = 264;
 const MINUTE_MS = 60000;
 const HOUR_MS = 3600000;
 const DAY_MS = 86400000;
@@ -1149,7 +1207,7 @@ const state = {
   periods: [],            // normaliseeritud hinnaperioodid (vt normalizePrices)
   intervalMinutes: 60,    // tuvastatud API perioodi pikkus (15 või 60)
   dataVersion: 0,         // suureneb iga eduka laadimisega
-  selectedDay: 'today',   // 'today' | 'tomorrow'
+  selectedDay: 'today',   // 'yesterday' | 'today' | 'tomorrow'
   chartResolution: null,  // 15 | 60 | null (= automaatne valik ekraani laiuse järgi)
   selectedDuration: 120,  // planeerija kestus minutites
   evChargerKw: Number(CONFIG.elektriauto.vaikimisiLaadijaKw),
@@ -1692,6 +1750,7 @@ function prepareBuildingData() {
 function derive() {
   const now = new Date();
   const all = state.periods;
+  const yesterday = getDayPrices(all, now, -1);
   const today = getDayPrices(all, now, 0);
   // Nord Pooli päev on Kesk-Euroopa ajas, seega Tallinna homne 00:00–01:00 on teada juba eilsest
   // oksjonist. Homne loetakse avaldatuks alles siis, kui kogu päev on kaetud; `all` jääb muutmata,
@@ -1699,11 +1758,13 @@ function derive() {
   const tomorrowRaw = getDayPrices(all, now, 1);
   const tomorrow = isDayComplete(tomorrowRaw, now, 1) ? tomorrowRaw : [];
   const current = getCurrentPricePeriod(all, now);
+  const yesterdayAvg = calculateWeightedAverage(yesterday);
   const todayAvg = calculateWeightedAverage(today);
   const horizonEnd = now.getTime() + DAY_MS;
   const future = all.filter(p => p.end.getTime() > now.getTime() && p.start.getTime() < horizonEnd);
   return {
-    now, all, today, tomorrow, current, todayAvg, future, horizonEnd,
+    now, all, yesterday, today, tomorrow, current, yesterdayAvg, todayAvg, future, horizonEnd,
+    hasYesterday: yesterday.length > 0,
     hasTomorrow: tomorrow.length > 0,
     tomorrowStatus: getTomorrowStatus(now, tomorrow.length > 0),
     best2h: findBestWindow(future, now, 120, horizonEnd),
@@ -2033,12 +2094,17 @@ function renderChartLegend() {
 function renderPriceChart(d) {
   const host = byId('chart-svg-host');
   const notice = byId('chart-notice');
+  const dayConfig = state.selectedDay === 'yesterday'
+    ? { offset: -1, label: 'Eile', aria: 'Eilsed', periods: d.yesterday }
+    : state.selectedDay === 'tomorrow'
+      ? { offset: 1, label: 'Homme', aria: 'Homsed', periods: d.tomorrow }
+      : { offset: 0, label: 'Täna', aria: 'Tänased', periods: d.today };
   const isToday = state.selectedDay === 'today';
-  const dayPeriods = isToday ? d.today : d.tomorrow;
-  const dayStart = getTallinnDayStart(d.now, isToday ? 0 : 1);
-  const dayEnd = getTallinnDayStart(d.now, isToday ? 1 : 2);
+  const dayPeriods = dayConfig.periods;
+  const dayStart = getTallinnDayStart(d.now, dayConfig.offset);
+  const dayEnd = getTallinnDayStart(d.now, dayConfig.offset + 1);
 
-  byId('chart-day-label').textContent = `${isToday ? 'Täna' : 'Homme'}, ${dateLongFormatter.format(dayStart)}`;
+  byId('chart-day-label').textContent = `${dayConfig.label}, ${dateLongFormatter.format(dayStart)}`;
   updateResolutionToggle();
   updateTomorrowTab(d);
 
@@ -2048,8 +2114,9 @@ function renderPriceChart(d) {
     state.chartKey = '';
     state.chartItems = [];
     notice.hidden = false;
-    notice.classList.toggle('notice--warn', !isToday && state.periods.length > 0 && d.tomorrowStatus.state === 'late');
+    notice.classList.toggle('notice--warn', state.selectedDay === 'tomorrow' && state.periods.length > 0 && d.tomorrowStatus.state === 'late');
     if (!state.periods.length) notice.textContent = placeholderText();
+    else if (state.selectedDay === 'yesterday') notice.textContent = 'Eilse päeva börsihinnad puuduvad andmetes.';
     else if (isToday) notice.textContent = 'Tänase päeva börsihinnad puuduvad andmetes.';
     else notice.textContent = tomorrowNotice(d.tomorrowStatus);
     return;
@@ -2070,15 +2137,15 @@ function renderPriceChart(d) {
 
   const hadFocus = host.firstChild && document.activeElement === host.firstChild;
   hideTooltip();
-  const chart = buildPriceChartSvg({ bars, avg, dayStart, dayEnd, width, currentTs, isToday, dayPeriods, bestWindow, nowMs: d.now.getTime() });
+  const chart = buildPriceChartSvg({ bars, avg, dayStart, dayEnd, width, currentTs, isToday, dayAriaLabel: dayConfig.aria, dayPeriods, bestWindow, nowMs: d.now.getTime() });
   state.chartItems = chart.items;
   host.replaceChildren(chart.svg);
   attachChartInteraction(chart.svg, chart.items, avg);
   if (hadFocus) chart.svg.focus();
 }
 
-function buildPriceChartSvg({ bars, avg, dayStart, dayEnd, width, currentTs, isToday, dayPeriods, bestWindow, nowMs }) {
-  const height = CHART_HEIGHT;
+function buildPriceChartSvg({ bars, avg, dayStart, dayEnd, width, currentTs, isToday, dayAriaLabel, dayPeriods, bestWindow, nowMs }) {
+  const height = width >= 640 ? CHART_HEIGHT_DESKTOP : CHART_HEIGHT;
   const padL = 38;
   const padR = 8;
   const padT = 18;
@@ -2109,7 +2176,7 @@ function buildPriceChartSvg({ bars, avg, dayStart, dayEnd, width, currentTs, isT
     role: 'group',
     tabindex: '0',
     'aria-roledescription': 'tulpdiagramm',
-    'aria-label': `${isToday ? 'Tänased' : 'Homsed'} börsihinnad ${bars.length} perioodi kaupa. ` +
+    'aria-label': `${dayAriaLabel} börsihinnad ${bars.length} perioodi kaupa. ` +
       `Madalaim ${formatCents(min.spotIncVatCentsKwh)} kell ${formatTime(min.start)}, ` +
       `kõrgeim ${formatCents(max.spotIncVatCentsKwh)} kell ${formatTime(max.start)}, ` +
       `päeva keskmine ${formatCents(avg)}. Nooleklahvidega või sõrmega libistades saab perioode ükshaaval vaadata.`
@@ -2202,11 +2269,12 @@ function buildPriceChartSvg({ bars, avg, dayStart, dayEnd, width, currentTs, isT
     }));
   }
 
-  // X-telje kellaajad iga 4 tunni tagant (kohaliku aja järgi)
+  // X-telje kellaajad: laial ekraanil (>= 600px) iga 2 tunni tagant, mobiilis iga 4 tunni tagant
+  const hourStep = width >= 600 ? 2 : 4;
   const labelled = new Set();
   for (const item of items) {
     const parts = getTallinnDateParts(item.bar.start);
-    if (parts.minute !== 0 || parts.hour % 4 !== 0 || labelled.has(parts.hour)) continue;
+    if (parts.minute !== 0 || parts.hour % hourStep !== 0 || labelled.has(parts.hour)) continue;
     labelled.add(parts.hour);
     const lx = item.slotX;
     svg.append(svgEl('line', { x1: lx, x2: lx, y1: height - padB, y2: height - padB + 4, stroke: 'var(--muted)', 'stroke-width': 1 }));
@@ -2340,20 +2408,43 @@ function attachChartInteraction(svg, items, avg) {
 
 function renderDaySummary(d) {
   const host = byId('day-summary');
-  const dayPeriods = state.selectedDay === 'today' ? d.today : d.tomorrow;
+  const dayPeriods = state.selectedDay === 'yesterday'
+    ? d.yesterday
+    : state.selectedDay === 'tomorrow'
+      ? d.tomorrow
+      : d.today;
   if (!dayPeriods.length) { host.replaceChildren(); return; }
   const { min, max } = getMinMax(dayPeriods);
   const avg = calculateWeightedAverage(dayPeriods);
-  const tile = (label, value, time, modifier = '') => el('div', { class: 'stat' }, [
+  const tile = (label, valueText, subText, modifier = '') => el('div', { class: 'stat' }, [
     el('p', { class: 'stat__label', text: label }),
-    el('p', { class: modifier ? `stat__value ${modifier}` : 'stat__value', text: numberFormat.d2.format(value) }),
-    el('p', { class: 'stat__time', text: time ? `${time} · s/kWh` : 's/kWh' })
+    el('p', { class: modifier ? `stat__value ${modifier}` : 'stat__value', text: valueText }),
+    el('p', { class: 'stat__time', text: subText })
   ]);
-  host.replaceChildren(
-    tile('Madalaim', min.spotIncVatCentsKwh, formatTime(min.start), 'stat__value--good'),
-    tile('Keskmine', avg, null),
-    tile('Kõrgeim', max.spotIncVatCentsKwh, formatTime(max.start))
-  );
+
+  const tiles = [
+    tile('Madalaim', numberFormat.d2.format(min.spotIncVatCentsKwh), `${formatTime(min.start)} · s/kWh`, 'stat__value--good'),
+    tile('Keskmine', numberFormat.d2.format(avg), 's/kWh'),
+    tile('Kõrgeim', numberFormat.d2.format(max.spotIncVatCentsKwh), `${formatTime(max.start)} · s/kWh`)
+  ];
+
+  // Neljas KPI-kaart: päevade keskmiste võrdlus (täna vs eile, või eile/homme vs täna)
+  const refAvg = state.selectedDay === 'today' ? d.yesterdayAvg : d.todayAvg;
+  const refLabel = state.selectedDay === 'today' ? 'Võrdlus eilsega' : 'Võrdlus tänasega';
+  const refSubPrefix = state.selectedDay === 'today' ? 'eile keskm.' : 'täna keskm.';
+  if (avg != null && refAvg != null) {
+    const diff = avg - refAvg;
+    const sign = diff > 0.005 ? '+' : '';
+    const mod = diff < -0.05 ? 'stat__value--good' : diff > 0.05 ? 'stat__value--bad' : '';
+    tiles.push(tile(
+      refLabel,
+      `${sign}${numberFormat.d2.format(diff)}`,
+      `${refSubPrefix} ${numberFormat.d2.format(refAvg)} s/kWh`,
+      mod
+    ));
+  }
+
+  host.replaceChildren(...tiles);
 }
 
 /** Sääst/vahe võrreldes viiteperioodi keskmisega; protsent ainult siis, kui see on tähenduslik. */
@@ -2703,14 +2794,14 @@ function renderAll() {
    9. Juhtelemendid, ajastus ja käivitus
    ========================================================================== */
 function selectDay(day) {
-  if (day !== 'today' && day !== 'tomorrow') return;
+  if (day !== 'yesterday' && day !== 'today' && day !== 'tomorrow') return;
   state.selectedDay = day;
   for (const tab of document.querySelectorAll('.tab')) {
     const selected = tab.dataset.day === day;
     tab.setAttribute('aria-selected', selected ? 'true' : 'false');
     tab.tabIndex = selected ? 0 : -1;
   }
-  byId('chart-panel').setAttribute('aria-labelledby', day === 'today' ? 'tab-today' : 'tab-tomorrow');
+  byId('chart-panel').setAttribute('aria-labelledby', `tab-${day}`);
   if (!state.derived) return;
   renderPriceChart(state.derived);
   renderDaySummary(state.derived);
