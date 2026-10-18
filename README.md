@@ -57,6 +57,9 @@ Accept: application/vnd.github+json
 ```
 
 2. Käesoleva aasta ja eelneva aasta vastavate kuude kokkuarvutatud tarbimist (`kwh`) ja kogumaksumust (`eur` koos võrgutasude, aktsiisi ja käibemaksuga) massiivis `data.majaElekter`.
+   - Kuu maksumus on **hinnang**, mis arvutatakse `index.html` `CONFIG.hinnad` ja `CONFIG.ootariif` tariifidest (käibemaks kehtinud määra järgi: 20% kuni 2023, 22% kuni 30.06.2025). Kui tariife muuta, arvutab töövoog kõik kuud ümber (väli `tariff`).
+   - Kui kuu kohta on `CONFIG.majaElekter` all päris arve, näitab leht hinnangu asemel arve summat (märge „arve“).
+   - Jooksva kuu võrdluseks on eelmise aasta kuul `kwhToDate`/`eurToDate`: tarbimine ja kulu sama kuupäeva ja kellaajani, milleni jooksva kuu andmed Estfeedis olemas on.
 
 `timestamp` on perioodi algus (Unix sekundites, UTC), `price` on börsihind €/MWh ilma käibemaksuta ja `kwh` on 15-minutilise perioodi tarbimine kilovatt-tundides.
 
@@ -66,5 +69,5 @@ Accept: application/vnd.github+json
 
 ## Versioon ja muudatuste ajalugu
 
-- Praegune versioon: **v2.3.0** (määratud konstandis `APP_VERSION` failis `index.html`).
+- Praegune versioon: **v2.3.1** (määratud konstandis `APP_VERSION` failis `index.html`).
 - Üksikasjalik ülevaade UI/UX muudatustest, komponentide klassidest ja arhitektuurireeglitest (sh juhised Claude AI-le) asub failis [CHANGELOG.md](CHANGELOG.md).

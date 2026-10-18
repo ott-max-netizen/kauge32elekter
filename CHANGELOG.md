@@ -4,6 +4,30 @@ See fail kirjeldab rakenduse `index.html` versioonimuudatusi, arhitektuurilisi k
 
 ---
 
+## [2.3.1] — 2026-10-18
+
+### Ülevaade
+Paranduste versioon `2.3.1` (`APP_VERSION = '2.3.1'` failis `index.html`) parandab „Maja üldelektri“ kuuandmete arvutuse ja kuvamise vead.
+
+### 1. Töövoog (`.github/workflows/uuenda-hinnad.yml`)
+- **„Sama ajani“ võrdlus uueneb:** eelmise aasta sama kuu `kwhToDate`/`eurToDate` arvutatakse iga käivitusega uuesti (varem jäi see esimese käivituse väärtusele). Võrdlushetk on jooksva kuu viimase mõõdetud perioodi lõpp aasta varem, sest Estfeedi andmed jõuavad viivitusega.
+- **Tariifide muutus arvutab kuud ümber:** iga kuu kirjes on väli `tariff` (tariifide ja `ARVUTUSE_VERSIOON` sõrmejälg). Kui `CONFIG.hinnad` või `CONFIG.ootariif` muutub, arvutatakse vahemälus olevad kuud uuesti.
+- **Käibemaksu ajalugu (`KM_AJALUGU`):** kuni 31.12.2023 20%, kuni 30.06.2025 22%, hiljem `CONFIG.hinnad.kaibemaks`.
+- **Puuduva börsihinnaga kuud ei salvestata:** varem arvestati puuduvat hinda kui 0 €/MWh ja liiga väike summa jäi püsivalt vahemällu.
+- **Tühja Estfeedi vastusega kuud (`noData`)** kontrollitakse uuesti kord päevas (väli `checked`).
+- **Ilma EIC-filtrita varupäringut enam ei tehta:** see liitis kokku kõigi võtmele nähtavate mõõtepunktide tarbimise ja peitis vale `ELERING_EIC` väärtuse. Kui EIC puudub ja vastuses on mitu mõõtepunkti, andmeid ei kasutata.
+- **Tunniandmetega arvesti:** tunnine kogus jagatakse ühtlaselt neljale veerandtunnile (varem sai täistunni rida kogu tunni koguse ja tund loeti 1,75-kordselt).
+- **Aegunud OAuth token:** HTTP 401 korral küsitakse uus token ja päringut korratakse.
+
+### 2. Leht (`index.html`)
+- **Päris arved eelistatakse hinnangule:** `CONFIG.majaElekter` real olev `eur` asendab Estfeedi põhjal arvutatud summa. Valitud kuu juures on märge „arve“ või „hinnang“.
+- `prepareBuildingData` tagastab jälle `previousOfLatest`, nii et hinnagraafiku all ilmub uuesti „Aasta varem“ paan (jooksva kuu puhul sama ajani).
+- Jooksvat kuud võrreldakse ainult eelmise aasta sama ajaga. Kui see puudub, võrdlust ei näidata (varem võrreldi poolikut kuud terve kuuga).
+- Aastaarvu ei kuvata enam kaks korda („Oktoober 2026 2026“).
+- Vigased `CONFIG.majaElekter` read jäetakse jälle vahele ja logitakse konsooli.
+
+---
+
 ## [2.3.0] — 2026-10-18
 
 ### Ülevaade

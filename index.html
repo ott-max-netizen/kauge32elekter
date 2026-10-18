@@ -1207,7 +1207,9 @@ const CONFIG = {
     vorgutasuOo: 1.99,        // võrgutasu öötariif, s/kWh ilma KM-ta
     taastuvenergiaTasu: 1.598, // taastuvenergia tasu, s/kWh ilma KM-ta lisatud ka varustuskindluse tasu. 0.758
     aktsiis: 0.21,            // elektriaktsiis, s/kWh ilma KM-ta
-    kuutasu: 0.00,            // fikseeritud kuutasu, €/kuu; kuvatakse eraldi reana, 0 peidab rea
+    kuutasu: 0.00,            // fikseeritud kuutasu, €/kuu; kuvatakse eraldi reana, 0 peidab rea. Kui maja
+                              // kuu maksumus jääb arvest väiksemaks, lisa siia arvel olevad fikseeritud tasud
+                              // (töövoog arvutab tariifide muutumisel kõik kuud automaatselt ümber).
     kaibemaks: 24             // käibemaksu määr, % (kasutatakse kõikjal, ka börsihinna KM-ga näitamisel)
   },
 
@@ -1253,10 +1255,12 @@ const CONFIG = {
     laadijadKw: [3.6, 7.4, 11, 22]  // valitavad laadija võimsused, kW
   },
 
-  // Maja üldelektri tarbimine kuude kaupa. "kuu" kujul "AAAA-KK", "kwh" tarbitud
+  // Maja üldelektri arved kuude kaupa. "kuu" kujul "AAAA-KK", "kwh" tarbitud
   // kilovatt-tunnid, "eur" arve summa eurodes. Lisa iga kuu kohta üks rida;
-  // eelmise aasta sama kuu kuvatakse võrdlusena automaatselt. Allolevad read on
-  // näidisväärtused. Tühi massiiv [] peidab kogu "Maja üldelekter" ploki. Ohutu muuta.
+  // eelmise aasta sama kuu kuvatakse võrdlusena automaatselt. Kui Estfeed on
+  // seadistatud, tulevad kWh Estfeedist ja siinne "eur" asendab Estfeedi põhjal
+  // arvutatud hinnangu. Ilma Estfeedita peidab tühi massiiv [] kogu "Maja üldelekter"
+  // ploki. Ohutu muuta.
   majaElekter: [
     { kuu: "2025-05", kwh: 7245, eur: 1139.49 },
     { kuu: "2025-06", kwh: 6916, eur: 878.37 },
@@ -1270,7 +1274,7 @@ const CONFIG = {
 };
 
 /* Tehnilised konstandid — neid ei ole tavakasutuses vaja muuta. */
-const APP_VERSION = '2.3.0';
+const APP_VERSION = '2.3.1';
 const TIME_ZONE = 'Europe/Tallinn';
 const API_URL = 'https://dashboard.elering.ee/api/nps/price';
 const API_TIMEOUT_MS = 20000;
@@ -1832,30 +1836,55 @@ function calculateEvCharging(d, chargerKw) {
   return { energyKwh, minutes, best, cost };
 }
 
-/** Maja üldelektri andmed (eelistab Estfeedi andmeid failist hinnad.json, varuvariandina CONFIG.majaElekter).
+/** Maja üldelektri andmed: Estfeedi kuusummad failist hinnad.json, millele kirjutatakse peale CONFIG.majaElekter
+ *  päris arvete summad (Estfeedist arvutatud € on hinnang). Ilma Estfeedita kasutatakse ainult CONFIG-i.
  *  Genereerib alati täpselt viimased 12 järjestikust kalendrikuud. */
 function prepareBuildingData() {
-  const rawSource = Array.isArray(state.majaElekter) && state.majaElekter.length
-    ? state.majaElekter
-    : (Array.isArray(CONFIG.majaElekter) ? CONFIG.majaElekter : []);
-  if (!rawSource.length) return null;
+  const estfeedRows = Array.isArray(state.majaElekter) ? state.majaElekter : [];
+  const billRows = Array.isArray(CONFIG.majaElekter) ? CONFIG.majaElekter : [];
+  if (!estfeedRows.length && !billRows.length) return null;
 
-  const byIndex = new Map();
-  for (const row of rawSource) {
-    if (!row || typeof row !== 'object') continue;
-    const match = /^(\d{4})-(\d{2})$/.exec(String(row.kuu || ''));
-    if (!match) continue;
+  const parseMonth = row => {
+    const match = row && typeof row === 'object' ? /^(\d{4})-(\d{2})$/.exec(String(row.kuu || '')) : null;
+    if (!match) return null;
     const year = Number(match[1]);
     const month = Number(match[2]);
-    if (month < 1 || month > 12) continue;
-    const kwh = Number(row.kwh) || 0;
-    const eur = Number(row.eur) || 0;
-    const kwhToDate = row.kwhToDate != null && Number.isFinite(Number(row.kwhToDate)) ? Number(row.kwhToDate) : null;
-    const eurToDate = row.eurToDate != null && Number.isFinite(Number(row.eurToDate)) ? Number(row.eurToDate) : null;
-    const complete = row.complete !== false;
-    const noData = row.noData === true;
-    const index = year * 12 + month - 1;
-    byIndex.set(index, { key: `${year}-${match[2]}`, year, month, index, kwh, eur, kwhToDate, eurToDate, complete, noData });
+    if (month < 1 || month > 12) return null;
+    return { key: `${year}-${match[2]}`, year, month, index: year * 12 + month - 1 };
+  };
+  const optionalNumber = value => (value != null && Number.isFinite(Number(value)) ? Number(value) : null);
+
+  const byIndex = new Map();
+  for (const row of estfeedRows) {
+    const m = parseMonth(row);
+    if (!m) continue;
+    byIndex.set(m.index, {
+      ...m,
+      kwh: Number(row.kwh) || 0,
+      eur: Number(row.eur) || 0,
+      kwhToDate: optionalNumber(row.kwhToDate),
+      eurToDate: optionalNumber(row.eurToDate),
+      complete: row.complete !== false,
+      noData: row.noData === true,
+      billed: false
+    });
+  }
+  // Päris arve summa on täpsem kui Estfeedi põhjal arvutatud hinnang (see ei sisalda nt kõiki fikseeritud tasusid)
+  for (const row of billRows) {
+    const m = parseMonth(row);
+    const kwh = Number(row && row.kwh);
+    const eur = Number(row && row.eur);
+    if (!m || !Number.isFinite(kwh) || !Number.isFinite(eur)) {
+      console.error('CONFIG.majaElekter: vigane rida jäeti vahele', row);
+      continue;
+    }
+    const existing = byIndex.get(m.index);
+    if (existing && !existing.noData) {
+      existing.eur = eur;
+      existing.billed = true;
+    } else {
+      byIndex.set(m.index, { ...m, kwh, eur, kwhToDate: null, eurToDate: null, complete: true, noData: false, billed: true });
+    }
   }
 
   // Tuvasta sihtvahemiku lõppkuu (praegune Tallinna kuu või viimane andmetes esinev kuu)
@@ -1900,6 +1929,7 @@ function prepareBuildingData() {
   return {
     groups,
     latest,
+    previousOfLatest: groups[groups.length - 1].previous,
     totalKwh12,
     totalEur12,
     avgKwh,
@@ -2690,13 +2720,14 @@ function renderDaySummary(d) {
       `maksumus ${formatEur(curM.eur)}`
     ));
     if (prevM) {
-      const sub = prevM.kwhToDate != null && !curM.complete
-        ? `sama ajani ${numberFormat.d0.format(prevM.kwhToDate)} kWh · terve kuu ${formatEur(prevM.eur)}`
-        : `maksumus ${formatEur(prevM.eur)}`;
+      // Jooksvat kuud võrreldakse eelmise aasta sama ajaga, mitte terve kuuga
+      const toDate = !curM.complete && prevM.kwhToDate != null;
       tiles.push(tile(
         `Aasta varem (${mShort(prevM)} ${prevM.year})`,
-        `${numberFormat.d0.format(prevM.kwh)} kWh`,
-        sub
+        `${numberFormat.d0.format(toDate ? prevM.kwhToDate : prevM.kwh)} kWh`,
+        toDate
+          ? `sama ajani · terve kuu ${numberFormat.d0.format(prevM.kwh)} kWh`
+          : `maksumus ${formatEur(prevM.eur)}`
       ));
     }
   }
@@ -2927,12 +2958,18 @@ function renderBuildingElectricity() {
   const infoEl = byId('building-chart-info');
   if (infoEl) {
     const isOngoing = selectedRow.complete === false;
+    // monthName sisaldab juba aastat ("oktoober 2026")
     const curDesc = selectedRow.isPlaceholder
-      ? `${monthName(selectedRow)} ${selectedRow.year}: andmed puuduvad`
-      : `${monthName(selectedRow)} ${selectedRow.year}${isOngoing ? ' (jooksev)' : ''}: ${numberFormat.d0.format(selectedRow.kwh)} kWh (${formatEur(selectedRow.eur)})`;
-    const prevDesc = prevRow && prevRow.kwh > 0
-      ? ` · Aasta varem: ${numberFormat.d0.format(isOngoing && prevRow.kwhToDate ? prevRow.kwhToDate : prevRow.kwh)} kWh (${formatEur(isOngoing && prevRow.eurToDate ? prevRow.eurToDate : prevRow.eur)})`
-      : '';
+      ? `${monthName(selectedRow)}: andmed puuduvad`
+      : `${monthName(selectedRow)}${isOngoing ? ' (jooksev)' : ''}: ${numberFormat.d0.format(selectedRow.kwh)} kWh (${formatEur(selectedRow.eur)}, ${selectedRow.billed ? 'arve' : 'hinnang'})`;
+    let prevDesc = '';
+    if (prevRow && prevRow.kwh > 0) {
+      if (!isOngoing) {
+        prevDesc = ` · Aasta varem: ${numberFormat.d0.format(prevRow.kwh)} kWh (${formatEur(prevRow.eur)})`;
+      } else if (prevRow.kwhToDate != null) {
+        prevDesc = ` · Aasta varem sama ajani: ${numberFormat.d0.format(prevRow.kwhToDate)} kWh (${formatEur(prevRow.eurToDate)})`;
+      }
+    }
     infoEl.textContent = curDesc + prevDesc;
   }
 
@@ -2940,16 +2977,19 @@ function renderBuildingElectricity() {
 
   // 1. Valitud kuu
   statTiles.push(el('div', { class: 'stat' }, [
-    el('p', { class: 'stat__label', text: `${monthName(selectedRow)} ${selectedRow.year}` }),
+    el('p', { class: 'stat__label', text: monthName(selectedRow) }),
     el('p', { class: 'stat__value', text: selectedRow.isPlaceholder ? '—' : (metric === 'eur' ? formatEur(selectedRow.eur) : `${numberFormat.d0.format(selectedRow.kwh)} kWh`) }),
-    el('p', { class: 'stat__time', text: selectedRow.isPlaceholder ? 'andmed puuduvad' : (metric === 'eur' ? `${numberFormat.d0.format(selectedRow.kwh)} kWh` : formatEur(selectedRow.eur)) })
+    el('p', { class: 'stat__time', text: selectedRow.isPlaceholder ? 'andmed puuduvad' : (metric === 'eur'
+      ? `${numberFormat.d0.format(selectedRow.kwh)} kWh · ${selectedRow.billed ? 'arve' : 'hinnang'}`
+      : `${formatEur(selectedRow.eur)} · ${selectedRow.billed ? 'arve' : 'hinnang'}`) })
   ]));
 
   // 2. Võrdlus eelmise aastaga
   if (prevRow && !selectedRow.isPlaceholder) {
     const isOngoing = selectedRow.complete === false;
     const toDateKey = metric === 'eur' ? 'eurToDate' : 'kwhToDate';
-    const prevComp = isOngoing && prevRow[toDateKey] > 0 ? prevRow[toDateKey] : prevRow[metric];
+    // Jooksvat kuud võrreldakse ainult eelmise aasta sama ajaga; terve kuuga võrdlemine annaks vale tulemuse
+    const prevComp = isOngoing ? prevRow[toDateKey] : prevRow[metric];
     if (prevComp > 0 && selectedRow[metric] > 0) {
       const change = (selectedRow[metric] - prevComp) / prevComp * 100;
       const mod = change < -0.5 ? 'stat__value--good' : change > 0.5 ? 'stat__value--bad' : '';
