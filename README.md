@@ -66,6 +66,5 @@ Accept: application/vnd.github+json
 
 ## Versioon ja muudatuste ajalugu
 
-- Praegune versioon: **v2.2.0** (määratud konstandis `APP_VERSION` failis `index.html`).
+- Praegune versioon: **v2.3.0** (määratud konstandis `APP_VERSION` failis `index.html`).
 - Üksikasjalik ülevaade UI/UX muudatustest, komponentide klassidest ja arhitektuurireeglitest (sh juhised Claude AI-le) asub failis [CHANGELOG.md](CHANGELOG.md).
-

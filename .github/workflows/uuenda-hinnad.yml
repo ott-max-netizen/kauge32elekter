@@ -68,7 +68,7 @@ jobs:
           MAX_OOTUS_S = 40 * 60   # üks käivitus ootab kuni 40 min, edasi jätkab järgmine
           SAMM_S = 60             # kontrolli iga minuti järel
           ESTFEED_DELAY_S = 5.5   # Estfeed rate limit: max 1 päring 5 sekundi jooksul
-          MAX_BACKFILL_PAIRS = 4  # mitu ajaloolist kuupaari ühe käivitusega maksimaalselt juurde laetakse
+          MAX_BACKFILL_PAIRS = 12  # laeb ühe käivitusega kõik puuduvad kuud viimase 12 kuu aknas
 
           def tallinn_now():
               return datetime.now(TZ)
@@ -498,6 +498,8 @@ jobs:
                                   continue
                               if not m_kwh:
                                   print(f"Kuu {y:04d}-{m:02d} kohta mõõteandmed puuduvad.")
+                                  if is_comp:
+                                      cached_months[f"{y:04d}-{m:02d}"] = {"kuu": f"{y:04d}-{m:02d}", "kwh": 0.0, "eur": 0.0, "complete": True, "noData": True}
                                   continue
                               m_prices = fetch_nps_prices(ms, me, strict=False)
                               m_price_map = {r["timestamp"]: r["price"] for r in m_prices}

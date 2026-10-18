@@ -12,7 +12,7 @@
 <title>Kauge 32 elektriinfo</title>
 <style>
 /* ==========================================================================
-   Kauge 32 elektriinfo — kujundus (v2.2.0)
+   Kauge 32 elektriinfo — kujundus (v2.3.0)
    Kõik värvid, raadiused ja vahed on defineeritud custom property'tena.
    ========================================================================== */
 :root {
@@ -699,6 +699,57 @@ body {
   color: var(--muted);
 }
 
+.card__title-wrap {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  flex-wrap: wrap;
+}
+.badge-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--muted);
+  border: 1px solid var(--border);
+  line-height: 1.2;
+}
+
+.stats--building {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: var(--s2);
+}
+@media (min-width: 640px) {
+  .stats--building {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+.stats--building .stat {
+  padding: 8px 10px;
+}
+.stats--building .stat__value {
+  font-size: 16px;
+  letter-spacing: -0.01em;
+}
+.stats--building .stat__label,
+.stats--building .stat__time {
+  font-size: 11px;
+}
+.chart-host--building {
+  min-height: 162px;
+}
+.building-bar-hit {
+  cursor: pointer;
+  transition: fill 0.1s ease;
+}
+.building-bar-hit:hover {
+  fill: rgba(128, 128, 128, 0.08);
+}
+
 /* ---------- Plokk 3: planeerija ---------- */
 .plan {
   margin: var(--s3) 0 0;
@@ -1083,7 +1134,10 @@ body {
     <!-- 5. Maja üldelekter (peidetakse, kui CONFIG.majaElekter on tühi) -->
     <section class="card" id="section-building" aria-labelledby="h-building" hidden>
       <div class="card__head">
-        <h2 id="h-building" class="card__title">Maja üldelekter</h2>
+        <div class="card__title-wrap">
+          <h2 id="h-building" class="card__title">Maja üldelekter</h2>
+          <span id="building-rolling-badge" class="badge-pill" aria-label="12 kuu koondtarbimine" hidden></span>
+        </div>
         <fieldset class="segmented segmented--small" id="building-view">
           <legend class="visually-hidden">Näitaja</legend>
           <input type="radio" name="building-view" id="bv-kwh" value="kwh" checked><label for="bv-kwh">kWh</label>
@@ -1093,7 +1147,7 @@ body {
       <div class="chart-status-bar">
         <p id="building-chart-info" class="chart-day"></p>
       </div>
-      <div id="building-chart-host" class="chart-host"></div>
+      <div id="building-chart-host" class="chart-host chart-host--building"></div>
       <div id="building-body"></div>
     </section>
 
@@ -1216,7 +1270,7 @@ const CONFIG = {
 };
 
 /* Tehnilised konstandid — neid ei ole tavakasutuses vaja muuta. */
-const APP_VERSION = '2.2.0';
+const APP_VERSION = '2.3.0';
 const TIME_ZONE = 'Europe/Tallinn';
 const API_URL = 'https://dashboard.elering.ee/api/nps/price';
 const API_TIMEOUT_MS = 20000;
@@ -1778,38 +1832,80 @@ function calculateEvCharging(d, chargerKw) {
   return { energyKwh, minutes, best, cost };
 }
 
-/** Maja üldelektri andmed (eelistab Estfeedi andmeid failist hinnad.json, varuvariandina CONFIG.majaElekter). */
+/** Maja üldelektri andmed (eelistab Estfeedi andmeid failist hinnad.json, varuvariandina CONFIG.majaElekter).
+ *  Genereerib alati täpselt viimased 12 järjestikust kalendrikuud. */
 function prepareBuildingData() {
   const rawSource = Array.isArray(state.majaElekter) && state.majaElekter.length
     ? state.majaElekter
     : (Array.isArray(CONFIG.majaElekter) ? CONFIG.majaElekter : []);
-  const rows = [];
+  if (!rawSource.length) return null;
+
+  const byIndex = new Map();
   for (const row of rawSource) {
     if (!row || typeof row !== 'object') continue;
     const match = /^(\d{4})-(\d{2})$/.exec(String(row.kuu || ''));
-    const kwh = Number(row.kwh);
-    const eur = Number(row.eur);
-    if (!match || !Number.isFinite(kwh) || !Number.isFinite(eur)) {
-      console.error('majaElekter: vigane rida jäeti vahele', row);
-      continue;
-    }
+    if (!match) continue;
     const year = Number(match[1]);
     const month = Number(match[2]);
     if (month < 1 || month > 12) continue;
+    const kwh = Number(row.kwh) || 0;
+    const eur = Number(row.eur) || 0;
     const kwhToDate = row.kwhToDate != null && Number.isFinite(Number(row.kwhToDate)) ? Number(row.kwhToDate) : null;
     const eurToDate = row.eurToDate != null && Number.isFinite(Number(row.eurToDate)) ? Number(row.eurToDate) : null;
     const complete = row.complete !== false;
-    rows.push({ key: `${year}-${match[2]}`, year, month, index: year * 12 + month - 1, kwh, eur, kwhToDate, eurToDate, complete });
+    const noData = row.noData === true;
+    const index = year * 12 + month - 1;
+    byIndex.set(index, { key: `${year}-${match[2]}`, year, month, index, kwh, eur, kwhToDate, eurToDate, complete, noData });
   }
-  rows.sort((a, b) => a.index - b.index);
-  const byIndex = new Map(rows.map(r => [r.index, r]));
-  const unique = [...byIndex.values()].sort((a, b) => a.index - b.index);
-  if (!unique.length) return null;
-  const latest = unique[unique.length - 1];
-  const groups = unique
-    .filter(r => r.index > latest.index - 12)
-    .map(r => ({ current: r, previous: byIndex.get(r.index - 12) || null }));
-  return { groups, latest, previousOfLatest: byIndex.get(latest.index - 12) || null };
+
+  // Tuvasta sihtvahemiku lõppkuu (praegune Tallinna kuu või viimane andmetes esinev kuu)
+  const nowParts = getTallinnDateParts(new Date());
+  const nowIndex = nowParts.year * 12 + nowParts.month - 1;
+  const maxDataIndex = byIndex.size ? Math.max(...byIndex.keys()) : nowIndex;
+  const targetEndIndex = Math.max(nowIndex, maxDataIndex);
+
+  // Koosta täpselt viimased 12 järjestikust kuud
+  const groups = [];
+  let totalKwh12 = 0;
+  let totalEur12 = 0;
+  let countWithData = 0;
+
+  for (let offset = 11; offset >= 0; offset--) {
+    const idx = targetEndIndex - offset;
+    const year = Math.floor(idx / 12);
+    const month = (idx % 12) + 1;
+    const key = `${year}-${String(month).padStart(2, '0')}`;
+    const curRow = byIndex.get(idx) || {
+      key, year, month, index: idx, kwh: 0, eur: 0,
+      kwhToDate: null, eurToDate: null, complete: idx < nowIndex, isPlaceholder: true
+    };
+    const prevRow = byIndex.get(idx - 12) || null;
+
+    if (!curRow.isPlaceholder && curRow.kwh > 0) {
+      totalKwh12 += curRow.kwh;
+      totalEur12 += curRow.eur;
+      countWithData++;
+    }
+
+    groups.push({
+      current: curRow,
+      previous: prevRow
+    });
+  }
+
+  const latest = groups[groups.length - 1].current;
+  const avgKwh = countWithData > 0 ? totalKwh12 / countWithData : 0;
+  const avgEur = countWithData > 0 ? totalEur12 / countWithData : 0;
+
+  return {
+    groups,
+    latest,
+    totalKwh12,
+    totalEur12,
+    avgKwh,
+    avgEur,
+    countWithData
+  };
 }
 
 /** Tuletatud andmed praeguse hetke jaoks. */
@@ -2800,6 +2896,21 @@ function renderBuildingElectricity() {
 
   const metric = state.buildingView === 'eur' ? 'eur' : 'kwh';
   const unit = metric === 'eur' ? '€' : 'kWh';
+
+  // 12 kuu koondmaht pealkirja kõrval kapslis (säästab vertikaalset ruumi)
+  const badgeEl = byId('building-rolling-badge');
+  if (badgeEl) {
+    if (data.totalKwh12 > 0) {
+      const totalTxt = metric === 'eur'
+        ? formatEur(data.totalEur12)
+        : (data.totalKwh12 >= 10000 ? `${numberFormat.d1.format(data.totalKwh12 / 1000)} MWh` : `${numberFormat.d0.format(data.totalKwh12)} kWh`);
+      badgeEl.textContent = `12 k: ${totalTxt}`;
+      badgeEl.hidden = false;
+    } else {
+      badgeEl.hidden = true;
+    }
+  }
+
   const host = byId('building-chart-host');
   const width = Math.max(240, Math.floor(host.clientWidth || 320));
   const activeIdx = state.selectedBuildingIndex != null && data.groups[state.selectedBuildingIndex]
@@ -2815,96 +2926,158 @@ function renderBuildingElectricity() {
 
   const infoEl = byId('building-chart-info');
   if (infoEl) {
-    infoEl.textContent = prevRow
-      ? `${monthName(selectedRow)} ${selectedRow.year}${selectedRow.complete === false ? ' (jooksev)' : ''}: ${numberFormat.d1.format(selectedRow.kwh)} kWh (${formatEur(selectedRow.eur)}) · Aasta varem (${prevRow.year}): ${numberFormat.d1.format(prevRow.kwh)} kWh (${formatEur(prevRow.eur)})`
-      : `${monthName(selectedRow)} ${selectedRow.year}: ${numberFormat.d1.format(selectedRow.kwh)} kWh (${formatEur(selectedRow.eur)})`;
+    const isOngoing = selectedRow.complete === false;
+    const curDesc = selectedRow.isPlaceholder
+      ? `${monthName(selectedRow)} ${selectedRow.year}: andmed puuduvad`
+      : `${monthName(selectedRow)} ${selectedRow.year}${isOngoing ? ' (jooksev)' : ''}: ${numberFormat.d0.format(selectedRow.kwh)} kWh (${formatEur(selectedRow.eur)})`;
+    const prevDesc = prevRow && prevRow.kwh > 0
+      ? ` · Aasta varem: ${numberFormat.d0.format(isOngoing && prevRow.kwhToDate ? prevRow.kwhToDate : prevRow.kwh)} kWh (${formatEur(isOngoing && prevRow.eurToDate ? prevRow.eurToDate : prevRow.eur)})`
+      : '';
+    infoEl.textContent = curDesc + prevDesc;
   }
 
-  const statTiles = [
-    el('div', { class: 'stat' }, [
-      el('p', { class: 'stat__label', text: `${monthName(selectedRow)} ${selectedRow.year}` }),
-      el('p', { class: 'stat__value', text: metric === 'eur' ? formatEur(selectedRow.eur) : `${numberFormat.d1.format(selectedRow.kwh)} kWh` }),
-      el('p', { class: 'stat__time', text: metric === 'eur' ? `${numberFormat.d1.format(selectedRow.kwh)} kWh` : formatEur(selectedRow.eur) })
-    ])
-  ];
+  const statTiles = [];
 
-  if (prevRow) {
+  // 1. Valitud kuu
+  statTiles.push(el('div', { class: 'stat' }, [
+    el('p', { class: 'stat__label', text: `${monthName(selectedRow)} ${selectedRow.year}` }),
+    el('p', { class: 'stat__value', text: selectedRow.isPlaceholder ? '—' : (metric === 'eur' ? formatEur(selectedRow.eur) : `${numberFormat.d0.format(selectedRow.kwh)} kWh`) }),
+    el('p', { class: 'stat__time', text: selectedRow.isPlaceholder ? 'andmed puuduvad' : (metric === 'eur' ? `${numberFormat.d0.format(selectedRow.kwh)} kWh` : formatEur(selectedRow.eur)) })
+  ]));
+
+  // 2. Võrdlus eelmise aastaga
+  if (prevRow && !selectedRow.isPlaceholder) {
     const isOngoing = selectedRow.complete === false;
     const toDateKey = metric === 'eur' ? 'eurToDate' : 'kwhToDate';
     const prevComp = isOngoing && prevRow[toDateKey] > 0 ? prevRow[toDateKey] : prevRow[metric];
-    if (prevComp > 0) {
+    if (prevComp > 0 && selectedRow[metric] > 0) {
       const change = (selectedRow[metric] - prevComp) / prevComp * 100;
       const mod = change < -0.5 ? 'stat__value--good' : change > 0.5 ? 'stat__value--bad' : '';
       const subText = isOngoing && prevRow[toDateKey] != null
-        ? `sama ajani ${prevRow.year}: ${metric === 'eur' ? formatEur(prevRow.eurToDate) : `${numberFormat.d1.format(prevRow.kwhToDate)} kWh`} (kuu: ${numberFormat.d0.format(prevRow.kwh)} kWh)`
-        : `aasta varem ${metric === 'eur' ? formatEur(prevRow.eur) : `${numberFormat.d1.format(prevRow.kwh)} ${unit}`}`;
+        ? `sama ajani ${prevRow.year}: ${metric === 'eur' ? formatEur(prevRow.eurToDate) : `${numberFormat.d0.format(prevRow.kwhToDate)} kWh`}`
+        : `aasta varem ${metric === 'eur' ? formatEur(prevRow.eur) : `${numberFormat.d0.format(prevRow.kwh)} ${unit}`}`;
       statTiles.push(el('div', { class: 'stat' }, [
-        el('p', { class: 'stat__label', text: `Võrdlus (${selectedRow.year - 1})` }),
+        el('p', { class: 'stat__label', text: `Võrdlus (${prevRow.year})` }),
         el('p', { class: mod ? `stat__value ${mod}` : 'stat__value', text: `${numberFormat.signed1.format(change)}%` }),
         el('p', { class: 'stat__time', text: subText })
       ]));
+    } else {
+      statTiles.push(el('div', { class: 'stat' }, [
+        el('p', { class: 'stat__label', text: `Võrdlus (${selectedRow.year - 1})` }),
+        el('p', { class: 'stat__value', text: '—' }),
+        el('p', { class: 'stat__time', text: 'andmed puuduvad' })
+      ]));
     }
+  } else {
+    statTiles.push(el('div', { class: 'stat' }, [
+      el('p', { class: 'stat__label', text: `Võrdlus (${selectedRow.year - 1})` }),
+      el('p', { class: 'stat__value', text: '—' }),
+      el('p', { class: 'stat__time', text: 'võrdlus puudub' })
+    ]));
   }
 
+  // 3. Korteri kohta
   const flats = Number(CONFIG.korteriteArv);
   if (Number.isInteger(flats) && flats > 0) {
     statTiles.push(el('div', { class: 'stat' }, [
-      el('p', { class: 'stat__label', text: 'Korteri kohta' }),
-      el('p', { class: 'stat__value', text: formatEur(selectedRow.eur / flats) }),
-      el('p', { class: 'stat__time', text: `${numberFormat.d1.format(selectedRow.kwh / flats)} kWh / krt` })
+      el('p', { class: 'stat__label', text: `Korteri kohta (${flats} krt)` }),
+      el('p', { class: 'stat__value', text: selectedRow.isPlaceholder ? '—' : (metric === 'eur' ? formatEur(selectedRow.eur / flats) : `${numberFormat.d1.format(selectedRow.kwh / flats)} kWh`) }),
+      el('p', { class: 'stat__time', text: selectedRow.isPlaceholder ? '—' : (metric === 'eur' ? `${numberFormat.d1.format(selectedRow.kwh / flats)} kWh` : formatEur(selectedRow.eur / flats)) })
+    ]));
+  }
+
+  // 4. 12 kuu keskmine
+  if (data.countWithData > 0) {
+    statTiles.push(el('div', { class: 'stat' }, [
+      el('p', { class: 'stat__label', text: '12 k keskmine' }),
+      el('p', { class: 'stat__value', text: metric === 'eur' ? formatEur(data.avgEur) : `${numberFormat.d0.format(data.avgKwh)} kWh` }),
+      el('p', { class: 'stat__time', text: `kokku: ${metric === 'eur' ? `${numberFormat.d0.format(data.totalKwh12)} kWh` : formatEur(data.totalEur12)}` })
     ]));
   }
 
   byId('building-body').replaceChildren(
-    el('div', { class: 'stats' }, statTiles),
-    el('div', { class: 'legend' }, [
-      el('span', { class: 'legend__item' }, [el('span', { class: 'legend__swatch', style: '--swatch:var(--bar-primary)', 'aria-hidden': 'true' }), 'käesolev periood (puuduta tulpa kuu valimiseks)']),
-      data.groups.some(g => g.previous) ? el('span', { class: 'legend__item' }, [el('span', { class: 'legend__swatch legend__swatch--outline', 'aria-hidden': 'true' }), 'sama kuu aasta varem']) : null
+    el('div', { class: 'stats stats--building' }, statTiles),
+    el('div', { class: 'legend', style: 'margin-top:var(--s2);justify-content:space-between;' }, [
+      el('span', { class: 'legend__item' }, [
+        el('span', { class: 'legend__swatch', style: '--swatch:var(--bar-primary)', 'aria-hidden': 'true' }),
+        'viimased 12 kuud (puuduta tulpa)'
+      ]),
+      el('span', { class: 'legend__item' }, [
+        el('span', { class: 'legend__swatch legend__swatch--outline', 'aria-hidden': 'true' }),
+        'aasta varem'
+      ]),
+      data.groups.some(g => g.current.complete === false) ? el('span', { class: 'legend__item' }, [
+        el('span', { text: '* jooksev kuu (pooleli)', style: 'font-size:12px;color:var(--muted);' })
+      ]) : null
     ])
   );
 }
 
 function buildBuildingChartSvg(data, metric, width, activeIdx) {
-  const height = 200;
-  const padL = 44;
+  const isDesktop = width >= 640;
+  const height = isDesktop ? 176 : 162;
+  const padL = 36;
   const padR = 8;
-  const padT = 22;
-  const padB = 34;
+  const padT = 16;
+  const padB = 26;
   const plotW = width - padL - padR;
   const plotH = height - padT - padB;
   const groups = data.groups;
-  const values = groups.flatMap(g => [g.current[metric], g.previous ? g.previous[metric] : 0]);
-  const maxValue = Math.max(1, ...values) * 1.12;
-  const y = v => padT + (1 - v / maxValue) * plotH;
+  const values = groups.flatMap(g => [g.current[metric] || 0, g.previous ? (g.previous[metric] || 0) : 0]);
+  const maxValue = Math.max(1, ...values) * 1.14;
+  const y = v => padT + (1 - Math.max(0, v) / maxValue) * plotH;
+
   const svg = svgEl('svg', {
-    class: 'chart-svg', viewBox: `0 0 ${width} ${height}`, width, height, role: 'img',
-    'aria-label': `Maja üldelekter kuude kaupa (${metric === 'eur' ? 'eurodes' : 'kWh'}): ` +
-      groups.map(g => `${monthShortFormatter.format(new Date(Date.UTC(g.current.year, g.current.month - 1, 15)))} ${g.current.year} ${numberFormat.d0.format(g.current[metric])}` +
-        (g.previous ? ` (aasta varem ${numberFormat.d0.format(g.previous[metric])})` : '')).join(', ') + '.'
+    class: 'chart-svg chart-svg--building', viewBox: `0 0 ${width} ${height}`, width, height, role: 'img',
+    'aria-label': `Maja üldelekter viimased 12 kuud (${metric === 'eur' ? 'eurodes' : 'kWh'})`
   });
 
-  const axis = niceTicks(0, maxValue, 4);
+  // Teljejaotused (3 joont: 0, kesk, tipp)
+  const axis = niceTicks(0, maxValue, 3);
   for (const tick of axis.ticks) {
     const ty = y(tick);
     svg.append(svgEl('line', { x1: padL, x2: width - padR, y1: ty, y2: ty, stroke: 'var(--border)', 'stroke-width': 1 }));
-    svg.append(svgEl('text', { x: padL - 6, y: ty + 4, 'text-anchor': 'end', 'font-size': 12, fill: 'var(--muted)', text: axis.format.format(tick) }));
+    const tickText = tick >= 1000 && metric !== 'eur' ? `${Math.round(tick / 1000)}k` : axis.format.format(tick);
+    svg.append(svgEl('text', { x: padL - 5, y: ty + 4, 'text-anchor': 'end', 'font-size': 10, fill: 'var(--muted)', text: tickText }));
   }
 
   const slot = plotW / groups.length;
-  const barW = Math.min(36, Math.max(6, slot * 0.34));
-  const showAllValues = groups.length <= 6;
-  const labelEvery = slot >= 40 ? 1 : slot >= 20 ? 2 : 3;
-  let previousYear = null;
+  const barW = Math.max(5, Math.min(11, Math.floor(slot * 0.36)));
+
+  const MONTH_NAMES_SHORT = ['', 'Jaan', 'Veebr', 'Märts', 'Apr', 'Mai', 'Juun', 'Juul', 'Aug', 'Sept', 'Okt', 'Nov', 'Dets'];
+  const MONTH_NAMES_3 = ['', 'Jaa', 'Vee', 'Mär', 'Apr', 'Mai', 'Juu', 'Juu', 'Aug', 'Sep', 'Okt', 'Nov', 'Det'];
+
+  // Aasta vahetuse eraldusjoon
+  let janIndex = -1;
+  groups.forEach((g, i) => {
+    if (g.current.month === 1) janIndex = i;
+  });
+
+  if (janIndex > 0) {
+    const divX = padL + slot * janIndex;
+    svg.append(svgEl('line', {
+      x1: divX, x2: divX, y1: padT - 4, y2: height - padB + 14,
+      stroke: 'var(--border)', 'stroke-width': 1, 'stroke-dasharray': '2 2'
+    }));
+  }
+
   groups.forEach((g, i) => {
     const isSelected = i === activeIdx;
     const center = padL + slot * (i + 0.5);
-    const hasPrev = Boolean(g.previous);
-    const currentX = hasPrev ? center + 2 : center - barW / 2;
+    const hasPrev = Boolean(g.previous && g.previous[metric] > 0);
+    const hasCur = Boolean(g.current && g.current[metric] > 0);
+    const isOngoing = g.current && g.current.complete === false;
+    const prevX = center - barW - 1;
+    const currX = hasPrev ? center + 1 : center - barW / 2;
 
+    // Kogu tulba puute-/klikitsoon
     const hitZone = svgEl('rect', {
-      class: 'building-bar',
-      x: padL + slot * i, y: padT, width: slot, height: plotH,
-      fill: isSelected ? 'var(--surface-2)' : 'transparent', rx: 4
+      class: 'building-bar-hit',
+      x: padL + slot * i, y: padT - 4, width: slot, height: plotH + 8,
+      fill: isSelected ? 'var(--surface-2)' : 'transparent',
+      stroke: isSelected ? 'var(--border)' : 'none',
+      'stroke-width': 1,
+      rx: 4
     });
     hitZone.addEventListener('click', () => {
       state.selectedBuildingIndex = i;
@@ -2912,36 +3085,71 @@ function buildBuildingChartSvg(data, metric, width, activeIdx) {
     });
     svg.append(hitZone);
 
+    // Eelmise aasta tulp
     if (hasPrev) {
-      const prevX = center - barW - 2;
+      const prevVal = g.previous[metric];
+      const prevH = Math.max(1, y(0) - y(prevVal));
       svg.append(svgEl('rect', {
-        class: 'building-bar',
-        x: prevX, y: y(g.previous[metric]), width: barW, height: Math.max(1, y(0) - y(g.previous[metric])), rx: 3,
-        fill: 'var(--surface-2)', stroke: 'var(--bar-primary)', 'stroke-width': 1.5, 'stroke-dasharray': '4 3',
+        x: prevX, y: y(prevVal), width: barW, height: prevH, rx: 2,
+        fill: 'var(--surface-2)', stroke: 'var(--bar-primary)', 'stroke-width': 1, 'stroke-dasharray': '2 2',
+        opacity: isSelected ? 0.9 : 0.6,
         'pointer-events': 'none'
-      }));
-      if (showAllValues) svg.append(svgEl('text', { x: prevX + barW / 2, y: y(g.previous[metric]) - 5, 'text-anchor': 'middle', 'font-size': 11, fill: 'var(--muted)', text: numberFormat.d0.format(g.previous[metric]), 'pointer-events': 'none' }));
-    }
-    svg.append(svgEl('rect', {
-      class: isSelected ? 'building-bar bar--active' : 'building-bar',
-      x: currentX, y: y(g.current[metric]), width: barW, height: Math.max(1, y(0) - y(g.current[metric])), rx: 3,
-      fill: 'var(--bar-primary)', 'pointer-events': 'none'
-    }));
-    if (showAllValues || isSelected) {
-      svg.append(svgEl('text', {
-        x: currentX + barW / 2, y: y(g.current[metric]) - 5, 'text-anchor': 'middle', 'font-size': 12, 'font-weight': 700,
-        fill: 'var(--text)', text: numberFormat.d0.format(g.current[metric]), 'pointer-events': 'none'
       }));
     }
 
-    const monthLabel = monthShortFormatter.format(new Date(Date.UTC(g.current.year, g.current.month - 1, 15)));
-    if (i % labelEvery === 0) svg.append(svgEl('text', { x: center, y: height - padB + 16, 'text-anchor': 'middle', 'font-size': 12, 'font-weight': isSelected ? 700 : 400, fill: isSelected ? 'var(--text)' : 'var(--muted)', text: monthLabel }));
-    if (g.current.year !== previousYear) {
-      svg.append(svgEl('text', { x: center, y: height - padB + 30, 'text-anchor': 'middle', 'font-size': 11, fill: 'var(--muted)', text: String(g.current.year) }));
-      previousYear = g.current.year;
+    // Käesoleva perioodi tulp
+    if (hasCur) {
+      const curVal = g.current[metric];
+      const curH = Math.max(1, y(0) - y(curVal));
+      svg.append(svgEl('rect', {
+        x: currX, y: y(curVal), width: barW, height: curH, rx: 2,
+        fill: 'var(--bar-primary)',
+        opacity: isOngoing ? 0.82 : 1,
+        stroke: isOngoing ? 'var(--text)' : 'none',
+        'stroke-width': isOngoing ? 1 : 0,
+        'stroke-dasharray': isOngoing ? '2 1' : 'none',
+        'pointer-events': 'none'
+      }));
+
+      // Valitud tulba kohal kuvatakse number
+      if (isSelected) {
+        svg.append(svgEl('text', {
+          x: currX + barW / 2, y: y(curVal) - 4, 'text-anchor': 'middle',
+          'font-size': 11, 'font-weight': 700, fill: 'var(--text)',
+          text: numberFormat.d0.format(curVal), 'pointer-events': 'none'
+        }));
+      }
     }
+
+    // Kuu lühend X-teljel
+    const monthLabel = (slot < 32 ? MONTH_NAMES_3[g.current.month] : MONTH_NAMES_SHORT[g.current.month]) || '';
+    svg.append(svgEl('text', {
+      x: center, y: height - padB + 12, 'text-anchor': 'middle',
+      'font-size': 11, 'font-weight': isSelected ? 700 : 500,
+      fill: isSelected ? 'var(--text)' : 'var(--muted)',
+      text: monthLabel + (isOngoing ? '*' : ''),
+      'pointer-events': 'none'
+    }));
   });
-  svg.append(svgEl('line', { x1: padL, x2: width - padR, y1: y(0), y2: y(0), stroke: 'var(--muted)', 'stroke-width': 1 }));
+
+  // Aasta sildid graafiku allservas (nt '25 ja '26)
+  if (janIndex > 0) {
+    const y1Center = padL + slot * (janIndex / 2);
+    const y2Center = padL + slot * (janIndex + (12 - janIndex) / 2);
+    svg.append(svgEl('text', {
+      x: y1Center, y: height - 2, 'text-anchor': 'middle',
+      'font-size': 10, 'font-weight': 600, fill: 'var(--muted)',
+      text: `'${String(groups[0].current.year).slice(-2)}`, 'pointer-events': 'none'
+    }));
+    svg.append(svgEl('text', {
+      x: y2Center, y: height - 2, 'text-anchor': 'middle',
+      'font-size': 10, 'font-weight': 600, fill: 'var(--muted)',
+      text: `'${String(groups[groups.length - 1].current.year).slice(-2)}`, 'pointer-events': 'none'
+    }));
+  }
+
+  // Baasjoon
+  svg.append(svgEl('line', { x1: padL, x2: width - padR, y1: y(0), y2: y(0), stroke: 'var(--border)', 'stroke-width': 1 }));
   return svg;
 }
 
