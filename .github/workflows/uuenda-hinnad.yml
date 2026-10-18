@@ -50,7 +50,7 @@ jobs:
           ELERING_EIC: ${{ secrets.ELERING_EIC }}
         run: |
           python3 - <<'PY'
-          import json, math, os, re, sys, time, urllib.error, urllib.parse, urllib.request
+          import hashlib, json, math, os, re, sys, time, urllib.error, urllib.parse, urllib.request
           from datetime import datetime, timedelta, timezone
           from zoneinfo import ZoneInfo
 
@@ -69,6 +69,10 @@ jobs:
           SAMM_S = 60             # kontrolli iga minuti järel
           ESTFEED_DELAY_S = 5.5   # Estfeed rate limit: max 1 päring 5 sekundi jooksul
           MAX_BACKFILL_PAIRS = 12  # laeb ühe käivitusega kõik puuduvad kuud viimase 12 kuu aknas
+          # Suurenda, kui kuu maksumuse arvutusloogika muutub: kõik vahemälus olevad kuud arvutatakse siis ümber.
+          ARVUTUSE_VERSIOON = 2
+          # Eesti käibemaksu varasemad määrad: (kuni see hetk, määr %). Hilisemad kuud kasutavad CONFIG.hinnad.kaibemaks väärtust.
+          KM_AJALUGU = [(datetime(2024, 1, 1, tzinfo=TZ), 20.0), (datetime(2025, 7, 1, tzinfo=TZ), 22.0)]
 
           def tallinn_now():
               return datetime.now(TZ)
@@ -137,7 +141,19 @@ jobs:
               is_night = (cfg["nadalavahetusOnOo"] and is_weekend) or is_night_hour
               network = cfg["vorgutasuOo"] if is_night else cfg["vorgutasuPaev"]
               subtotal = spot_s + cfg["marginaal"] + network + cfg["taastuvenergiaTasu"] + cfg["aktsiis"]
-              return subtotal * (1.0 + cfg["kaibemaks"] / 100.0)
+              return subtotal * (1.0 + vat_percent(dt_tl, cfg) / 100.0)
+
+          def vat_percent(dt_tl, cfg):
+              """Antud hetkel kehtinud käibemaksu määr (%)."""
+              for until, pct in KM_AJALUGU:
+                  if dt_tl < until:
+                      return pct
+              return cfg["kaibemaks"]
+
+          def tariff_key(cfg):
+              """Tariifide ja arvutusloogika sõrmejälg. Muutusel arvutatakse vahemälus olevad kuud ümber."""
+              raw = json.dumps(cfg, sort_keys=True) + f"|v{ARVUTUSE_VERSIOON}"
+              return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:10]
 
           def fetch_nps_prices(start_dt, end_dt, strict=True):
               """Laeb Eleringi börsihinnad vahemikus [start_dt, end_dt). Tagastab [{timestamp, price}, ...]."""
@@ -231,34 +247,34 @@ jobs:
                   time.sleep(3 * attempt)
               return None
 
-          def fetch_estfeed_chunk(token, eic, start_dt, end_dt, resolution="fifteen_minutes"):
-              """Pärib Estfeedist kuni 30-päevase lõigu mõõteandmeid. Tagastab {timestamp_sec: kwh}."""
+          def fetch_estfeed_chunk(auth, eic, start_dt, end_dt, resolution="fifteen_minutes"):
+              """Pärib Estfeedist kuni 30-päevase lõigu mõõteandmeid. Tagastab {timestamp_sec: kwh} või vea korral None."""
               global last_estfeed_ts
               if end_dt <= start_dt:
                   return {}
 
-              def do_request(use_eic):
+              def do_request():
                   global last_estfeed_ts
-                  elapsed = time.monotonic() - last_estfeed_ts
-                  if last_estfeed_ts > 0 and elapsed < ESTFEED_DELAY_S:
-                      time.sleep(ESTFEED_DELAY_S - elapsed)
-
                   params = [
                       ("startDateTime", fmt_utc(start_dt)),
                       ("endDateTime", fmt_utc(end_dt)),
                       ("resolution", resolution),
                   ]
-                  if use_eic and eic:
+                  if eic:
                       for single_eic in [x.strip() for x in re.split(r"[,;\s]+", eic) if x.strip()]:
                           params.append(("meteringPointEics", single_eic))
                   url = f"{ESTFEED_URL}?{urllib.parse.urlencode(params)}"
-                  headers = {
-                      "Authorization": f"Bearer {token}",
-                      "Accept": "application/json",
-                      "User-Agent": UA,
-                  }
+                  token_refreshed = False
                   for attempt in range(1, 4):
+                      elapsed = time.monotonic() - last_estfeed_ts
+                      if last_estfeed_ts > 0 and elapsed < ESTFEED_DELAY_S:
+                          time.sleep(ESTFEED_DELAY_S - elapsed)
                       last_estfeed_ts = time.monotonic()
+                      headers = {
+                          "Authorization": f"Bearer {auth['token']}",
+                          "Accept": "application/json",
+                          "User-Agent": UA,
+                      }
                       try:
                           req = urllib.request.Request(url, headers=headers)
                           with urllib.request.urlopen(req, timeout=30) as r:
@@ -269,6 +285,14 @@ jobs:
                               err_text = e.read().decode("utf-8", errors="replace")[:240]
                           except Exception:
                               pass
+                          if e.code == 401 and not token_refreshed:
+                              # Token aegus pika täislaadimise ajal: küsi uus ja korda päringut
+                              print("Estfeed token aegus, küsin uue...")
+                              new_token = get_estfeed_token(auth["client_id"], auth["client_secret"])
+                              token_refreshed = True
+                              if new_token:
+                                  auth["token"] = new_token
+                                  continue
                           if e.code == 429 or e.code >= 500:
                               print(f"Estfeed HTTP {e.code}, ootan ja proovin uuesti ({attempt}/3)...")
                               time.sleep(6 * attempt)
@@ -279,14 +303,19 @@ jobs:
                           time.sleep(6 * attempt)
                   return None, 0
 
-              data, status = do_request(use_eic=bool(eic))
-              # Kui EIC-koodiga päring tagastas vea või tühja vastuse, proovi varuvariandina ilma EIC-filtrita
-              if eic and (status in (400, 403, 404, 422) or (isinstance(data, list) and not data)):
-                  print(f"EIC-filtriga päring tagastas oleku {status}, proovin ilma meteringPointEics parameetrita...")
-                  data, status = do_request(use_eic=False)
-
+              # NB! Ilma EIC-filtrita varupäringut ei tehta: see liidaks kokku kõigi võtmele
+              # nähtavate mõõtepunktide tarbimise ja peidaks vale ELERING_EIC väärtuse.
+              data, status = do_request()
               if status != 200 or not isinstance(data, list):
-                  warn(f"Estfeed päring ({fmt_utc(start_dt)} .. {fmt_utc(end_dt)}) ebaõnnestus (HTTP {status}): {data}")
+                  hint = " Kontrolli ELERING_EIC väärtust." if eic and status in (400, 403, 404, 422) else ""
+                  warn(f"Estfeed päring ({fmt_utc(start_dt)} .. {fmt_utc(end_dt)}) ebaõnnestus (HTTP {status}).{hint} {data}")
+                  return None
+
+              points_with_data = sum(
+                  1 for mp in data if isinstance(mp, dict) and mp.get("accountingIntervals")
+              )
+              if not eic and points_with_data > 1:
+                  warn(f"Estfeed tagastas {points_with_data} mõõtepunkti andmed. Määra ELERING_EIC, et maja tarbimisse ei liidetaks teisi mõõtepunkte.")
                   return None
 
               kwh_by_ts = {}
@@ -312,13 +341,13 @@ jobs:
                       kwh_by_ts[ts] = round(kwh_by_ts.get(ts, 0.0) + float(kwh), 4)
               return kwh_by_ts
 
-          def fetch_estfeed_range(token, eic, start_dt, end_dt, resolution="fifteen_minutes"):
+          def fetch_estfeed_range(auth, eic, start_dt, end_dt, resolution="fifteen_minutes"):
               """Pärib Estfeedist suvalise pikkusega vahemiku kuni 30-päevaste lõikude kaupa."""
               combined = {}
               cur = start_dt
               while cur < end_dt:
                   nxt = min(cur + timedelta(days=30), end_dt)
-                  chunk = fetch_estfeed_chunk(token, eic, cur, nxt, resolution=resolution)
+                  chunk = fetch_estfeed_chunk(auth, eic, cur, nxt, resolution=resolution)
                   if chunk is None:
                       return None
                   combined.update(chunk)
@@ -337,12 +366,19 @@ jobs:
               todate_kwh = 0.0
               todate_eur = 0.0
               count = 0
+              missing_price = 0
 
               for ts, kwh in kwh_map.items():
                   if not (t0 <= ts < t1):
                       continue
+                  # 15-min hind või (enne 1.10.2025) sama tunni hind
+                  spot_eur_mwh = price_by_ts.get(ts)
+                  if spot_eur_mwh is None:
+                      spot_eur_mwh = price_by_ts.get(ts - (ts % 3600))
+                  if spot_eur_mwh is None:
+                      missing_price += 1
+                      continue
                   count += 1
-                  spot_eur_mwh = price_by_ts.get(ts, price_by_ts.get(ts - (ts % 3600), 0.0))
                   dt_tl = datetime.fromtimestamp(ts, TZ)
                   final_s = calc_final_cents_kwh(spot_eur_mwh, dt_tl, tariff_cfg)
                   eur = kwh * final_s / 100.0
@@ -352,6 +388,10 @@ jobs:
                       todate_kwh += kwh
                       todate_eur += eur
 
+              if missing_price:
+                  # Ilma börsihinnata oleks kuu maksumus liiga väike; ära salvesta, järgmine käivitus proovib uuesti
+                  warn(f"Kuu {year:04d}-{month:02d}: {missing_price} perioodil puudub börsihind, kuud ei salvestata.")
+                  return None
               if count == 0:
                   return None
 
@@ -363,8 +403,9 @@ jobs:
                   "kwh": round(total_kwh, 2),
                   "eur": round(total_eur, 2),
                   "complete": bool(complete_flag),
+                  "tariff": tariff_key(tariff_cfg),
               }
-              if cutoff_ts is not None and todate_kwh > 0:
+              if cutoff_ts is not None:
                   rec["kwhToDate"] = round(todate_kwh, 2)
                   rec["eurToDate"] = round(todate_eur, 2)
               return rec
@@ -427,11 +468,14 @@ jobs:
               print("Autendin Estfeed API-ga...")
               token = get_estfeed_token(client_id, client_secret)
               if token:
+                  auth = {"token": token, "client_id": client_id, "client_secret": client_secret}
+                  cur_tariff = tariff_key(tariff_cfg)
+                  today_str = now.date().isoformat()
                   cur_y, cur_m = now.year, now.month
                   cur_m_start = month_start(cur_y, cur_m)
                   recent_start = min(start, cur_m_start)
                   print(f"Pärin 15-min tarbimisandmed ({fmt_utc(recent_start)} .. {fmt_utc(now)})...")
-                  recent_kwh = fetch_estfeed_range(token, eic, recent_start, now, resolution="fifteen_minutes")
+                  recent_kwh = fetch_estfeed_range(auth, eic, recent_start, now, resolution="fifteen_minutes")
 
                   if recent_kwh is not None:
                       estfeed_ok = True
@@ -441,10 +485,13 @@ jobs:
                       ee_step = (ee[1]["timestamp"] - ee[0]["timestamp"]) if len(ee) > 1 else 900
                       for row in ee:
                           ts = row["timestamp"]
-                          if ts in recent_kwh:
+                          if only_hourly and ee_step == 900:
+                              # Tunnine kogus jagatakse tunni neljale veerandtunnile (ka täistunni reale)
+                              hour_ts = ts - (ts % 3600)
+                              if hour_ts in recent_kwh:
+                                  row["kwh"] = round(recent_kwh[hour_ts] / 4.0, 4)
+                          elif ts in recent_kwh:
                               row["kwh"] = round(recent_kwh[ts], 4)
-                          elif only_hourly and ee_step == 900 and (ts - (ts % 3600)) in recent_kwh:
-                              row["kwh"] = round(recent_kwh[ts - (ts % 3600)] / 4.0, 4)
 
                       # Arvuta käesoleva kuu (cur_y, cur_m) kWh ja maksumus
                       cur_m_prices = fetch_nps_prices(cur_m_start, now, strict=False)
@@ -456,11 +503,30 @@ jobs:
                           cached_months[cur_rec["kuu"]] = cur_rec
                           print(f"Käesolev kuu {cur_rec['kuu']}: {cur_rec['kwh']} kWh, {cur_rec['eur']} €")
 
-                      # Arvuta eelneva aasta vastav kuu (cur_y - 1, cur_m) + vajadusel eelmised kuud (kuni 12 kuud)
-                      try:
-                          same_time_prev_year = now.replace(year=cur_y - 1)
-                      except ValueError:
-                          same_time_prev_year = now.replace(year=cur_y - 1, day=28)
+                      # Eelneva aasta "sama ajani" võrdlushetk = jooksva kuu viimase mõõdetud perioodi lõpp aasta varem.
+                      # (Estfeedi andmed jõuavad mõnetunnise viivitusega, seega mitte praegune kellaaeg.)
+                      step_s = 3600 if only_hourly else 900
+                      cur_m_ts = [ts for ts in recent_kwh if ts >= int(cur_m_start.timestamp())]
+                      same_time_prev_year = None
+                      if cur_m_ts:
+                          data_end = datetime.fromtimestamp(max(cur_m_ts) + step_s, TZ)
+                          try:
+                              same_time_prev_year = data_end.replace(year=cur_y - 1)
+                          except ValueError:
+                              same_time_prev_year = data_end.replace(year=cur_y - 1, day=28)
+
+                      def is_cached_fresh(y, m, cutoff):
+                          """Kas vahemälus olevat kuud võib kasutada ilma uuesti pärimata?"""
+                          rec = cached_months.get(f"{y:04d}-{m:02d}")
+                          if not rec or rec.get("complete") is not True:
+                              return False
+                          if rec.get("noData"):
+                              # Tühja kuu kontrollime uuesti kord päevas (vastus võis olla ajutiselt tühi)
+                              return rec.get("checked") == today_str
+                          if rec.get("tariff") != cur_tariff:
+                              return False  # tariifid või arvutusloogika muutusid
+                          # "Sama ajani" võrdlushetk liigub iga käivitusega, seega see kuu arvutatakse alati uuesti
+                          return cutoff is None
 
                       # Koosta sihtkuude nimekiri: käesolev kuu (offset 0) + kuni 11 eelnevat kuud
                       backfilled_pairs = 0
@@ -480,7 +546,7 @@ jobs:
                           need_fetch = [
                               (y, m, comp, cutoff)
                               for (y, m, comp, cutoff) in months_to_check
-                              if not (cached_months.get(f"{y:04d}-{m:02d}", {}).get("complete") is True and (cutoff is None or "kwhToDate" in cached_months.get(f"{y:04d}-{m:02d}", {})))
+                              if not is_cached_fresh(y, m, cutoff)
                           ]
                           if not need_fetch:
                               continue
@@ -493,13 +559,13 @@ jobs:
                               ms = month_start(y, m)
                               me = min(now, next_month_start(y, m))
                               print(f"Arvutan kuu {y:04d}-{m:02d} tarbimist ja hinda...")
-                              m_kwh = fetch_estfeed_range(token, eic, ms, me, resolution="fifteen_minutes")
+                              m_kwh = fetch_estfeed_range(auth, eic, ms, me, resolution="fifteen_minutes")
                               if m_kwh is None:
                                   continue
                               if not m_kwh:
                                   print(f"Kuu {y:04d}-{m:02d} kohta mõõteandmed puuduvad.")
                                   if is_comp:
-                                      cached_months[f"{y:04d}-{m:02d}"] = {"kuu": f"{y:04d}-{m:02d}", "kwh": 0.0, "eur": 0.0, "complete": True, "noData": True}
+                                      cached_months[f"{y:04d}-{m:02d}"] = {"kuu": f"{y:04d}-{m:02d}", "kwh": 0.0, "eur": 0.0, "complete": True, "noData": True, "checked": today_str}
                                   continue
                               m_prices = fetch_nps_prices(ms, me, strict=False)
                               m_price_map = {r["timestamp"]: r["price"] for r in m_prices}
