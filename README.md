@@ -43,17 +43,22 @@ Accept: application/vnd.github+json
 {"ref":"main"}
 ```
 
-## Andmefail
+## Andmefail ja Elering Estfeed tarbimisandmed
 
-`hinnad.json` sisaldab Eesti hinnapiirkonna hindu eilsest 00:00 kuni ülehomme 00:00:
+`hinnad.json` uueneb **iga tunni järel** (ning tihedamalt kell 15:00 homsete börsihindade avaldamise ajal) ja sisaldab:
+1. Eesti hinnapiirkonna 15-minutilisi börsihindu eilsest 00:00 kuni ülehomme 00:00 koos maja 15-minutilise tarbimisega (`kwh`), kui GitHub Actions Secrets all on seadistatud `ELERING_CLIENT_ID`, `ELERING_CLIENT_SECRET` ja `ELERING_EIC`:
 
 ```json
-{"success":true,"generatedAt":"2026-10-18T12:01:07Z","source":"Elering (Nord Pool day-ahead, EE)",
- "data":{"ee":[{"timestamp":1792056600,"price":13.69}]}}
+{"success":true,"generatedAt":"2026-10-18T12:01:07Z","source":"Elering (Nord Pool day-ahead, EE + Estfeed)",
+ "data":{
+   "ee":[{"timestamp":1792056600,"price":13.69,"kwh":0.412}],
+   "majaElekter":[{"kuu":"2026-10","kwh":480.5,"eur":112.4,"complete":false}]
+ }}
 ```
 
-`timestamp` on perioodi algus (Unix sekundites, UTC) ja `price` on hind €/MWh ilma
-käibemaksuta.
+2. Käesoleva aasta ja eelneva aasta vastavate kuude kokkuarvutatud tarbimist (`kwh`) ja kogumaksumust (`eur` koos võrgutasude, aktsiisi ja käibemaksuga) massiivis `data.majaElekter`.
+
+`timestamp` on perioodi algus (Unix sekundites, UTC), `price` on börsihind €/MWh ilma käibemaksuta ja `kwh` on 15-minutilise perioodi tarbimine kilovatt-tundides.
 
 ## Piirangud
 
@@ -61,6 +66,6 @@ käibemaksuta.
 
 ## Versioon ja muudatuste ajalugu
 
-- Praegune versioon: **v2.1.0** (määratud konstandis `APP_VERSION` failis `index.html`).
+- Praegune versioon: **v2.2.0** (määratud konstandis `APP_VERSION` failis `index.html`).
 - Üksikasjalik ülevaade UI/UX muudatustest, komponentide klassidest ja arhitektuurireeglitest (sh juhised Claude AI-le) asub failis [CHANGELOG.md](CHANGELOG.md).
 

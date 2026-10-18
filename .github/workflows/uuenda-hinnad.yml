@@ -1,8 +1,13 @@
-# GitHub Actions töövoog: laadib Eleringist elektrihinnad ja salvestab need
-# repositooriumi faili hinnad.json. Leht loeb neid samast repost, nii et brauser
-# ei tee ühtegi välist päringut ja CORS-piirang ei sega.
+# GitHub Actions töövoog: laadib Eleringist elektri börsihinnad ja Estfeedist
+# maja mõõtepunkti 15-minutilise tarbimise ning kuude kokkuvõtted ja salvestab
+# need faili hinnad.json. Leht loeb neid samast repost, nii et brauser ei tee
+# ühtegi välist päringut, API võtmed jäävad turvaliselt GitHub Secretsisse ja
+# CORS-piirang ei sega.
 #
-# Fail peab asuma repositooriumis kaustas .github/workflows/
+# Vajalikud GitHub Actions Repository Secrets (Settings -> Secrets and variables -> Actions):
+#   ELERING_CLIENT_ID     - Estfeed API võtme Kliendi ID
+#   ELERING_CLIENT_SECRET - Estfeed API võtme salajane võti
+#   ELERING_EIC           - Mõõtepunkti EIC-kood (nt 38ZEE...)
 
 name: Uuenda elektrihinnad
 
@@ -12,9 +17,15 @@ on:
     # Cron on UTC-s, seega katab 11:02–14:57 UTC mõlemad aastaajad. Käivitus, mis algab
     # 14:50–16:30 Eesti aja järgi, jääb ise hindu ootama; ülejäänud teevad ühe kiire päringu.
     - cron: "2-57/5 11-14 * * *"
-    # Varukäivitus ülejäänud ööpäeval (hilinenud avaldamine, parandatud hinnad).
-    - cron: "17 */3 * * *"
+    # Igatunnine uuendus: laadib värsked 15-min tarbimisandmed (kWh), arvutab kuu kWh/maksumuse
+    # ning kontrollib ka börsihindade parandusi.
+    - cron: "12 * * * *"
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/uuenda-hinnad.yml"
 
 permissions: {}
 
@@ -25,23 +36,30 @@ concurrency:
 jobs:
   uuenda:
     runs-on: ubuntu-latest
-    timeout-minutes: 50   # skript ootab kuni 40 min
+    timeout-minutes: 50   # skript ootab 15:00 akna ajal kuni 40 min
     permissions:
       contents: write
     steps:
       - name: Võta repositoorium
         uses: actions/checkout@v5
 
-      - name: Lae, kontrolli ja filtreeri hinnad
+      - name: Lae, kontrolli ja filtreeri hinnad ning tarbimine
+        env:
+          ELERING_CLIENT_ID: ${{ secrets.ELERING_CLIENT_ID }}
+          ELERING_CLIENT_SECRET: ${{ secrets.ELERING_CLIENT_SECRET }}
+          ELERING_EIC: ${{ secrets.ELERING_EIC }}
         run: |
           python3 - <<'PY'
-          import json, math, os, sys, time, urllib.request
+          import json, math, os, re, sys, time, urllib.error, urllib.parse, urllib.request
           from datetime import datetime, timedelta, timezone
           from zoneinfo import ZoneInfo
 
           TZ = ZoneInfo("Europe/Tallinn")
           API = os.environ.get("ELERING_URL", "https://dashboard.elering.ee/api/nps/price")
+          TOKEN_URL = "https://kc.elering.ee/realms/elering-sso/protocol/openid-connect/token"
+          ESTFEED_URL = "https://estfeed.elering.ee/api/public/v1/metering-data"
           OUT = "hinnad.json"
+          UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 
           # Homsed hinnad avaldatakse iga päev kell 15:00 Eesti aja järgi.
           AVALDAMINE = (15, 0)
@@ -49,6 +67,8 @@ jobs:
           OOTA_KUNI_MIN = 90      # ... kuid mitte kauem kui 16:30
           MAX_OOTUS_S = 40 * 60   # üks käivitus ootab kuni 40 min, edasi jätkab järgmine
           SAMM_S = 60             # kontrolli iga minuti järel
+          ESTFEED_DELAY_S = 5.5   # Estfeed rate limit: max 1 päring 5 sekundi jooksul
+          MAX_BACKFILL_PAIRS = 4  # mitu ajaloolist kuupaari ühe käivitusega maksimaalselt juurde laetakse
 
           def tallinn_now():
               return datetime.now(TZ)
@@ -57,41 +77,111 @@ jobs:
               print(f"::error::{msg}")
               sys.exit(1)
 
+          def warn(msg):
+              print(f"::warning::{msg}")
+
           def midnight(dt, days):
               return (dt + timedelta(days=days)).replace(hour=0, minute=0, second=0, microsecond=0)
+
+          def month_start(year, month):
+              return datetime(year, month, 1, 0, 0, 0, tzinfo=TZ)
+
+          def next_month_start(year, month):
+              return datetime(year + 1, 1, 1, 0, 0, 0, tzinfo=TZ) if month == 12 else datetime(year, month + 1, 1, 0, 0, 0, tzinfo=TZ)
+
+          def shift_month(year, month, delta):
+              idx = (year * 12 + (month - 1)) + delta
+              return idx // 12, (idx % 12) + 1
+
+          def fmt_utc(dt):
+              return dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
 
           def reject_constant(name):  # Python lubaks NaN/Infinity, brauseri JSON.parse mitte
               raise ValueError(f"lubamatu JSON väärtus {name}")
 
-          def fetch(url):
-              """Laeb ja valideerib vastuse. Tagastab sorteeritud data.ee read."""
+          def load_tariff_config():
+              """Loeb index.html CONFIG objektist maja elektripaketi tariifid ja tasud."""
+              cfg = {
+                  "marginaal": 0.6,
+                  "vorgutasuPaev": 3.49,
+                  "vorgutasuOo": 1.99,
+                  "taastuvenergiaTasu": 1.598,
+                  "aktsiis": 0.21,
+                  "kuutasu": 0.0,
+                  "kaibemaks": 24.0,
+                  "algus": 22.0,
+                  "lopp": 7.0,
+                  "nadalavahetusOnOo": True,
+              }
+              try:
+                  with open("index.html", encoding="utf-8") as f:
+                      html = f.read()
+                  for key in ("marginaal", "vorgutasuPaev", "vorgutasuOo", "taastuvenergiaTasu", "aktsiis", "kuutasu", "kaibemaks", "algus", "lopp"):
+                      m = re.search(rf"\b{key}\s*:\s*(-?\d+(?:\.\d+)?)", html)
+                      if m:
+                          cfg[key] = float(m.group(1))
+                  m_bool = re.search(r"\bnadalavahetusOnOo\s*:\s*(true|false)", html)
+                  if m_bool:
+                      cfg["nadalavahetusOnOo"] = (m_bool.group(1) == "true")
+              except OSError:
+                  pass
+              return cfg
+
+          def calc_final_cents_kwh(spot_eur_mwh, dt_tl, cfg):
+              """Arvutab maja lõpphinna (s/kWh koos võrgutasu, aktsiisi, marginaali ja KM-ga) antud hetkel."""
+              spot_s = spot_eur_mwh / 10.0
+              is_weekend = dt_tl.weekday() in (5, 6)  # 5=L, 6=P
+              hour = dt_tl.hour + dt_tl.minute / 60.0
+              algus, lopp = cfg["algus"], cfg["lopp"]
+              is_night_hour = (hour >= algus or hour < lopp) if algus > lopp else (algus <= hour < lopp)
+              is_night = (cfg["nadalavahetusOnOo"] and is_weekend) or is_night_hour
+              network = cfg["vorgutasuOo"] if is_night else cfg["vorgutasuPaev"]
+              subtotal = spot_s + cfg["marginaal"] + network + cfg["taastuvenergiaTasu"] + cfg["aktsiis"]
+              return subtotal * (1.0 + cfg["kaibemaks"] / 100.0)
+
+          def fetch_nps_prices(start_dt, end_dt, strict=True):
+              """Laeb Eleringi börsihinnad vahemikus [start_dt, end_dt). Tagastab [{timestamp, price}, ...]."""
+              url = f"{API}?start={fmt_utc(start_dt)}&end={fmt_utc(end_dt - timedelta(seconds=1))}"
               raw = None
               for attempt in range(1, 4):
                   try:
-                      with urllib.request.urlopen(url, timeout=30) as r:
+                      req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "application/json"})
+                      with urllib.request.urlopen(req, timeout=30) as r:
                           raw = r.read()
                       break
                   except Exception as e:
-                      print(f"Katse {attempt} ebaõnnestus: {e}")
+                      print(f"NPS katse {attempt} ebaõnnestus: {e}")
                       time.sleep(5 * attempt)
               if raw is None:
-                  fail("Eleringi API ei vastanud")
+                  if strict:
+                      fail("Eleringi hinna-API ei vastanud")
+                  return []
               try:
                   data = json.loads(raw, parse_constant=reject_constant)
               except ValueError as e:
-                  fail(f"Vigane JSON: {e}")
+                  if strict:
+                      fail(f"Vigane JSON: {e}")
+                  return []
               if not isinstance(data, dict) or data.get("success") is not True:
-                  fail("API vastus: success ei ole true")
+                  if strict:
+                      fail("API vastus: success ei ole true")
+                  return []
               rows_in = (data.get("data") or {}).get("ee")
               if not isinstance(rows_in, list) or not rows_in:
-                  fail("API vastuses puudub data.ee või see on tühi")
+                  if strict:
+                      fail("API vastuses puudub data.ee või see on tühi")
+                  return []
               rows = {}
               for row in rows_in:
                   ts, price = row.get("timestamp"), row.get("price")
                   if not isinstance(ts, int) or isinstance(price, bool) or not isinstance(price, (int, float)):
-                      fail(f"Vigane rida: {row}")
+                      if strict:
+                          fail(f"Vigane rida: {row}")
+                      continue
                   if not math.isfinite(price) or not -1000 <= price <= 10000:
-                      fail(f"Ebausutav hind: {row}")
+                      if strict:
+                          fail(f"Ebausutav hind: {row}")
+                      continue
                   rows[ts] = round(float(price), 4)
               return [{"timestamp": ts, "price": p} for ts, p in sorted(rows.items())]
 
@@ -104,51 +194,348 @@ jobs:
               step = ts[1] - ts[0]  # 900 (15 min) või 3600 (1 h)
               return all(b - a == step for a, b in zip(ts, ts[1:])) and ts[-1] + step == t1
 
-          now = tallinn_now()
-          start, end = midnight(now, -1), midnight(now, 2)   # eile 00:00 … ülehomme 00:00
-          fmt = lambda d: d.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
-          url = f"{API}?start={fmt(start)}&end={fmt(end - timedelta(seconds=1))}"
-          print("Päring:", url)
+          # --- Estfeed OAuth2 ja mõõteandmete päringud ---
+          last_estfeed_ts = 0.0
 
-          publish = now.replace(hour=AVALDAMINE[0], minute=AVALDAMINE[1], second=0, microsecond=0)
-          wait_from = publish + timedelta(minutes=OOTA_ALATES_MIN)
-          wait_until = min(publish + timedelta(minutes=OOTA_KUNI_MIN), now + timedelta(seconds=MAX_OOTUS_S))
+          def get_estfeed_token(client_id, client_secret):
+              """Küsib Keycloakist OAuth2 Bearer tokeni client_credentials vooga."""
+              body = urllib.parse.urlencode({
+                  "grant_type": "client_credentials",
+                  "client_id": client_id,
+                  "client_secret": client_secret,
+              }).encode("utf-8")
+              headers = {
+                  "Content-Type": "application/x-www-form-urlencoded",
+                  "Accept": "application/json",
+                  "User-Agent": UA,
+              }
+              for attempt in range(1, 4):
+                  try:
+                      req = urllib.request.Request(TOKEN_URL, data=body, headers=headers, method="POST")
+                      with urllib.request.urlopen(req, timeout=30) as r:
+                          resp = json.loads(r.read())
+                      token = resp.get("access_token")
+                      if token:
+                          return token
+                  except urllib.error.HTTPError as e:
+                      err_body = ""
+                      try:
+                          err_body = e.read().decode("utf-8", errors="replace")[:200]
+                      except Exception:
+                          pass
+                      warn(f"Estfeed OAuth2 autentimine ebaõnnestus (HTTP {e.code}): {err_body}")
+                      if e.code in (400, 401, 403):
+                          return None
+                  except Exception as e:
+                      warn(f"Estfeed OAuth2 katse {attempt} ebaõnnestus: {e}")
+                  time.sleep(3 * attempt)
+              return None
 
-          ee = fetch(url)
-          while not tomorrow_complete(ee, now) and wait_from <= tallinn_now() < wait_until:
-              print(f"{tallinn_now():%H:%M} homseid hindu veel pole, kontrollin {SAMM_S} s pärast uuesti")
-              time.sleep(SAMM_S)
-              ee = fetch(url)
-          print("Homsed hinnad olemas." if tomorrow_complete(ee, now) else "Homseid hindu veel pole.")
+          def fetch_estfeed_chunk(token, eic, start_dt, end_dt, resolution="fifteen_minutes"):
+              """Pärib Estfeedist kuni 30-päevase lõigu mõõteandmeid. Tagastab {timestamp_sec: kwh}."""
+              global last_estfeed_ts
+              if end_dt <= start_dt:
+                  return {}
 
-          now_ts = int(tallinn_now().timestamp())
-          if not any(r["timestamp"] <= now_ts < r["timestamp"] + 3600 for r in ee):
-              fail("Vastus ei kata praegust hetke")
+              def do_request(use_eic):
+                  global last_estfeed_ts
+                  elapsed = time.monotonic() - last_estfeed_ts
+                  if last_estfeed_ts > 0 and elapsed < ESTFEED_DELAY_S:
+                      time.sleep(ESTFEED_DELAY_S - elapsed)
 
+                  params = [
+                      ("startDateTime", fmt_utc(start_dt)),
+                      ("endDateTime", fmt_utc(end_dt)),
+                      ("resolution", resolution),
+                  ]
+                  if use_eic and eic:
+                      for single_eic in [x.strip() for x in re.split(r"[,;\s]+", eic) if x.strip()]:
+                          params.append(("meteringPointEics", single_eic))
+                  url = f"{ESTFEED_URL}?{urllib.parse.urlencode(params)}"
+                  headers = {
+                      "Authorization": f"Bearer {token}",
+                      "Accept": "application/json",
+                      "User-Agent": UA,
+                  }
+                  for attempt in range(1, 4):
+                      last_estfeed_ts = time.monotonic()
+                      try:
+                          req = urllib.request.Request(url, headers=headers)
+                          with urllib.request.urlopen(req, timeout=30) as r:
+                              return json.loads(r.read(), parse_constant=reject_constant), 200
+                      except urllib.error.HTTPError as e:
+                          err_text = ""
+                          try:
+                              err_text = e.read().decode("utf-8", errors="replace")[:240]
+                          except Exception:
+                              pass
+                          if e.code == 429 or e.code >= 500:
+                              print(f"Estfeed HTTP {e.code}, ootan ja proovin uuesti ({attempt}/3)...")
+                              time.sleep(6 * attempt)
+                              continue
+                          return err_text, e.code
+                      except Exception as e:
+                          print(f"Estfeed võrguviga ({attempt}/3): {e}")
+                          time.sleep(6 * attempt)
+                  return None, 0
+
+              data, status = do_request(use_eic=bool(eic))
+              # Kui EIC-koodiga päring tagastas vea või tühja vastuse, proovi varuvariandina ilma EIC-filtrita
+              if eic and (status in (400, 403, 404, 422) or (isinstance(data, list) and not data)):
+                  print(f"EIC-filtriga päring tagastas oleku {status}, proovin ilma meteringPointEics parameetrita...")
+                  data, status = do_request(use_eic=False)
+
+              if status != 200 or not isinstance(data, list):
+                  warn(f"Estfeed päring ({fmt_utc(start_dt)} .. {fmt_utc(end_dt)}) ebaõnnestus (HTTP {status}): {data}")
+                  return None
+
+              kwh_by_ts = {}
+              for mp in data:
+                  if not isinstance(mp, dict):
+                      continue
+                  if mp.get("error"):
+                      err = mp["error"]
+                      warn(f"Estfeed mõõtepunkti viga: {err.get('code')} - {err.get('message')}")
+                  for iv in mp.get("accountingIntervals") or []:
+                      if not isinstance(iv, dict):
+                          continue
+                      ps = iv.get("periodStart")
+                      kwh = iv.get("consumptionKwh")
+                      if not ps or kwh is None or isinstance(kwh, bool) or not isinstance(kwh, (int, float)):
+                          continue
+                      if not math.isfinite(kwh) or kwh < 0:
+                          continue
+                      try:
+                          ts = int(datetime.fromisoformat(str(ps).replace("Z", "+00:00")).timestamp())
+                      except ValueError:
+                          continue
+                      kwh_by_ts[ts] = round(kwh_by_ts.get(ts, 0.0) + float(kwh), 4)
+              return kwh_by_ts
+
+          def fetch_estfeed_range(token, eic, start_dt, end_dt, resolution="fifteen_minutes"):
+              """Pärib Estfeedist suvalise pikkusega vahemiku kuni 30-päevaste lõikude kaupa."""
+              combined = {}
+              cur = start_dt
+              while cur < end_dt:
+                  nxt = min(cur + timedelta(days=30), end_dt)
+                  chunk = fetch_estfeed_chunk(token, eic, cur, nxt, resolution=resolution)
+                  if chunk is None:
+                      return None
+                  combined.update(chunk)
+                  cur = nxt
+              return combined
+
+          def compute_month_record(year, month, now, kwh_map, price_by_ts, tariff_cfg, complete_flag, prev_year_cutoff_dt=None):
+              """Arvutab ühe kalendrikuu (Tallinna ajas) kWh ja maksumuse eurodes."""
+              m_start = month_start(year, month)
+              m_end = min(now, next_month_start(year, month))
+              t0, t1 = int(m_start.timestamp()), int(m_end.timestamp())
+              cutoff_ts = int(prev_year_cutoff_dt.timestamp()) if prev_year_cutoff_dt else None
+
+              total_kwh = 0.0
+              total_eur = 0.0
+              todate_kwh = 0.0
+              todate_eur = 0.0
+              count = 0
+
+              for ts, kwh in kwh_map.items():
+                  if not (t0 <= ts < t1):
+                      continue
+                  count += 1
+                  spot_eur_mwh = price_by_ts.get(ts, price_by_ts.get(ts - (ts % 3600), 0.0))
+                  dt_tl = datetime.fromtimestamp(ts, TZ)
+                  final_s = calc_final_cents_kwh(spot_eur_mwh, dt_tl, tariff_cfg)
+                  eur = kwh * final_s / 100.0
+                  total_kwh += kwh
+                  total_eur += eur
+                  if cutoff_ts is not None and ts < cutoff_ts:
+                      todate_kwh += kwh
+                      todate_eur += eur
+
+              if count == 0:
+                  return None
+
+              if total_kwh > 0 and tariff_cfg["kuutasu"] > 0:
+                  total_eur += tariff_cfg["kuutasu"]
+
+              rec = {
+                  "kuu": f"{year:04d}-{month:02d}",
+                  "kwh": round(total_kwh, 2),
+                  "eur": round(total_eur, 2),
+                  "complete": bool(complete_flag),
+              }
+              if cutoff_ts is not None and todate_kwh > 0:
+                  rec["kwhToDate"] = round(todate_kwh, 2)
+                  rec["eurToDate"] = round(todate_eur, 2)
+              return rec
+
+          # 1. Lae olemasolev hinnad.json, et säilitada vahemälu ja varuandmed
           old = None
           try:
               with open(OUT, encoding="utf-8") as f:
                   old = json.load(f)
           except (OSError, ValueError):
               pass
-          old_ee = ((old or {}).get("data") or {}).get("ee") or []
+          old_data = (old or {}).get("data") or {}
+          old_ee = old_data.get("ee") or []
+          old_maja = old_data.get("majaElekter") or []
+          old_kwh_by_ts = {
+              r["timestamp"]: r["kwh"]
+              for r in old_ee
+              if isinstance(r, dict) and isinstance(r.get("timestamp"), int) and isinstance(r.get("kwh"), (int, float))
+          }
+          cached_months = {
+              m["kuu"]: m
+              for m in old_maja
+              if isinstance(m, dict) and isinstance(m.get("kuu"), str) and isinstance(m.get("kwh"), (int, float)) and isinstance(m.get("eur"), (int, float))
+          }
+
+          # 2. Lae börsihinnad (eile 00:00 ... ülehomme 00:00)
+          now = tallinn_now()
+          start, end = midnight(now, -1), midnight(now, 2)
+          print(f"Börsihindade päring: {fmt_utc(start)} .. {fmt_utc(end)}")
+
+          publish = now.replace(hour=AVALDAMINE[0], minute=AVALDAMINE[1], second=0, microsecond=0)
+          wait_from = publish + timedelta(minutes=OOTA_ALATES_MIN)
+          wait_until = min(publish + timedelta(minutes=OOTA_KUNI_MIN), now + timedelta(seconds=MAX_OOTUS_S))
+
+          ee = fetch_nps_prices(start, end, strict=True)
+          while not tomorrow_complete(ee, now) and wait_from <= tallinn_now() < wait_until:
+              print(f"{tallinn_now():%H:%M} homseid hindu veel pole, kontrollin {SAMM_S} s pärast uuesti")
+              time.sleep(SAMM_S)
+              ee = fetch_nps_prices(start, end, strict=True)
+          print("Homsed hinnad olemas." if tomorrow_complete(ee, now) else "Homseid hindu veel pole.")
+
+          now = tallinn_now()
+          now_ts = int(now.timestamp())
+          if not any(r["timestamp"] <= now_ts < r["timestamp"] + 3600 for r in ee):
+              fail("Vastus ei kata praegust hetke")
+
           if old_ee and old_ee[-1]["timestamp"] > ee[-1]["timestamp"] and old_ee[-1]["timestamp"] > now_ts:
               fail("Uus vastus ulatub vähem tulevikku kui olemasolev fail; jätan vana faili alles")
-          if [r for r in old_ee if r["timestamp"] >= ee[0]["timestamp"]] == ee:
-              print("Hinnad ei muutunud.")
+
+          # 3. Lae Estfeedi 15-min tarbimisandmed ja arvuta kuude kokkuvõtted
+          client_id = os.environ.get("ELERING_CLIENT_ID", "").strip().strip('"').strip("'")
+          client_secret = os.environ.get("ELERING_CLIENT_SECRET", "").strip().strip('"').strip("'")
+          eic = os.environ.get("ELERING_EIC", "").strip().strip('"').strip("'")
+          tariff_cfg = load_tariff_config()
+
+          maja_elekter = list(old_maja)
+          estfeed_ok = False
+
+          if client_id and client_secret:
+              print("Autendin Estfeed API-ga...")
+              token = get_estfeed_token(client_id, client_secret)
+              if token:
+                  cur_y, cur_m = now.year, now.month
+                  cur_m_start = month_start(cur_y, cur_m)
+                  recent_start = min(start, cur_m_start)
+                  print(f"Pärin 15-min tarbimisandmed ({fmt_utc(recent_start)} .. {fmt_utc(now)})...")
+                  recent_kwh = fetch_estfeed_range(token, eic, recent_start, now, resolution="fifteen_minutes")
+
+                  if recent_kwh is not None:
+                      estfeed_ok = True
+                      print(f"Saadi {len(recent_kwh)} 15-min tarbimisperioodi.")
+                      # Kontrolli, kas arvesti tagastas tunnised või 15-minutilised intervallid
+                      only_hourly = len(recent_kwh) > 2 and all(ts % 3600 == 0 for ts in recent_kwh)
+                      ee_step = (ee[1]["timestamp"] - ee[0]["timestamp"]) if len(ee) > 1 else 900
+                      for row in ee:
+                          ts = row["timestamp"]
+                          if ts in recent_kwh:
+                              row["kwh"] = round(recent_kwh[ts], 4)
+                          elif only_hourly and ee_step == 900 and (ts - (ts % 3600)) in recent_kwh:
+                              row["kwh"] = round(recent_kwh[ts - (ts % 3600)] / 4.0, 4)
+
+                      # Arvuta käesoleva kuu (cur_y, cur_m) kWh ja maksumus
+                      cur_m_prices = fetch_nps_prices(cur_m_start, now, strict=False)
+                      cur_price_map = {r["timestamp"]: r["price"] for r in cur_m_prices}
+                      for r in ee:
+                          cur_price_map[r["timestamp"]] = r["price"]
+                      cur_rec = compute_month_record(cur_y, cur_m, now, recent_kwh, cur_price_map, tariff_cfg, complete_flag=False)
+                      if cur_rec:
+                          cached_months[cur_rec["kuu"]] = cur_rec
+                          print(f"Käesolev kuu {cur_rec['kuu']}: {cur_rec['kwh']} kWh, {cur_rec['eur']} €")
+
+                      # Arvuta eelneva aasta vastav kuu (cur_y - 1, cur_m) + vajadusel eelmised kuud (kuni 12 kuud)
+                      try:
+                          same_time_prev_year = now.replace(year=cur_y - 1)
+                      except ValueError:
+                          same_time_prev_year = now.replace(year=cur_y - 1, day=28)
+
+                      # Koosta sihtkuude nimekiri: käesolev kuu (offset 0) + kuni 11 eelnevat kuud
+                      backfilled_pairs = 0
+                      for offset in range(0, 12):
+                          ty, tm = shift_month(cur_y, cur_m, -offset)
+                          py, pm = ty - 1, tm
+                          months_to_check = []
+                          if offset == 0:
+                              # Käesolev kuu on juba arvutatud; kontrolli alati eelneva aasta vastavat kuud
+                              months_to_check.append((py, pm, True, same_time_prev_year))
+                          else:
+                              # Kui oleme kuu esimeses 3 päevas, värskenda ka eelmise kuu lõplikku seisu
+                              force_refresh_prev = (offset == 1 and now.day <= 3)
+                              months_to_check.append((ty, tm, not force_refresh_prev, None))
+                              months_to_check.append((py, pm, True, None))
+
+                          need_fetch = [
+                              (y, m, comp, cutoff)
+                              for (y, m, comp, cutoff) in months_to_check
+                              if not (cached_months.get(f"{y:04d}-{m:02d}", {}).get("complete") is True and (cutoff is None or "kwhToDate" in cached_months.get(f"{y:04d}-{m:02d}", {})))
+                          ]
+                          if not need_fetch:
+                              continue
+                          if offset > 0 and backfilled_pairs >= MAX_BACKFILL_PAIRS:
+                              continue
+                          if offset > 0:
+                              backfilled_pairs += 1
+
+                          for (y, m, is_comp, cutoff) in need_fetch:
+                              ms = month_start(y, m)
+                              me = min(now, next_month_start(y, m))
+                              print(f"Arvutan kuu {y:04d}-{m:02d} tarbimist ja hinda...")
+                              m_kwh = fetch_estfeed_range(token, eic, ms, me, resolution="fifteen_minutes")
+                              if m_kwh is None:
+                                  continue
+                              if not m_kwh:
+                                  print(f"Kuu {y:04d}-{m:02d} kohta mõõteandmed puuduvad.")
+                                  continue
+                              m_prices = fetch_nps_prices(ms, me, strict=False)
+                              m_price_map = {r["timestamp"]: r["price"] for r in m_prices}
+                              rec = compute_month_record(y, m, now, m_kwh, m_price_map, tariff_cfg, complete_flag=is_comp, prev_year_cutoff_dt=cutoff)
+                              if rec:
+                                  cached_months[rec["kuu"]] = rec
+                                  print(f"Kuu {rec['kuu']}: {rec['kwh']} kWh, {rec['eur']} € (complete={rec['complete']})")
+
+                      maja_elekter = [cached_months[k] for k in sorted(cached_months.keys())]
+          else:
+              warn("ELERING_CLIENT_ID / ELERING_CLIENT_SECRET puudub — tarbimisandmeid Estfeedist ei päritud.")
+
+          # Kui Estfeed ei olnud saadaval, säilita varasemad 15-min kWh väärtused
+          if not estfeed_ok and old_kwh_by_ts:
+              for row in ee:
+                  if row["timestamp"] in old_kwh_by_ts:
+                      row["kwh"] = old_kwh_by_ts[row["timestamp"]]
+
+          old_trimmed_ee = [r for r in old_ee if r.get("timestamp", 0) >= ee[0]["timestamp"]]
+          if old_trimmed_ee == ee and old_maja == maja_elekter:
+              print("Hinnad ega tarbimisandmed ei muutunud.")
               sys.exit(0)
+
+          data_out = {"ee": ee}
+          if maja_elekter:
+              data_out["majaElekter"] = maja_elekter
 
           out = {
               "success": True,
               "generatedAt": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-              "source": "Elering (Nord Pool day-ahead, EE)",
-              "data": {"ee": ee},
+              "source": "Elering (Nord Pool day-ahead, EE + Estfeed)",
+              "data": data_out,
           }
           tmp = OUT + ".tmp"
           with open(tmp, "w", encoding="utf-8") as f:
               json.dump(out, f, separators=(",", ":"), allow_nan=False)
           os.replace(tmp, OUT)  # aatomiline asendus
-          print(f"Korras: {len(ee)} perioodi, viimane {datetime.fromtimestamp(ee[-1]['timestamp'], TZ):%d.%m %H:%M}")
+          print(f"Korras: {len(ee)} perioodi, {len(maja_elekter)} kuud, viimane {datetime.fromtimestamp(ee[-1]['timestamp'], TZ):%d.%m %H:%M}")
           PY
 
       - name: Salvesta muudatus
@@ -156,12 +543,12 @@ jobs:
           set -euo pipefail
           git add hinnad.json
           if git diff --staged --quiet; then
-            echo "Hinnad ei muutunud, uut commit'i ei tehta."
+            echo "Hinnad ega tarbimisandmed ei muutunud, uut commit'i ei tehta."
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "Uuenda elektrihinnad"
+          git commit -m "Uuenda elektrihinnad ja tarbimine"
           for attempt in 1 2 3; do
             if git push origin "HEAD:${GITHUB_REF_NAME}"; then exit 0; fi
             echo "Push lükati tagasi (repot muudeti samal ajal), proovin uuesti ($attempt/3)..."
