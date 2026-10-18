@@ -8,13 +8,15 @@ name: Uuenda elektrihinnad
 
 on:
   schedule:
-    # Iga tunni 7. minutil (UTC). GitHub võib käivitust mõne minuti võrra edasi lükata.
-    - cron: "7 * * * *"
-  # Lubab töövoo käsitsi käivitada Actions vahelehelt (kasuta seda esimesel korral).
+    # Homsed hinnad avaldatakse kell 15:00 Eesti aja järgi = 12:00 UTC suveajal, 13:00 UTC talveajal.
+    # Cron on UTC-s, seega katab 11:02–14:57 UTC mõlemad aastaajad. Käivitus, mis algab
+    # 14:50–16:30 Eesti aja järgi, jääb ise hindu ootama; ülejäänud teevad ühe kiire päringu.
+    - cron: "2-57/5 11-14 * * *"
+    # Varukäivitus ülejäänud ööpäeval (hilinenud avaldamine, parandatud hinnad).
+    - cron: "17 */3 * * *"
   workflow_dispatch:
 
-permissions:
-  contents: write
+permissions: {}
 
 concurrency:
   group: uuenda-hinnad
@@ -23,49 +25,146 @@ concurrency:
 jobs:
   uuenda:
     runs-on: ubuntu-latest
+    timeout-minutes: 50   # skript ootab kuni 40 min
+    permissions:
+      contents: write
     steps:
       - name: Võta repositoorium
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
-      - name: Lae hinnad Eleringist
+      - name: Lae, kontrolli ja filtreeri hinnad
         run: |
-          set -euo pipefail
-          START=$(date -u -d '3 days ago' +%Y-%m-%dT%H:%M:%S.000Z)
-          END=$(date -u -d '2 days' +%Y-%m-%dT%H:%M:%S.999Z)
-          echo "Vahemik: $START kuni $END"
-          curl --fail --silent --show-error --retry 3 --retry-delay 5 --max-time 60 \
-            "https://dashboard.elering.ee/api/nps/price?start=${START}&end=${END}" \
-            -o hinnad.uus.json
-
-      - name: Kontrolli, et vastus on korras
-        run: |
-          set -euo pipefail
           python3 - <<'PY'
-          import json, sys
-          with open('hinnad.uus.json', encoding='utf-8') as f:
-              data = json.load(f)
-          if data.get('success') is not True:
-              sys.exit('API vastus: success ei ole true')
-          rows = data.get('data', {}).get('ee')
-          if not isinstance(rows, list) or not rows:
-              sys.exit('API vastuses puudub data.ee massiiv või see on tühi')
-          for row in rows:
-              float(row['price']); int(row['timestamp'])
-          print(f'Korras: {len(rows)} hinnaperioodi')
+          import json, math, os, sys, time, urllib.request
+          from datetime import datetime, timedelta, timezone
+          from zoneinfo import ZoneInfo
+
+          TZ = ZoneInfo("Europe/Tallinn")
+          API = os.environ.get("ELERING_URL", "https://dashboard.elering.ee/api/nps/price")
+          OUT = "hinnad.json"
+
+          # Homsed hinnad avaldatakse iga päev kell 15:00 Eesti aja järgi.
+          AVALDAMINE = (15, 0)
+          OOTA_ALATES_MIN = -10   # käivitus, mis algab 14:50 või hiljem, jääb hindu ootama
+          OOTA_KUNI_MIN = 90      # ... kuid mitte kauem kui 16:30
+          MAX_OOTUS_S = 40 * 60   # üks käivitus ootab kuni 40 min, edasi jätkab järgmine
+          SAMM_S = 60             # kontrolli iga minuti järel
+
+          def tallinn_now():
+              return datetime.now(TZ)
+
+          def fail(msg):
+              print(f"::error::{msg}")
+              sys.exit(1)
+
+          def midnight(dt, days):
+              return (dt + timedelta(days=days)).replace(hour=0, minute=0, second=0, microsecond=0)
+
+          def reject_constant(name):  # Python lubaks NaN/Infinity, brauseri JSON.parse mitte
+              raise ValueError(f"lubamatu JSON väärtus {name}")
+
+          def fetch(url):
+              """Laeb ja valideerib vastuse. Tagastab sorteeritud data.ee read."""
+              raw = None
+              for attempt in range(1, 4):
+                  try:
+                      with urllib.request.urlopen(url, timeout=30) as r:
+                          raw = r.read()
+                      break
+                  except Exception as e:
+                      print(f"Katse {attempt} ebaõnnestus: {e}")
+                      time.sleep(5 * attempt)
+              if raw is None:
+                  fail("Eleringi API ei vastanud")
+              try:
+                  data = json.loads(raw, parse_constant=reject_constant)
+              except ValueError as e:
+                  fail(f"Vigane JSON: {e}")
+              if not isinstance(data, dict) or data.get("success") is not True:
+                  fail("API vastus: success ei ole true")
+              rows_in = (data.get("data") or {}).get("ee")
+              if not isinstance(rows_in, list) or not rows_in:
+                  fail("API vastuses puudub data.ee või see on tühi")
+              rows = {}
+              for row in rows_in:
+                  ts, price = row.get("timestamp"), row.get("price")
+                  if not isinstance(ts, int) or isinstance(price, bool) or not isinstance(price, (int, float)):
+                      fail(f"Vigane rida: {row}")
+                  if not math.isfinite(price) or not -1000 <= price <= 10000:
+                      fail(f"Ebausutav hind: {row}")
+                  rows[ts] = round(float(price), 4)
+              return [{"timestamp": ts, "price": p} for ts, p in sorted(rows.items())]
+
+          def tomorrow_complete(ee, now):
+              """Kas kogu Tallinna homne päev (ka 23/25 h DST-päev) on andmetes ilma aukudeta?"""
+              t0, t1 = int(midnight(now, 1).timestamp()), int(midnight(now, 2).timestamp())
+              ts = [r["timestamp"] for r in ee if t0 <= r["timestamp"] < t1]
+              if len(ts) < 2 or ts[0] != t0:
+                  return False
+              step = ts[1] - ts[0]  # 900 (15 min) või 3600 (1 h)
+              return all(b - a == step for a, b in zip(ts, ts[1:])) and ts[-1] + step == t1
+
+          now = tallinn_now()
+          start, end = midnight(now, -1), midnight(now, 2)   # eile 00:00 … ülehomme 00:00
+          fmt = lambda d: d.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+          url = f"{API}?start={fmt(start)}&end={fmt(end - timedelta(seconds=1))}"
+          print("Päring:", url)
+
+          publish = now.replace(hour=AVALDAMINE[0], minute=AVALDAMINE[1], second=0, microsecond=0)
+          wait_from = publish + timedelta(minutes=OOTA_ALATES_MIN)
+          wait_until = min(publish + timedelta(minutes=OOTA_KUNI_MIN), now + timedelta(seconds=MAX_OOTUS_S))
+
+          ee = fetch(url)
+          while not tomorrow_complete(ee, now) and wait_from <= tallinn_now() < wait_until:
+              print(f"{tallinn_now():%H:%M} homseid hindu veel pole, kontrollin {SAMM_S} s pärast uuesti")
+              time.sleep(SAMM_S)
+              ee = fetch(url)
+          print("Homsed hinnad olemas." if tomorrow_complete(ee, now) else "Homseid hindu veel pole.")
+
+          now_ts = int(tallinn_now().timestamp())
+          if not any(r["timestamp"] <= now_ts < r["timestamp"] + 3600 for r in ee):
+              fail("Vastus ei kata praegust hetke")
+
+          old = None
+          try:
+              with open(OUT, encoding="utf-8") as f:
+                  old = json.load(f)
+          except (OSError, ValueError):
+              pass
+          old_ee = ((old or {}).get("data") or {}).get("ee") or []
+          if old_ee and old_ee[-1]["timestamp"] > ee[-1]["timestamp"] and old_ee[-1]["timestamp"] > now_ts:
+              fail("Uus vastus ulatub vähem tulevikku kui olemasolev fail; jätan vana faili alles")
+          if [r for r in old_ee if r["timestamp"] >= ee[0]["timestamp"]] == ee:
+              print("Hinnad ei muutunud.")
+              sys.exit(0)
+
+          out = {
+              "success": True,
+              "generatedAt": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+              "source": "Elering (Nord Pool day-ahead, EE)",
+              "data": {"ee": ee},
+          }
+          tmp = OUT + ".tmp"
+          with open(tmp, "w", encoding="utf-8") as f:
+              json.dump(out, f, separators=(",", ":"), allow_nan=False)
+          os.replace(tmp, OUT)  # aatomiline asendus
+          print(f"Korras: {len(ee)} perioodi, viimane {datetime.fromtimestamp(ee[-1]['timestamp'], TZ):%d.%m %H:%M}")
           PY
-          mv hinnad.uus.json hinnad.json
 
       - name: Salvesta muudatus
         run: |
           set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          # NB! git add peab tulema enne võrdlust, muidu jääb esimesel korral uus fail märkamata.
           git add hinnad.json
           if git diff --staged --quiet; then
             echo "Hinnad ei muutunud, uut commit'i ei tehta."
             exit 0
           fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "Uuenda elektrihinnad"
-          git push
-          echo "hinnad.json on repositooriumis uuendatud."
+          for attempt in 1 2 3; do
+            if git push origin "HEAD:${GITHUB_REF_NAME}"; then exit 0; fi
+            echo "Push lükati tagasi (repot muudeti samal ajal), proovin uuesti ($attempt/3)..."
+            git pull --rebase origin "${GITHUB_REF_NAME}"
+          done
+          exit 1
