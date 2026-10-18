@@ -2,13 +2,17 @@
 <html lang="et">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f1f4f7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f1620" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="robots" content="noindex">
 <title>Kauge 32 elektriinfo</title>
 <style>
 /* ==========================================================================
-   Kauge 32 elektriinfo — kujundus
+   Kauge 32 elektriinfo — kujundus (v2.0.0)
    Kõik värvid, raadiused ja vahed on defineeritud custom property'tena.
    ========================================================================== */
 :root {
@@ -32,7 +36,7 @@
   --s5: 24px;
   --s6: 32px;
 
-  --shadow: 0 1px 2px rgba(27, 36, 51, 0.06);
+  --shadow: 0 2px 8px rgba(27, 36, 51, 0.05), 0 1px 2px rgba(27, 36, 51, 0.04);
   --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 
   /* Hinnakategooriad: tulba/aktsendi värv, sildi taust, sildi tekst */
@@ -66,7 +70,7 @@
     --muted: #b7c1ce;
     --border: #33404f;
     --focus: #8ab4f8;
-    --shadow: none;
+    --shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
 
     --cat-roheline: #3fcb79;
     --cat-roheline-bg: #16402a;
@@ -110,14 +114,14 @@ body {
 .app {
   max-width: 1120px;
   margin: 0 auto;
-  padding: var(--s3);
+  padding: max(var(--s3), env(safe-area-inset-top)) max(var(--s3), env(safe-area-inset-right)) max(var(--s4), env(safe-area-inset-bottom)) max(var(--s3), env(safe-area-inset-left));
 }
 
 /* ---------- Päis, olek, teated ---------- */
 .app-header {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: var(--s1) var(--s4);
   margin: 0 0 var(--s3);
@@ -125,15 +129,16 @@ body {
 
 .app-title {
   margin: 0;
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
 }
 
 .status {
   margin: 0;
   color: var(--muted);
-  font-size: 15px;
+  font-size: 14px;
+  font-weight: 500;
 }
 .status:empty { display: none; }
 
@@ -199,13 +204,14 @@ body {
 .card__title {
   margin: 0 0 var(--s3);
   font-size: 17px;
-  font-weight: 600;
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
 
 .card__hint {
   margin: 0 0 var(--s3);
   color: var(--muted);
-  font-size: 15px;
+  font-size: 14px;
 }
 
 .placeholder {
@@ -218,6 +224,7 @@ body {
   padding: var(--s2) var(--s3);
   border-radius: var(--radius-sm);
   background: var(--surface-2);
+  font-size: 15px;
 }
 .notice--warn {
   background: var(--cat-kollane-bg);
@@ -233,25 +240,52 @@ body {
 .card--hero[data-category="oranz"]    { --hero-accent: var(--cat-oranz);    --hero-bg: var(--cat-oranz-bg);    --hero-fg: var(--cat-oranz-fg); }
 .card--hero[data-category="punane"]   { --hero-accent: var(--cat-punane);   --hero-bg: var(--cat-punane-bg);   --hero-fg: var(--cat-punane-fg); }
 
+.hero-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+  margin: 0 0 var(--s3);
+}
+
 .verdict {
   display: inline-flex;
   align-items: center;
   gap: var(--s2);
-  margin: 0 0 var(--s3);
-  padding: 6px 16px 6px 12px;
+  margin: 0;
+  padding: 5px 14px 5px 11px;
   border-radius: 999px;
   background: var(--hero-bg, var(--surface-2));
   color: var(--hero-fg, var(--text));
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 700;
 }
 .verdict::before {
   content: "";
-  width: 12px;
-  height: 12px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
   background: var(--hero-accent, var(--muted));
   flex: none;
+}
+
+.hero-period {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--muted);
+  background: var(--surface-2);
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+
+.hero-price-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s2) var(--s4);
 }
 
 .hero-price {
@@ -263,41 +297,63 @@ body {
 }
 .hero-price__value {
   font-size: 52px;
-  font-weight: 700;
+  font-weight: 800;
   line-height: 1;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.03em;
 }
 .hero-price__unit {
-  font-size: 20px;
+  font-size: 19px;
   font-weight: 600;
   color: var(--muted);
+}
+
+.hero-final-pill {
+  display: inline-flex;
+  flex-direction: column;
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+.hero-final-pill__label {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.2;
+}
+.hero-final-pill__value {
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.25;
 }
 
 .hero-meta {
   margin: var(--s2) 0 0;
   color: var(--muted);
+  font-size: 14px;
 }
 
 .compare {
-  margin: var(--s3) 0 0;
-  font-size: 17px;
+  margin: var(--s2) 0 0;
+  font-size: 16px;
   font-weight: 600;
 }
 
 .advice {
-  margin: var(--s4) 0 0;
+  margin: var(--s3) 0 0;
   padding: var(--s3) var(--s4);
   border-radius: var(--radius-sm);
-  background: var(--surface-2);
+  background: var(--hero-bg, var(--surface-2));
+  color: var(--hero-fg, var(--text));
   border-left: 4px solid var(--hero-accent, var(--border));
 }
 .advice__title {
   margin: 0;
-  font-size: 19px;
+  font-size: 18px;
   font-weight: 700;
 }
 .advice__text {
-  margin: var(--s1) 0 0;
+  margin: 2px 0 0;
+  font-size: 15px;
 }
 
 .facts {
@@ -305,36 +361,26 @@ body {
   margin: var(--s3) 0 0;
   padding: 0;
   display: grid;
-  gap: var(--s1);
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: var(--s2);
 }
 .facts li {
   position: relative;
-  padding-left: var(--s4);
+  padding: 8px 10px 8px 24px;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  line-height: 1.35;
 }
 .facts li::before {
   content: "";
   position: absolute;
-  left: 0;
-  top: 0.62em;
+  left: 10px;
+  top: 13px;
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--muted);
-}
-
-.hero-final {
-  margin: var(--s4) 0 0;
-  padding-top: var(--s3);
-  border-top: 1px solid var(--border);
-}
-.hero-final dt {
-  color: var(--muted);
-  font-size: 15px;
-}
-.hero-final dd {
-  margin: 2px 0 0;
-  font-size: 22px;
-  font-weight: 700;
+  background: var(--hero-accent, var(--muted));
 }
 
 /* ---------- Tabid ja segmentnupud ---------- */
@@ -362,13 +408,28 @@ body {
   font: inherit;
   font-weight: 600;
   min-height: 40px;
-  padding: 0 20px;
+  padding: 0 18px;
   border-radius: 999px;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 .tab[aria-selected="true"] {
   background: var(--text);
   color: var(--surface);
+}
+.tab__badge {
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.8;
+}
+.tab__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--cat-roheline);
+  display: inline-block;
 }
 
 .segmented {
@@ -379,6 +440,16 @@ body {
   display: flex;
   flex-wrap: wrap;
   gap: var(--s2);
+}
+.segmented--grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--s2);
+}
+@media (min-width: 420px) {
+  .segmented--grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
 }
 .segmented input {
   position: absolute;
@@ -392,13 +463,16 @@ body {
   align-items: center;
   justify-content: center;
   min-height: 44px;
-  min-width: 56px;
-  padding: 0 14px;
+  min-width: 48px;
+  padding: 0 12px;
   border: 1px solid var(--border);
   border-radius: 999px;
   background: var(--surface-2);
   font-weight: 600;
   cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: background-color 0.12s ease, color 0.12s ease, border-color 0.12s ease;
 }
 .segmented input:checked + label {
   background: var(--text);
@@ -420,12 +494,32 @@ body {
   margin: 0 0 var(--s2);
   padding: 0;
   font-weight: 600;
+  font-size: 15px;
 }
 
 /* ---------- Graafik ---------- */
-.chart-day {
+.chart-status-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s1) var(--s3);
+  min-height: 26px;
   margin: 0 0 var(--s2);
+}
+.chart-day {
+  margin: 0;
   color: var(--muted);
+  font-size: 15px;
+}
+.chart-inspector {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--surface-2);
+  padding: 2px 10px;
+  border-radius: 999px;
 }
 .chart-wrapper {
   position: relative;
@@ -440,9 +534,15 @@ body {
   width: 100%;
   height: auto;
 }
-.chart-svg { border-radius: var(--radius-sm); }
+.chart-svg {
+  border-radius: var(--radius-sm);
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+}
 
-.bar--active { stroke: var(--text); stroke-width: 2; }
+.bar--past { opacity: 0.38; }
+.bar--active { stroke: var(--text); stroke-width: 2; opacity: 1 !important; }
 .bar-current { animation: pulse 2.4s ease-in-out infinite; }
 @keyframes pulse {
   0%, 100% { stroke-opacity: 1; }
@@ -460,14 +560,15 @@ body {
   font-size: 14px;
   line-height: 1.35;
   pointer-events: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
 }
 .tooltip strong,
 .tooltip span {
   display: block;
 }
-.tooltip strong { font-size: 16px; }
+.tooltip strong { font-size: 15px; }
 .tooltip__price {
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 700;
 }
 
@@ -476,7 +577,7 @@ body {
   flex-wrap: wrap;
   gap: var(--s1) var(--s3);
   margin: var(--s2) 0 0;
-  font-size: 14px;
+  font-size: 13px;
   color: var(--muted);
 }
 .legend__item {
@@ -502,6 +603,10 @@ body {
   background: none;
   border: 2px solid var(--text);
 }
+.legend__swatch--best {
+  background: var(--cat-roheline-bg);
+  border: 1.5px solid var(--cat-roheline);
+}
 .legend__swatch--outline {
   background: var(--surface-2);
   border: 1px dashed var(--bar-primary);
@@ -509,88 +614,162 @@ body {
 
 .stats {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(76px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
   gap: var(--s2);
   margin: var(--s3) 0 0;
 }
 .stat {
   min-width: 0;
-  padding: var(--s2) 10px;
+  padding: var(--s2) 12px;
   border-radius: var(--radius-sm);
   background: var(--surface-2);
 }
 .stat__label {
   margin: 0;
-  font-size: 14px;
+  font-size: 13px;
   color: var(--muted);
 }
 .stat__value {
   margin: 2px 0 0;
-  font-size: 22px;
+  font-size: 21px;
   font-weight: 700;
-  line-height: 1.1;
+  line-height: 1.15;
 }
+.stat__value--good { color: var(--cat-roheline); }
+.stat__value--bad { color: var(--cat-punane); }
 .stat__time {
   margin: 2px 0 0;
-  font-size: 14px;
+  font-size: 13px;
   color: var(--muted);
 }
 
 /* ---------- Plokk 3: planeerija ---------- */
-.plan { margin: var(--s4) 0 0; }
+.plan {
+  margin: var(--s3) 0 0;
+  padding: var(--s3) var(--s4);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  border-left: 4px solid var(--cat-roheline);
+}
+.plan__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+}
 .plan__label {
   margin: 0;
   color: var(--muted);
-  font-size: 15px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.plan__badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--cat-roheline-bg);
+  color: var(--cat-roheline-fg);
+  font-size: 13px;
+  font-weight: 700;
 }
 .plan__window {
-  margin: 2px 0 0;
-  font-size: 26px;
-  font-weight: 700;
+  margin: 4px 0 0;
+  font-size: 25px;
+  font-weight: 800;
   line-height: 1.15;
+  letter-spacing: -0.01em;
 }
 .plan__avg {
   margin: var(--s1) 0 0;
-  font-size: 17px;
+  font-size: 16px;
+  font-weight: 600;
 }
 .plan__saving {
-  margin: var(--s1) 0 0;
+  margin: 2px 0 0;
+  font-size: 15px;
+  color: var(--cat-roheline-fg);
   font-weight: 600;
 }
 .plan__tip {
   margin: var(--s2) 0 0;
   color: var(--muted);
+  font-size: 14px;
 }
 .plan__avoid {
-  margin: var(--s3) 0 0;
+  margin: var(--s2) 0 0;
   padding: var(--s2) var(--s3);
   border-radius: var(--radius-sm);
-  background: var(--surface-2);
+  background: var(--cat-punane-bg);
+  color: var(--cat-punane-fg);
+  border-left: 3px solid var(--cat-punane);
+  font-size: 14px;
 }
-.plan__avoid strong { font-size: 17px; }
+.plan__avoid strong { font-size: 15px; }
 
 .ev {
-  margin: var(--s4) 0 0;
-  padding-top: var(--s2);
+  margin: var(--s3) 0 0;
   border-top: 1px solid var(--border);
+  padding-top: var(--s2);
 }
 .ev__summary {
+  list-style: none;
   cursor: pointer;
-  padding: 10px 0;
+  padding: 8px 0;
   font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+  user-select: none;
+}
+.ev__summary::-webkit-details-marker { display: none; }
+.ev__summary-title {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+}
+.ev__summary-title::after {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted);
+  transform: rotate(45deg);
+  transition: transform 0.15s ease;
+  margin-top: -2px;
+}
+.ev[open] .ev__summary-title::after {
+  transform: rotate(-135deg);
+  margin-top: 3px;
+}
+.ev__summary-meta {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+  background: var(--surface-2);
+  padding: 2px 10px;
+  border-radius: 999px;
 }
 .ev__body { padding: var(--s2) 0 0; }
-.ev__body p { margin: var(--s2) 0 0; }
+.ev__body p { margin: var(--s2) 0 0; font-size: 15px; }
 .ev__window {
-  font-size: 22px;
+  font-size: 21px;
   font-weight: 700;
 }
 
 /* ---------- Plokk 4: lõpphind ---------- */
+.final-head-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s2);
+}
 .big-number {
   margin: 0;
   font-size: 40px;
-  font-weight: 700;
+  font-weight: 800;
   line-height: 1;
   letter-spacing: -0.02em;
 }
@@ -599,10 +778,27 @@ body {
   font-weight: 600;
   color: var(--muted);
 }
+.tariff-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+.final-split {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s2);
+  margin: var(--s3) 0 0;
+}
 .breakdown {
   width: 100%;
   margin: var(--s3) 0 0;
   border-collapse: collapse;
+  font-size: 15px;
 }
 .breakdown th,
 .breakdown td {
@@ -620,13 +816,13 @@ body {
 }
 .breakdown .breakdown__total td {
   font-weight: 700;
-  font-size: 18px;
+  font-size: 17px;
   border-bottom: 0;
 }
 .shares-bar {
   display: flex;
-  height: 16px;
-  margin: var(--s4) 0 0;
+  height: 14px;
+  margin: var(--s3) 0 0;
   border-radius: 999px;
   overflow: hidden;
 }
@@ -637,7 +833,7 @@ body {
   padding: 0;
   display: grid;
   gap: 4px;
-  font-size: 15px;
+  font-size: 14px;
 }
 .shares li {
   display: flex;
@@ -650,22 +846,22 @@ body {
 }
 
 /* ---------- Plokk 5: maja üldelekter ---------- */
-.building-lines {
-  margin: var(--s3) 0 0;
-  padding: 0;
-  list-style: none;
-  display: grid;
-  gap: var(--s1);
-}
-.building-change { font-weight: 700; }
+.building-bar { cursor: pointer; transition: opacity 0.12s ease; }
+.building-bar:hover { opacity: 0.85; }
 
 /* ---------- Jalus ---------- */
 .app-footer {
   margin: var(--s5) 0 var(--s3);
   color: var(--muted);
-  font-size: 15px;
+  font-size: 14px;
 }
 .app-footer p { margin: 0 0 var(--s2); }
+.app-footer__meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--s2);
+}
 
 /* ---------- Üldised abiklassid ---------- */
 .nowrap { white-space: nowrap; }
@@ -705,8 +901,8 @@ body {
   #section-building { grid-area: building; }
   .layout.no-building #section-final { grid-column: 1 / -1; }
   .card { padding: var(--s5); }
-  .hero-price__value { font-size: 64px; }
-  .stat__value { font-size: 26px; }
+  .hero-price__value { font-size: 60px; }
+  .stat__value { font-size: 24px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -754,7 +950,10 @@ body {
         </fieldset>
       </div>
       <div id="chart-panel" role="tabpanel" aria-labelledby="tab-today">
-        <p id="chart-day-label" class="chart-day"></p>
+        <div class="chart-status-bar">
+          <p id="chart-day-label" class="chart-day"></p>
+          <p id="chart-inspector" class="chart-inspector" aria-live="polite" hidden></p>
+        </div>
         <div class="chart-wrapper" id="chart-wrapper">
           <div id="chart-svg-host" class="chart-host"></div>
           <div id="chart-tooltip" class="tooltip" role="tooltip" aria-live="polite" hidden></div>
@@ -768,12 +967,15 @@ body {
     <!-- 3. Leia odavaim aeg -->
     <section class="card" id="section-planner" aria-labelledby="h-planner">
       <h2 id="h-planner" class="card__title">Leia odavaim aeg</h2>
-      <fieldset class="segmented" id="duration-select">
+      <fieldset class="segmented segmented--grid" id="duration-select">
         <legend class="field-label">Soovin tarbida järjest:</legend>
       </fieldset>
       <div id="planner-result"><p class="placeholder">Elektrihindade laadimine…</p></div>
       <details class="ev" id="ev-details">
-        <summary class="ev__summary">Elektriauto laadimine</summary>
+        <summary class="ev__summary">
+          <span class="ev__summary-title">Elektriauto laadimine</span>
+          <span class="ev__summary-meta" id="ev-summary-meta"></span>
+        </summary>
         <div class="ev__body">
           <fieldset class="segmented segmented--small" id="ev-charger-select">
             <legend class="field-label">Laadija võimsus:</legend>
@@ -799,6 +1001,9 @@ body {
           <input type="radio" name="building-view" id="bv-eur" value="eur"><label for="bv-eur">€</label>
         </fieldset>
       </div>
+      <div class="chart-status-bar">
+        <p id="building-chart-info" class="chart-day"></p>
+      </div>
       <div id="building-chart-host" class="chart-host"></div>
       <div id="building-body"></div>
     </section>
@@ -808,7 +1013,10 @@ body {
   <!-- 6. Jalus -->
   <footer class="app-footer">
     <p><strong>Andmeallikas: Elering Live.</strong> Börsihind on Nord Pooli Eesti hinnapiirkonna elektrienergia hind. Tegelik elektriarve sisaldab lisaks müüja marginaali, võrgutasusid, riiklikke tasusid, makse ja võimalikke fikseeritud kuutasusid.</p>
-    <p id="footer-updated">Andmeid pole veel uuendatud</p>
+    <div class="app-footer__meta">
+      <p id="footer-updated">Andmeid pole veel uuendatud</p>
+      <p id="footer-version"></p>
+    </div>
   </footer>
 </div>
 
@@ -919,6 +1127,7 @@ const CONFIG = {
 };
 
 /* Tehnilised konstandid — neid ei ole tavakasutuses vaja muuta. */
+const APP_VERSION = '2.0.0';
 const TIME_ZONE = 'Europe/Tallinn';
 const API_URL = 'https://dashboard.elering.ee/api/nps/price';
 const API_TIMEOUT_MS = 20000;
@@ -945,6 +1154,7 @@ const state = {
   selectedDuration: 120,  // planeerija kestus minutites
   evChargerKw: Number(CONFIG.elektriauto.vaikimisiLaadijaKw),
   buildingView: 'kwh',    // 'kwh' | 'eur'
+  selectedBuildingIndex: null, // valitud kuu indeks maja üldelektri graafikul
   lastUpdated: null,      // viimase eduka laadimise aeg (Date)
   loading: false,
   error: null,            // eestikeelne veateade, kui andmeid pole üldse õnnestunud laadida
@@ -1705,9 +1915,12 @@ function renderStatus() {
   byId('footer-updated').textContent = state.lastUpdated
     ? `Viimati uuendatud ${formatTime(state.lastUpdated)}`
     : 'Andmeid pole veel uuendatud';
+  const verEl = byId('footer-version');
+  if (verEl) verEl.textContent = `v${APP_VERSION}`;
 
   if (state.loading) status.textContent = state.periods.length ? 'Uuendan elektrihindu…' : 'Elektrihindade laadimine…';
   else if (state.refreshFailed && state.lastUpdated) status.textContent = `Kuvatakse kell ${formatTime(state.lastUpdated)} laaditud hindu.`;
+  else if (state.lastUpdated) status.textContent = `Uuendatud ${formatTime(state.lastUpdated)}`;
   else status.textContent = '';
 
   if (state.error && !state.periods.length) {
@@ -1740,25 +1953,27 @@ function renderCurrentPrice(d, a, rec) {
   const facts = a.facts.filter(f => !rec || f.key !== rec.usedKey);
 
   host.replaceChildren(
-    el('p', { class: 'verdict' }, [el('span', { class: 'visually-hidden', text: 'Hinnang: ' }), a.label]),
-    el('p', { class: 'hero-price' }, [
-      el('span', { class: 'hero-price__value', text: numberFormat.d2.format(a.price) }),
-      el('span', { class: 'hero-price__unit', text: 's/kWh' })
+    el('div', { class: 'hero-top' }, [
+      el('p', { class: 'verdict' }, [el('span', { class: 'visually-hidden', text: 'Hinnang: ' }), a.label]),
+      el('p', { class: 'hero-period', text: `Kehtib ${formatTimeRange(current.start, current.end)}` })
     ]),
-    el('p', { class: 'hero-meta' }, [
-      `Börsihind koos ${numberFormat.pct.format(CONFIG.hinnad.kaibemaks)}% käibemaksuga, kehtib `,
-      el('span', { class: 'nowrap', text: formatTimeRange(current.start, current.end) })
+    el('div', { class: 'hero-price-row' }, [
+      el('p', { class: 'hero-price' }, [
+        el('span', { class: 'hero-price__value', text: numberFormat.d2.format(a.price) }),
+        el('span', { class: 'hero-price__unit', text: 's/kWh' })
+      ]),
+      el('div', { class: 'hero-final-pill', title: 'Maja hinnanguline lõpphind praegu koos võrgutasude, aktsiisi ja käibemaksuga' }, [
+        el('span', { class: 'hero-final-pill__label', text: 'Koos tasudega' }),
+        el('span', { class: 'hero-final-pill__value', text: formatCents(finalPrice.total) })
+      ])
     ]),
+    el('p', { class: 'hero-meta', text: `Börsihind koos ${numberFormat.pct.format(CONFIG.hinnad.kaibemaks)}% käibemaksuga` }),
     a.comparison ? el('p', { class: 'compare', text: a.comparison }) : null,
     rec ? el('div', { class: 'advice' }, [
       el('p', { class: 'advice__title', text: rec.title }),
       rec.text ? el('p', { class: 'advice__text', text: rec.text }) : null
     ]) : null,
-    facts.length ? el('ul', { class: 'facts' }, facts.map(f => el('li', { text: f.text }))) : null,
-    el('dl', { class: 'hero-final' }, [
-      el('dt', { text: 'Maja hinnanguline lõpphind praegu, koos võrgutasude ja muude tasudega' }),
-      el('dd', { text: formatCents(finalPrice.total) })
-    ])
+    facts.length ? el('ul', { class: 'facts' }, facts.map(f => el('li', { text: f.text }))) : null
   );
 }
 
@@ -1779,23 +1994,39 @@ function updateResolutionToggle() {
   byId('res-15').checked = resolution === 15;
 }
 
+function updateTomorrowTab(d) {
+  const tab = byId('tab-tomorrow');
+  if (!tab) return;
+  if (!state.periods.length) {
+    tab.replaceChildren('Homme');
+    return;
+  }
+  if (d.hasTomorrow) {
+    tab.replaceChildren('Homme', el('span', { class: 'tab__dot', title: 'Homsed hinnad on saadaval', 'aria-hidden': 'true' }));
+  } else {
+    const at = d.tomorrowStatus.publish ? formatTime(d.tomorrowStatus.publish) : '15:00';
+    tab.replaceChildren('Homme', el('span', { class: 'tab__badge', text: `(${at})` }));
+  }
+}
+
 function renderChartLegend() {
   const legend = byId('chart-legend');
   const limits = CONFIG.hinnapiirid;
   const labels = CONFIG.hinnasildid;
   const fmt = v => numberFormat.d0.format(v);
   const items = [
-    ['var(--cat-roheline)', `${labels.vagaOdav} (alla ${fmt(limits.roheline)})`],
+    ['var(--cat-roheline)', `${labels.vagaOdav} (<${fmt(limits.roheline)})`],
     ['var(--cat-kollane)', `${labels.soodne} (${fmt(limits.roheline)}–${fmt(limits.kollane)})`],
     ['var(--cat-oranz)', `${labels.moodukas} (${fmt(limits.kollane)}–${fmt(limits.oranz)})`],
-    ['var(--cat-punane)', `${labels.kallis} (${fmt(limits.oranz)} ja rohkem)`]
+    ['var(--cat-punane)', `${labels.kallis} (≥${fmt(limits.oranz)})`]
   ];
   legend.replaceChildren(
     ...items.map(([color, text]) => el('span', { class: 'legend__item' }, [
       el('span', { class: 'legend__swatch', style: `--swatch:${color}`, 'aria-hidden': 'true' }), text
     ])),
     el('span', { class: 'legend__item' }, [el('span', { class: 'legend__swatch legend__swatch--line', 'aria-hidden': 'true' }), 'päeva keskmine']),
-    el('span', { class: 'legend__item' }, [el('span', { class: 'legend__swatch legend__swatch--current', 'aria-hidden': 'true' }), 'praegune periood'])
+    el('span', { class: 'legend__item' }, [el('span', { class: 'legend__swatch legend__swatch--current', 'aria-hidden': 'true' }), 'praegune periood']),
+    el('span', { class: 'legend__item' }, [el('span', { class: 'legend__swatch legend__swatch--best', 'aria-hidden': 'true' }), 'valitud odavaim aken'])
   );
 }
 
@@ -1809,6 +2040,7 @@ function renderPriceChart(d) {
 
   byId('chart-day-label').textContent = `${isToday ? 'Täna' : 'Homme'}, ${dateLongFormatter.format(dayStart)}`;
   updateResolutionToggle();
+  updateTomorrowTab(d);
 
   if (!dayPeriods.length) {
     hideTooltip();
@@ -1830,28 +2062,32 @@ function renderPriceChart(d) {
   const avg = calculateWeightedAverage(dayPeriods);
   const width = Math.max(240, Math.floor(host.clientWidth || 320));
   const currentTs = d.current ? d.current.timestamp : null;
-  const key = [state.selectedDay, resolution, currentTs, state.dataVersion, width].join('|');
+  const bestWindow = findBestWindow(d.future, d.now, state.selectedDuration, d.horizonEnd);
+  const bestKey = bestWindow ? `${bestWindow.start.getTime()}-${bestWindow.end.getTime()}` : '';
+  const key = [state.selectedDay, resolution, currentTs, state.dataVersion, width, bestKey].join('|');
   if (key === state.chartKey && host.firstChild) return;
   state.chartKey = key;
 
   const hadFocus = host.firstChild && document.activeElement === host.firstChild;
   hideTooltip();
-  const chart = buildPriceChartSvg({ bars, avg, dayStart, dayEnd, width, currentTs, isToday, dayPeriods });
+  const chart = buildPriceChartSvg({ bars, avg, dayStart, dayEnd, width, currentTs, isToday, dayPeriods, bestWindow, nowMs: d.now.getTime() });
   state.chartItems = chart.items;
   host.replaceChildren(chart.svg);
   attachChartInteraction(chart.svg, chart.items, avg);
   if (hadFocus) chart.svg.focus();
 }
 
-function buildPriceChartSvg({ bars, avg, dayStart, dayEnd, width, currentTs, isToday, dayPeriods }) {
+function buildPriceChartSvg({ bars, avg, dayStart, dayEnd, width, currentTs, isToday, dayPeriods, bestWindow, nowMs }) {
   const height = CHART_HEIGHT;
   const padL = 38;
   const padR = 8;
-  const padT = 16;
+  const padT = 18;
   const padB = 26;
   const plotW = width - padL - padR;
   const plotH = height - padT - padB;
-  const dayMs = dayEnd.getTime() - dayStart.getTime();
+  const dayStartMs = dayStart.getTime();
+  const dayEndMs = dayEnd.getTime();
+  const dayMs = dayEndMs - dayStartMs;
 
   const prices = bars.map(b => b.spotIncVatCentsKwh);
   let yMin = Math.min(0, ...prices);
@@ -1861,7 +2097,7 @@ function buildPriceChartSvg({ bars, avg, dayStart, dayEnd, width, currentTs, isT
   yMax += span * 0.08;
   if (yMin < 0) yMin -= span * 0.08;
   const y = value => padT + (yMax - value) / (yMax - yMin) * plotH;
-  const x = time => padL + (time - dayStart.getTime()) / dayMs * plotW;
+  const x = time => padL + (time - dayStartMs) / dayMs * plotW;
   const zeroY = y(0);
   const hasNegative = prices.some(p => p < 0);
   const { min, max } = getMinMax(dayPeriods);
@@ -1876,8 +2112,26 @@ function buildPriceChartSvg({ bars, avg, dayStart, dayEnd, width, currentTs, isT
     'aria-label': `${isToday ? 'Tänased' : 'Homsed'} börsihinnad ${bars.length} perioodi kaupa. ` +
       `Madalaim ${formatCents(min.spotIncVatCentsKwh)} kell ${formatTime(min.start)}, ` +
       `kõrgeim ${formatCents(max.spotIncVatCentsKwh)} kell ${formatTime(max.start)}, ` +
-      `päeva keskmine ${formatCents(avg)}. Nooleklahvidega saab perioode ükshaaval vaadata.`
+      `päeva keskmine ${formatCents(avg)}. Nooleklahvidega või sõrmega libistades saab perioode ükshaaval vaadata.`
   });
+
+  // Valitud odavaima ajaakna taustaesiletõst
+  if (bestWindow) {
+    const bwStart = Math.max(dayStartMs, bestWindow.start.getTime());
+    const bwEnd = Math.min(dayEndMs, bestWindow.end.getTime());
+    if (bwEnd > bwStart) {
+      const bx = x(bwStart);
+      const bw = Math.max(2, x(bwEnd) - bx);
+      svg.append(svgEl('rect', {
+        x: bx, y: padT - 4, width: bw, height: plotH + 4, rx: 4,
+        fill: 'var(--cat-roheline-bg)', opacity: '0.55'
+      }));
+      svg.append(svgEl('line', {
+        x1: bx, x2: bx + bw, y1: padT - 4, y2: padT - 4,
+        stroke: 'var(--cat-roheline)', 'stroke-width': 2.5
+      }));
+    }
+  }
 
   // Ruudustik ja y-telg
   const axis = niceTicks(yMin, yMax, 4);
@@ -1902,12 +2156,14 @@ function buildPriceChartSvg({ bars, avg, dayStart, dayEnd, width, currentTs, isT
     const barH = Math.max(1, Math.abs(y(price) - zeroY));
     const category = getPriceCategory(price);
     const isCurrent = currentTs != null && (bar.members ? bar.members.some(m => m.timestamp === currentTs) : bar.timestamp === currentTs);
+    const isPast = isToday && !isCurrent && bar.end.getTime() <= nowMs;
     const rect = svgEl('rect', {
-      class: 'bar', x: barX, y: top, width: barW, height: barH, rx: Math.min(2, barW / 2),
+      class: isPast ? 'bar bar--past' : 'bar',
+      x: barX, y: top, width: barW, height: barH, rx: Math.min(2, barW / 2),
       fill: `var(--cat-${category})`, 'data-index': index
     });
     svg.append(rect);
-    items.push({ bar, rect, slotX, slotW, top, isCurrent, isAggregate: Boolean(bar.members) });
+    items.push({ bar, rect, slotX, slotW, top, isCurrent, isPast, isAggregate: Boolean(bar.members) });
   });
 
   // Nulljoon, kui on negatiivseid hindu
@@ -1922,10 +2178,12 @@ function buildPriceChartSvg({ bars, avg, dayStart, dayEnd, width, currentTs, isT
       x1: padL, x2: width - padR, y1: ay, y2: ay,
       stroke: 'var(--avg-line)', 'stroke-width': 1.5, 'stroke-dasharray': '5 4'
     }));
+    const labelText = `keskmine ${numberFormat.d2.format(avg)}`;
+    const labelY = ay > padT + 18 ? ay - 6 : ay + 14;
     svg.append(svgEl('text', {
-      x: width - padR, y: ay - 5, 'text-anchor': 'end', 'font-size': 12, 'font-weight': 600,
-      fill: 'var(--text)', stroke: 'var(--surface)', 'stroke-width': 3, 'paint-order': 'stroke',
-      text: `keskmine ${numberFormat.d2.format(avg)}`
+      x: width - padR - 4, y: labelY, 'text-anchor': 'end', 'font-size': 11, 'font-weight': 700,
+      fill: 'var(--text)', stroke: 'var(--surface)', 'stroke-width': 4, 'paint-order': 'stroke',
+      text: labelText
     }));
   }
 
@@ -1964,18 +2222,24 @@ function buildPriceChartSvg({ bars, avg, dayStart, dayEnd, width, currentTs, isT
 
 function hideTooltip() {
   const tooltip = byId('chart-tooltip');
+  const inspector = byId('chart-inspector');
   tooltip.hidden = true;
   tooltip.replaceChildren();
+  if (inspector) {
+    inspector.hidden = true;
+    inspector.textContent = '';
+  }
   for (const item of state.chartItems) item.rect.classList.remove('bar--active');
   state.tooltipIndex = null;
 }
 
-function showTooltip(index, avg) {
+function showTooltip(index, avg, pointerType = 'mouse') {
   const items = state.chartItems;
   if (!items.length) return;
   index = Math.max(0, Math.min(items.length - 1, index));
   const item = items[index];
   const tooltip = byId('chart-tooltip');
+  const inspector = byId('chart-inspector');
   const wrapper = byId('chart-wrapper');
   const price = item.bar.spotIncVatCentsKwh;
 
@@ -1983,18 +2247,27 @@ function showTooltip(index, avg) {
   item.rect.classList.add('bar--active');
   state.tooltipIndex = index;
 
-  const lines = [
-    el('strong', { text: formatTimeRange(item.bar.start, item.bar.end) }),
-    el('span', { class: 'tooltip__price', text: formatCents(price) + (item.isAggregate ? ' (tunni keskmine)' : '') })
-  ];
+  const timeRangeText = formatTimeRange(item.bar.start, item.bar.end);
+  const priceText = formatCents(price);
+  let diffText = '';
   if (avg != null) {
     const diff = price - avg;
-    let text;
-    if (Math.abs(diff) < 0.005) text = 'Sama, mis päeva keskmine';
-    else if (avg > 0 && price > 0) text = `${formatPercentAbs(diff / avg * 100)} ${diff < 0 ? 'odavam' : 'kallim'} kui päeva keskmine`;
-    else text = `${formatCents(Math.abs(diff))} ${diff < 0 ? 'alla' : 'üle'} päeva keskmise`;
-    lines.push(el('span', { text }));
+    if (Math.abs(diff) < 0.005) diffText = 'Sama, mis päeva keskmine';
+    else if (avg > 0 && price > 0) diffText = `${formatPercentAbs(diff / avg * 100)} ${diff < 0 ? 'odavam' : 'kallim'} kui päeva keskmine`;
+    else diffText = `${formatCents(Math.abs(diff))} ${diff < 0 ? 'alla' : 'üle'} päeva keskmise`;
   }
+
+  // Uuenda graafiku ülemist fikseeritud infopaneeli (eriti mugav mobiilis sõrmega vedades)
+  if (inspector) {
+    inspector.textContent = `${timeRangeText} · ${priceText}`;
+    inspector.hidden = false;
+  }
+
+  const lines = [
+    el('strong', { text: timeRangeText }),
+    el('span', { class: 'tooltip__price', text: priceText + (item.isAggregate ? ' (tunni keskmine)' : '') })
+  ];
+  if (diffText) lines.push(el('span', { text: diffText }));
   tooltip.replaceChildren(...lines);
   tooltip.hidden = false;
 
@@ -2005,8 +2278,13 @@ function showTooltip(index, avg) {
   const th = tooltip.offsetHeight;
   const maxLeft = Math.max(0, wrapper.clientWidth - tw);
   tooltip.style.left = `${Math.round(Math.min(maxLeft, Math.max(0, centerX - tw / 2)))}px`;
-  const above = item.top * scale - th - 8;
-  tooltip.style.top = `${Math.round(above >= 0 ? above : item.top * scale + 8)}px`;
+  if (pointerType === 'touch') {
+    // Mobiilis hoia hõljuv kast graafiku ülaservas, et see ei jääks sõrme alla
+    tooltip.style.top = '0px';
+  } else {
+    const above = item.top * scale - th - 8;
+    tooltip.style.top = `${Math.round(above >= 0 ? above : item.top * scale + 8)}px`;
+  }
 }
 
 function attachChartInteraction(svg, items, avg) {
@@ -2019,27 +2297,31 @@ function attachChartInteraction(svg, items, avg) {
     items.forEach((item, index) => {
       if (px >= item.slotX && px < item.slotX + item.slotW) { best = index; bestDistance = 0; return; }
       const distance = Math.min(Math.abs(px - item.slotX), Math.abs(px - item.slotX - item.slotW));
-      if (bestDistance > 0 && distance < bestDistance && distance < 12) { best = index; bestDistance = distance; }
+      if (bestDistance > 0 && distance < bestDistance && distance < 16) { best = index; bestDistance = distance; }
     });
     return best;
   };
   const currentIndex = Math.max(0, items.findIndex(i => i.isCurrent));
+  let touchActive = false;
 
-  svg.addEventListener('pointermove', event => {
-    if (event.pointerType === 'touch') return;
-    const index = indexFromClientX(event.clientX);
-    if (index != null) showTooltip(index, avg);
-  });
-  svg.addEventListener('pointerleave', () => {
-    if (document.activeElement !== svg) hideTooltip();
-  });
   svg.addEventListener('pointerdown', event => {
-    if (event.pointerType === 'mouse') return;
+    if (event.pointerType === 'touch') touchActive = true;
     const index = indexFromClientX(event.clientX);
-    if (index != null) showTooltip(index, avg);
+    if (index != null) showTooltip(index, avg, event.pointerType);
+  });
+  svg.addEventListener('pointermove', event => {
+    if (event.pointerType === 'touch' && !touchActive) return;
+    const index = indexFromClientX(event.clientX);
+    if (index != null) showTooltip(index, avg, event.pointerType);
+  });
+  svg.addEventListener('pointerup', () => { touchActive = false; });
+  svg.addEventListener('pointercancel', () => { touchActive = false; });
+  svg.addEventListener('pointerleave', event => {
+    touchActive = false;
+    if (event.pointerType !== 'touch' && document.activeElement !== svg) hideTooltip();
   });
   svg.addEventListener('focus', () => {
-    showTooltip(state.tooltipIndex ?? currentIndex, avg);
+    showTooltip(state.tooltipIndex ?? currentIndex, avg, 'mouse');
   });
   svg.addEventListener('blur', hideTooltip);
   svg.addEventListener('keydown', event => {
@@ -2052,7 +2334,7 @@ function attachChartInteraction(svg, items, avg) {
     else if (event.key === 'Escape') { hideTooltip(); return; }
     if (next == null) return;
     event.preventDefault();
-    showTooltip(next, avg);
+    showTooltip(next, avg, 'mouse');
   });
 }
 
@@ -2062,13 +2344,13 @@ function renderDaySummary(d) {
   if (!dayPeriods.length) { host.replaceChildren(); return; }
   const { min, max } = getMinMax(dayPeriods);
   const avg = calculateWeightedAverage(dayPeriods);
-  const tile = (label, value, time) => el('div', { class: 'stat' }, [
+  const tile = (label, value, time, modifier = '') => el('div', { class: 'stat' }, [
     el('p', { class: 'stat__label', text: label }),
-    el('p', { class: 'stat__value', text: numberFormat.d2.format(value) }),
-    el('p', { class: 'stat__time', text: time || 's/kWh' })
+    el('p', { class: modifier ? `stat__value ${modifier}` : 'stat__value', text: numberFormat.d2.format(value) }),
+    el('p', { class: 'stat__time', text: time ? `${time} · s/kWh` : 's/kWh' })
   ]);
   host.replaceChildren(
-    tile('Madalaim', min.spotIncVatCentsKwh, formatTime(min.start)),
+    tile('Madalaim', min.spotIncVatCentsKwh, formatTime(min.start), 'stat__value--good'),
     tile('Keskmine', avg, null),
     tile('Kõrgeim', max.spotIncVatCentsKwh, formatTime(max.start))
   );
@@ -2107,10 +2389,16 @@ function renderPlanner(d) {
     const tip = duration >= 240
       ? 'Sobiv aeg elektriauto laadimiseks või boileri kütmiseks.'
       : 'Sobiv aeg pesumasina, kuivati või nõudepesumasina kasutamiseks.';
+    const waitMinutes = (best.start.getTime() - nowMs) / MINUTE_MS;
+    const countdownText = waitMinutes <= 2 ? 'Praegu käib' : `Algab ${formatDuration(waitMinutes)} pärast`;
+
     nodes.push(el('div', { class: 'plan' }, [
-      el('p', { class: 'plan__label', text: `Parim aeg (${formatDuration(duration)} järjest)` }),
+      el('div', { class: 'plan__head' }, [
+        el('p', { class: 'plan__label', text: `Parim aeg (${formatDuration(duration)} järjest)` }),
+        el('span', { class: 'plan__badge', text: countdownText })
+      ]),
       el('p', { class: 'plan__window', text: describeRange(best.start, best.end, d.now) }),
-      el('p', { class: 'plan__avg', text: `Keskmine hind ${formatCents(best.avg)}` }),
+      el('p', { class: 'plan__avg', text: `Keskmine börsihind ${formatCents(best.avg)}` }),
       reference ? el('p', { class: 'plan__saving', text: describeSaving(best.avg, reference.avg, labelNom, labelGen) }) : null,
       el('p', { class: 'plan__tip', text: tip })
     ]));
@@ -2118,7 +2406,7 @@ function renderPlanner(d) {
       nodes.push(el('p', { class: 'plan__avoid' }, [
         'Väldi võimalusel: ',
         el('strong', { text: describeRange(worst.start, worst.end, d.now) }),
-        `, keskmiselt ${formatCents(worst.avg)}.`
+        ` (keskmiselt ${formatCents(worst.avg)}).`
       ]));
     }
   }
@@ -2133,6 +2421,11 @@ function renderPlanner(d) {
 
 function renderEv(d) {
   const host = byId('ev-result');
+  const metaEl = byId('ev-summary-meta');
+  const ev = CONFIG.elektriauto;
+  if (metaEl) {
+    metaEl.textContent = `${numberFormat.pct.format(ev.laadimiseAlgusProtsent)}→${numberFormat.pct.format(ev.laadimiseLoppProtsent)}% · ${numberFormat.max1.format(state.evChargerKw)} kW`;
+  }
   if (!state.periods.length) {
     host.replaceChildren(el('p', { class: 'placeholder', text: placeholderText() }));
     return;
@@ -2142,15 +2435,14 @@ function renderEv(d) {
     host.replaceChildren(el('p', { class: 'notice', text: result.error }));
     return;
   }
-  const ev = CONFIG.elektriauto;
   const nodes = [
-    el('p', { text: `Vajalik energia ${numberFormat.d1.format(result.energyKwh)} kWh (aku ${numberFormat.pct.format(ev.laadimiseAlgusProtsent)}% → ${numberFormat.pct.format(ev.laadimiseLoppProtsent)}%, kasutegur ${numberFormat.pct.format(ev.laadimiseKasutegur * 100)}%). Laadimisaeg ${numberFormat.max1.format(state.evChargerKw)} kW laadijaga ${formatDuration(result.minutes)}.` })
+    el('p', { text: `Vajalik energia ${numberFormat.d1.format(result.energyKwh)} kWh (${numberFormat.d0.format(ev.akuKwh)} kWh aku ${numberFormat.pct.format(ev.laadimiseAlgusProtsent)}% → ${numberFormat.pct.format(ev.laadimiseLoppProtsent)}%, kasutegur ${numberFormat.pct.format(ev.laadimiseKasutegur * 100)}%). Laadimisaeg ${numberFormat.max1.format(state.evChargerKw)} kW laadijaga ${formatDuration(result.minutes)}.` })
   ];
   if (result.best) {
     nodes.push(
       el('p', { class: 'plan__label', text: 'Soovitatud laadimine' }),
       el('p', { class: 'ev__window', text: describeRange(result.best.start, result.best.end, d.now) }),
-      el('p', { text: `Hinnanguline börsikulu ${formatEur(result.cost)} (koos KM-ga, ilma võrgutasude ja muude tasudeta). Keskmine hind ${formatCents(result.best.avg)}.` })
+      el('p', { text: `Hinnanguline börsikulu ${formatEur(result.cost)} (koos KM-ga, ilma võrgutasude ja muude tasudeta). Keskmine börsihind ${formatCents(result.best.avg)}.` })
     );
   } else {
     nodes.push(el('p', { class: 'notice', text: d.hasTomorrow
@@ -2168,11 +2460,15 @@ function renderFinalPrice(d) {
   }
   const calc = calculateFinalPrice(d.current.spotExVatCentsKwh, d.now);
   const fees = CONFIG.hinnad;
+  const vat = vatFactor();
   const vatPercent = numberFormat.pct.format(fees.kaibemaks);
   const tariffLabel = calc.tariff === 'oo' ? 'öötariif' : 'päevatariif';
   const tariffNote = calc.tariff === 'oo' && calc.tariffReason === 'nädalavahetus'
     ? 'Nädalavahetusel kehtib öötariif kogu päeva.'
     : `Öötariif kehtib ${String(CONFIG.ootariif.algus).padStart(2, '0')}:00–${String(CONFIG.ootariif.lopp).padStart(2, '0')}:00${CONFIG.ootariif.nadalavahetusOnOo ? ' ja nädalavahetusel' : ''}.`;
+
+  const spotIncVat = calc.spot * vat;
+  const fixedAddonsIncVat = (calc.marginaal + calc.vorgutasu + calc.taastuvenergia + calc.aktsiis) * vat;
 
   const row = (label, value, extra = {}) => el('tr', extra, [
     el('td', { text: label }),
@@ -2187,13 +2483,26 @@ function renderFinalPrice(d) {
       row('Taastuvenergia+Varustuskindluse tasu', calc.taastuvenergia),
       row('Elektriaktsiis', calc.aktsiis),
       row(`Käibemaks ${vatPercent}%`, calc.vat),
-      row('Lõpphind', calc.total, { class: 'breakdown__total' })
+      row('Lõpphind koos KM-ga', calc.total, { class: 'breakdown__total' })
     ])
   ]);
 
   const nodes = [
-    el('p', { class: 'big-number' }, [numberFormat.d2.format(calc.total), ' ', el('small', { text: 's/kWh' })]),
-    el('p', { class: 'hero-meta', text: `Arvutatud hetke börsihinnast, kehtib ${formatTimeRange(d.current.start, d.current.end)}. ${capitalize(tariffLabel)} on valitud automaatselt kellaaja järgi. ${tariffNote}` }),
+    el('div', { class: 'final-head-row' }, [
+      el('p', { class: 'big-number' }, [numberFormat.d2.format(calc.total), ' ', el('small', { text: 's/kWh' })]),
+      el('span', { class: 'tariff-badge', text: `Kehtib ${tariffLabel}` })
+    ]),
+    el('div', { class: 'final-split' }, [
+      el('div', { class: 'stat' }, [
+        el('p', { class: 'stat__label', text: 'Börsihind (koos KM)' }),
+        el('p', { class: 'stat__value', text: formatCents(spotIncVat) })
+      ]),
+      el('div', { class: 'stat' }, [
+        el('p', { class: 'stat__label', text: 'Võrgu- ja riigitasud (koos KM)' }),
+        el('p', { class: 'stat__value', text: `+${formatCents(fixedAddonsIncVat)}` })
+      ])
+    ]),
+    el('p', { class: 'hero-meta', text: `Arvutatud hetke börsihinnast (${formatTimeRange(d.current.start, d.current.end)}). ${tariffNote}` }),
     table
   ];
   if (Number(fees.kuutasu) > 0) {
@@ -2210,7 +2519,7 @@ function renderFinalPrice(d) {
   const sharesValid = calc.total > 0 && shares.every(s => s[1] >= 0);
   if (sharesValid) {
     nodes.push(
-      el('p', { class: 'plan__label', text: 'Hinnakomponentide osakaal praegu' }),
+      el('p', { class: 'plan__label', style: 'margin-top:var(--s3)', text: 'Hinnakomponentide osakaal praegu' }),
       el('div', { class: 'shares-bar', 'aria-hidden': 'true' },
         shares.map(([, value, color]) => el('span', { style: `width:${(value / calc.total * 100).toFixed(2)}%;background:${color}` }))),
       el('ul', { class: 'shares' }, shares.map(([label, value, color]) => el('li', {}, [
@@ -2241,36 +2550,61 @@ function renderBuildingElectricity() {
   const unit = metric === 'eur' ? '€' : 'kWh';
   const host = byId('building-chart-host');
   const width = Math.max(240, Math.floor(host.clientWidth || 320));
-  host.replaceChildren(buildBuildingChartSvg(data, metric, width));
+  const activeIdx = state.selectedBuildingIndex != null && data.groups[state.selectedBuildingIndex]
+    ? state.selectedBuildingIndex
+    : data.groups.length - 1;
+  const activeGroup = data.groups[activeIdx];
+
+  host.replaceChildren(buildBuildingChartSvg(data, metric, width, activeIdx));
 
   const monthName = row => capitalize(monthLongFormatter.format(new Date(Date.UTC(row.year, row.month - 1, 15))));
-  const { latest, previousOfLatest } = data;
-  const lines = [
-    el('li', { text: `${monthName(latest)}: ${numberFormat.d0.format(latest.kwh)} kWh, ${formatEur(latest.eur)}` })
-  ];
-  if (previousOfLatest) {
-    lines.push(el('li', { text: `${monthName(previousOfLatest)}: ${numberFormat.d0.format(previousOfLatest.kwh)} kWh, ${formatEur(previousOfLatest.eur)}` }));
-    const oldValue = previousOfLatest[metric];
-    const newValue = latest[metric];
-    if (oldValue !== 0) {
-      const change = (newValue - oldValue) / oldValue * 100;
-      lines.push(el('li', { class: 'building-change', text: `${numberFormat.signed1.format(change)}% võrreldes eelmise aastaga (${unit})` }));
-    }
+  const selectedRow = activeGroup.current;
+  const prevRow = activeGroup.previous;
+
+  const infoEl = byId('building-chart-info');
+  if (infoEl) {
+    infoEl.textContent = prevRow
+      ? `${monthName(selectedRow)}: ${numberFormat.d0.format(selectedRow.kwh)} kWh (${formatEur(selectedRow.eur)}) · Aasta varem: ${numberFormat.d0.format(prevRow.kwh)} kWh (${formatEur(prevRow.eur)})`
+      : `${monthName(selectedRow)}: ${numberFormat.d0.format(selectedRow.kwh)} kWh (${formatEur(selectedRow.eur)})`;
   }
+
+  const statTiles = [
+    el('div', { class: 'stat' }, [
+      el('p', { class: 'stat__label', text: monthName(selectedRow) }),
+      el('p', { class: 'stat__value', text: metric === 'eur' ? formatEur(selectedRow.eur) : `${numberFormat.d0.format(selectedRow.kwh)} kWh` }),
+      el('p', { class: 'stat__time', text: metric === 'eur' ? `${numberFormat.d0.format(selectedRow.kwh)} kWh` : formatEur(selectedRow.eur) })
+    ])
+  ];
+
+  if (prevRow && prevRow[metric] !== 0) {
+    const change = (selectedRow[metric] - prevRow[metric]) / prevRow[metric] * 100;
+    const mod = change < -0.5 ? 'stat__value--good' : change > 0.5 ? 'stat__value--bad' : '';
+    statTiles.push(el('div', { class: 'stat' }, [
+      el('p', { class: 'stat__label', text: `Võrdlus (${selectedRow.year - 1})` }),
+      el('p', { class: mod ? `stat__value ${mod}` : 'stat__value', text: `${numberFormat.signed1.format(change)}%` }),
+      el('p', { class: 'stat__time', text: `aasta varem ${metric === 'eur' ? formatEur(prevRow.eur) : `${numberFormat.d0.format(prevRow.kwh)} ${unit}`}` })
+    ]));
+  }
+
   const flats = Number(CONFIG.korteriteArv);
   if (Number.isInteger(flats) && flats > 0) {
-    lines.push(el('li', { text: `Ühe korteri kohta (${monthName(latest).toLowerCase()}): ${numberFormat.d1.format(latest.kwh / flats)} kWh ja ${formatEur(latest.eur / flats)}` }));
+    statTiles.push(el('div', { class: 'stat' }, [
+      el('p', { class: 'stat__label', text: 'Korteri kohta' }),
+      el('p', { class: 'stat__value', text: formatEur(selectedRow.eur / flats) }),
+      el('p', { class: 'stat__time', text: `${numberFormat.d1.format(selectedRow.kwh / flats)} kWh / krt` })
+    ]));
   }
+
   byId('building-body').replaceChildren(
-    el('ul', { class: 'building-lines' }, lines),
+    el('div', { class: 'stats' }, statTiles),
     el('div', { class: 'legend' }, [
-      el('span', { class: 'legend__item' }, [el('span', { class: 'legend__swatch', style: '--swatch:var(--bar-primary)', 'aria-hidden': 'true' }), 'viimased 12 kuud']),
+      el('span', { class: 'legend__item' }, [el('span', { class: 'legend__swatch', style: '--swatch:var(--bar-primary)', 'aria-hidden': 'true' }), 'viimased 12 kuud (puuduta tulpa kuu valimiseks)']),
       data.groups.some(g => g.previous) ? el('span', { class: 'legend__item' }, [el('span', { class: 'legend__swatch legend__swatch--outline', 'aria-hidden': 'true' }), 'sama kuu aasta varem']) : null
     ])
   );
 }
 
-function buildBuildingChartSvg(data, metric, width) {
+function buildBuildingChartSvg(data, metric, width, activeIdx) {
   const height = 200;
   const padL = 44;
   const padR = 8;
@@ -2298,28 +2632,50 @@ function buildBuildingChartSvg(data, metric, width) {
 
   const slot = plotW / groups.length;
   const barW = Math.min(36, Math.max(6, slot * 0.34));
-  const showValues = groups.length <= 6;
+  const showAllValues = groups.length <= 6;
   const labelEvery = slot >= 40 ? 1 : slot >= 20 ? 2 : 3;
   let previousYear = null;
   groups.forEach((g, i) => {
+    const isSelected = i === activeIdx;
     const center = padL + slot * (i + 0.5);
     const hasPrev = Boolean(g.previous);
     const currentX = hasPrev ? center + 2 : center - barW / 2;
+
+    const hitZone = svgEl('rect', {
+      class: 'building-bar',
+      x: padL + slot * i, y: padT, width: slot, height: plotH,
+      fill: isSelected ? 'var(--surface-2)' : 'transparent', rx: 4
+    });
+    hitZone.addEventListener('click', () => {
+      state.selectedBuildingIndex = i;
+      renderBuildingElectricity();
+    });
+    svg.append(hitZone);
+
     if (hasPrev) {
       const prevX = center - barW - 2;
       svg.append(svgEl('rect', {
+        class: 'building-bar',
         x: prevX, y: y(g.previous[metric]), width: barW, height: Math.max(1, y(0) - y(g.previous[metric])), rx: 3,
-        fill: 'var(--surface-2)', stroke: 'var(--bar-primary)', 'stroke-width': 1.5, 'stroke-dasharray': '4 3'
+        fill: 'var(--surface-2)', stroke: 'var(--bar-primary)', 'stroke-width': 1.5, 'stroke-dasharray': '4 3',
+        'pointer-events': 'none'
       }));
-      if (showValues) svg.append(svgEl('text', { x: prevX + barW / 2, y: y(g.previous[metric]) - 5, 'text-anchor': 'middle', 'font-size': 11, fill: 'var(--muted)', text: numberFormat.d0.format(g.previous[metric]) }));
+      if (showAllValues) svg.append(svgEl('text', { x: prevX + barW / 2, y: y(g.previous[metric]) - 5, 'text-anchor': 'middle', 'font-size': 11, fill: 'var(--muted)', text: numberFormat.d0.format(g.previous[metric]), 'pointer-events': 'none' }));
     }
     svg.append(svgEl('rect', {
-      x: currentX, y: y(g.current[metric]), width: barW, height: Math.max(1, y(0) - y(g.current[metric])), rx: 3, fill: 'var(--bar-primary)'
+      class: isSelected ? 'building-bar bar--active' : 'building-bar',
+      x: currentX, y: y(g.current[metric]), width: barW, height: Math.max(1, y(0) - y(g.current[metric])), rx: 3,
+      fill: 'var(--bar-primary)', 'pointer-events': 'none'
     }));
-    if (showValues) svg.append(svgEl('text', { x: currentX + barW / 2, y: y(g.current[metric]) - 5, 'text-anchor': 'middle', 'font-size': 12, 'font-weight': 600, fill: 'var(--text)', text: numberFormat.d0.format(g.current[metric]) }));
+    if (showAllValues || isSelected) {
+      svg.append(svgEl('text', {
+        x: currentX + barW / 2, y: y(g.current[metric]) - 5, 'text-anchor': 'middle', 'font-size': 12, 'font-weight': 700,
+        fill: 'var(--text)', text: numberFormat.d0.format(g.current[metric]), 'pointer-events': 'none'
+      }));
+    }
 
     const monthLabel = monthShortFormatter.format(new Date(Date.UTC(g.current.year, g.current.month - 1, 15)));
-    if (i % labelEvery === 0) svg.append(svgEl('text', { x: center, y: height - padB + 16, 'text-anchor': 'middle', 'font-size': 12, fill: 'var(--muted)', text: monthLabel }));
+    if (i % labelEvery === 0) svg.append(svgEl('text', { x: center, y: height - padB + 16, 'text-anchor': 'middle', 'font-size': 12, 'font-weight': isSelected ? 700 : 400, fill: isSelected ? 'var(--text)' : 'var(--muted)', text: monthLabel }));
     if (g.current.year !== previousYear) {
       svg.append(svgEl('text', { x: center, y: height - padB + 30, 'text-anchor': 'middle', 'font-size': 11, fill: 'var(--muted)', text: String(g.current.year) }));
       previousYear = g.current.year;
@@ -2400,7 +2756,13 @@ function setupControls() {
   buildRadioGroup(byId('duration-select'), 'duration',
     PLANNER_DURATIONS.map(m => ({ value: m, label: `${m / 60} h` })),
     state.selectedDuration,
-    value => { state.selectedDuration = value; if (state.derived) renderPlanner(state.derived); });
+    value => {
+      state.selectedDuration = value;
+      if (state.derived) {
+        renderPlanner(state.derived);
+        renderPriceChart(state.derived);
+      }
+    });
 
   const chargers = (Array.isArray(CONFIG.elektriauto.laadijadKw) ? CONFIG.elektriauto.laadijadKw : [])
     .map(Number).filter(kw => Number.isFinite(kw) && kw > 0);
