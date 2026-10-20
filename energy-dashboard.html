@@ -1,0 +1,3812 @@
+<!DOCTYPE html>
+<html lang="et">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f1f4f7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f1620" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="robots" content="noindex">
+<title>Kauge 32 energia</title>
+<style>
+/* ==========================================================================
+   Kauge 32 energia — kujundus (v1.0.0)
+   Sama disainikeel, mis index.html-is: kõik värvid, raadiused ja vahed on
+   custom property'tena. Energia identiteedivärvid (--solar, --home, --battery,
+   --grid) on kontrollitud värvipimeduse ja kontrasti suhtes mõlemas teemas.
+   ========================================================================== */
+:root {
+  color-scheme: light dark;
+
+  --bg: #f1f4f7;
+  --surface: #ffffff;
+  --surface-2: #f5f7fa;
+  --text: #1b2433;
+  --muted: #4a5566;
+  --border: #d3dae3;
+  --focus: #1f5fbf;
+
+  --radius: 16px;
+  --radius-sm: 10px;
+
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 24px;
+  --s6: 32px;
+
+  --shadow: 0 2px 8px rgba(27, 36, 51, 0.05), 0 1px 2px rgba(27, 36, 51, 0.04);
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+  /* Hinnakategooriad (samad, mis index.html-is): aktsent, sildi taust, sildi tekst */
+  --cat-roheline: #1f9d55;
+  --cat-roheline-bg: #dbf3e4;
+  --cat-roheline-fg: #0f5a31;
+  --cat-kollane: #c48f00;
+  --cat-kollane-bg: #fbf0c4;
+  --cat-kollane-fg: #614700;
+  --cat-oranz: #e8701a;
+  --cat-oranz-bg: #fde3cf;
+  --cat-oranz-fg: #7a3a08;
+  --cat-punane: #d22f2f;
+  --cat-punane-bg: #fadcdc;
+  --cat-punane-fg: #861c1c;
+
+  --avg-line: #1b2433;
+  --bar-primary: #2c5aa0;
+
+  /* Energiavoo osapooled */
+  --solar: #c27a12;
+  --home: #2c5aa0;
+  --battery: #3f8f5e;
+  --grid: #7b55b5;
+
+  --skeleton: #e6ebf1;
+  --skeleton-hi: #f5f7fa;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f1620;
+    --surface: #1a2230;
+    --surface-2: #232d3c;
+    --text: #edf1f6;
+    --muted: #b7c1ce;
+    --border: #33404f;
+    --focus: #8ab4f8;
+    --shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+
+    --cat-roheline: #3fcb79;
+    --cat-roheline-bg: #16402a;
+    --cat-roheline-fg: #bff2d2;
+    --cat-kollane: #f0c531;
+    --cat-kollane-bg: #4a3b08;
+    --cat-kollane-fg: #fbe7a3;
+    --cat-oranz: #f5924a;
+    --cat-oranz-bg: #4f2a0e;
+    --cat-oranz-fg: #ffd2b0;
+    --cat-punane: #f26565;
+    --cat-punane-bg: #4e1a1a;
+    --cat-punane-fg: #ffc7c7;
+
+    --avg-line: #edf1f6;
+    --bar-primary: #7faae8;
+
+    --solar: #c4862a;
+    --home: #5a8ad0;
+    --battery: #38a56a;
+    --grid: #9a76d8;
+
+    --skeleton: #232d3c;
+    --skeleton-hi: #2d394b;
+  }
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+[hidden] { display: none !important; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  font-family: var(--font);
+  font-size: 16px;
+  line-height: 1.45;
+  color: var(--text);
+  background: var(--bg);
+  overflow-x: hidden;
+  font-variant-numeric: tabular-nums;
+}
+
+.app {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: max(var(--s3), env(safe-area-inset-top)) max(var(--s3), env(safe-area-inset-right)) max(var(--s4), env(safe-area-inset-bottom)) max(var(--s3), env(safe-area-inset-left));
+}
+
+/* ---------- Päis, olek, teated ---------- */
+.app-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2) var(--s4);
+  margin: 0 0 var(--s3);
+}
+
+.app-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2) var(--s3);
+}
+
+.status {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 500;
+}
+.status:empty { display: none; }
+
+.banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2) var(--s3);
+  padding: var(--s3) var(--s4);
+  border-radius: var(--radius-sm);
+  margin: 0 0 var(--s3);
+  background: var(--cat-punane-bg);
+  color: var(--cat-punane-fg);
+  border: 1px solid var(--cat-punane);
+}
+.banner--warn {
+  background: var(--cat-kollane-bg);
+  color: var(--cat-kollane-fg);
+  border-color: var(--cat-kollane);
+}
+.banner__text {
+  margin: 0;
+  flex: 1 1 200px;
+  font-weight: 600;
+}
+.banner__text span { display: block; }
+
+.btn {
+  font: inherit;
+  font-weight: 600;
+  min-height: 44px;
+  padding: 0 20px;
+  border-radius: 999px;
+  border: 1px solid var(--text);
+  background: var(--text);
+  color: var(--surface);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.btn--ghost {
+  background: var(--surface);
+  color: var(--text);
+  border-color: var(--border);
+  padding: 0 16px 0 14px;
+}
+.btn--danger {
+  background: var(--surface);
+  color: var(--cat-punane-fg);
+  border-color: var(--cat-punane);
+}
+.btn[disabled] { cursor: progress; opacity: 0.8; }
+.btn__icon {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.btn.is-loading .btn__icon { animation: spin 0.9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.link-btn {
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: var(--focus);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  min-height: 44px;
+}
+
+/* ---------- Paigutus ---------- */
+.layout {
+  display: grid;
+  gap: var(--s3);
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.card {
+  min-width: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--s4);
+  box-shadow: var(--shadow);
+}
+
+.card__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s1) var(--s3);
+  margin: 0 0 var(--s3);
+}
+
+.card__title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.card__hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.card__body { transition: opacity 0.2s ease; }
+.layout.is-refreshing .card__body { opacity: 0.62; }
+
+.placeholder {
+  margin: 0;
+  color: var(--muted);
+}
+
+.notice {
+  margin: var(--s2) 0 0;
+  padding: var(--s2) var(--s3);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  font-size: 15px;
+}
+.notice--warn {
+  background: var(--cat-kollane-bg);
+  color: var(--cat-kollane-fg);
+}
+.notice--error {
+  background: var(--cat-punane-bg);
+  color: var(--cat-punane-fg);
+}
+
+.badge-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--muted);
+  border: 1px solid var(--border);
+  line-height: 1.2;
+}
+.badge-pill--warn {
+  background: var(--cat-kollane-bg);
+  color: var(--cat-kollane-fg);
+  border-color: var(--cat-kollane);
+}
+
+.state-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 12px 4px 10px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.state-pill::before {
+  content: "";
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--pill-dot, var(--muted));
+  flex: none;
+}
+
+/* ---------- Laadimise olekud ---------- */
+.skeleton {
+  display: block;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(90deg, var(--skeleton) 0%, var(--skeleton-hi) 50%, var(--skeleton) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+.skeleton + .skeleton { margin-top: var(--s2); }
+.skeleton--line { height: 14px; }
+.skeleton--short { width: 45%; }
+.skeleton--mid { width: 70%; }
+.skeleton--big { height: 46px; width: 55%; }
+.skeleton--block { height: 150px; }
+.skeleton--flow { height: 280px; }
+@keyframes shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
+/* ---------- Soovitus ---------- */
+.card--advice {
+  border-left: 6px solid var(--tone, var(--border));
+  padding-top: var(--s3);
+  padding-bottom: var(--s3);
+}
+.card--advice[data-tone="good"] { --tone: var(--cat-roheline); --tone-bg: var(--cat-roheline-bg); --tone-fg: var(--cat-roheline-fg); }
+.card--advice[data-tone="warn"] { --tone: var(--cat-kollane); --tone-bg: var(--cat-kollane-bg); --tone-fg: var(--cat-kollane-fg); }
+.card--advice[data-tone="bad"]  { --tone: var(--cat-punane); --tone-bg: var(--cat-punane-bg); --tone-fg: var(--cat-punane-fg); }
+
+.advice-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2) var(--s4);
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  margin: 0;
+  padding: 6px 14px 6px 11px;
+  border-radius: 999px;
+  background: var(--tone-bg, var(--surface-2));
+  color: var(--tone-fg, var(--text));
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+.chip::before {
+  content: "";
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--tone, var(--muted));
+  flex: none;
+}
+.advice-main { flex: 1 1 280px; min-width: 0; }
+.advice-title {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 800;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+.advice-text {
+  margin: 2px 0 0;
+  font-size: 15px;
+}
+.advice-reasons {
+  list-style: none;
+  margin: var(--s2) 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.advice-reasons li {
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* ---------- Energiavoog ---------- */
+.flow-layout {
+  display: grid;
+  gap: var(--s4);
+  grid-template-columns: minmax(0, 1fr);
+  align-items: center;
+}
+.flow-svg {
+  display: block;
+  width: 100%;
+  max-width: 400px;
+  height: auto;
+  margin: 0 auto;
+}
+.flow-track {
+  fill: none;
+  stroke: var(--border);
+  stroke-width: 2;
+}
+.flow-line {
+  fill: none;
+  stroke-width: 2;
+  stroke-opacity: 0.4;
+}
+.flow-dots {
+  fill: none;
+  stroke-width: 5;
+  stroke-linecap: round;
+  stroke-dasharray: 0.1 13;
+  animation: flow-move var(--flow-dur, 1.6s) linear infinite;
+}
+.flow-dots--rev { animation-direction: reverse; }
+@keyframes flow-move { to { stroke-dashoffset: -13.1; } }
+.flow-node__bg {
+  fill: var(--surface);
+  stroke: var(--border);
+  stroke-width: 3;
+}
+.flow-node__ring {
+  fill: none;
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+.flow-node--idle .flow-node__ring,
+.flow-node--idle .flow-node__icon { opacity: 0.45; }
+.flow-node__icon {
+  fill: none;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.flow-value {
+  font-size: 14px;
+  font-weight: 800;
+  fill: var(--text);
+}
+.flow-name {
+  font-size: 13px;
+  font-weight: 700;
+  fill: var(--text);
+}
+.flow-sub {
+  font-size: 12px;
+  font-weight: 500;
+  fill: var(--muted);
+}
+.flow-hub {
+  fill: var(--surface-2);
+  stroke: var(--border);
+  stroke-width: 2;
+}
+
+.flow-side { min-width: 0; }
+.flow-side__label {
+  margin: 0 0 var(--s2);
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+}
+.flow-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.flow-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  font-size: 15px;
+}
+.flow-list li span:last-child {
+  margin-left: auto;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.line-key {
+  flex: none;
+  width: 18px;
+  height: 0;
+  border-top: 3px solid var(--key, var(--muted));
+  border-radius: 2px;
+}
+
+/* ---------- Statistikakastid (nagu index.html-is) ---------- */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s2);
+  margin: var(--s3) 0 0;
+}
+.stat {
+  min-width: 0;
+  padding: var(--s2) 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+.stat__label {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+.stat__value {
+  margin: 2px 0 0;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.15;
+  font-variant-numeric: proportional-nums;
+}
+.stat__value--good { color: var(--cat-roheline-fg); }
+.stat__value--bad { color: var(--cat-punane-fg); }
+.stat__time {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* ---------- Päike ja aku ---------- */
+.kpi-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s2) var(--s3);
+}
+.big-number {
+  margin: 0;
+  font-size: 44px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: proportional-nums;
+}
+.big-number small {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: 0;
+}
+.kpi-caption {
+  margin: var(--s1) 0 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+.meter {
+  height: 10px;
+  margin: var(--s3) 0 0;
+  border-radius: 999px;
+  background: var(--surface-2);
+  background: color-mix(in srgb, var(--meter, var(--solar)) 16%, var(--surface));
+  overflow: hidden;
+}
+.meter__fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--meter, var(--solar));
+  transition: width 0.4s ease;
+}
+.meter-label {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s2);
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.battery-visual {
+  display: flex;
+  align-items: center;
+  gap: var(--s4);
+}
+.battery-visual svg {
+  flex: 0 1 200px;
+  min-width: 120px;
+  height: auto;
+}
+.battery-power {
+  margin: var(--s2) 0 0;
+  font-size: 17px;
+  font-weight: 700;
+}
+.battery-eta {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+/* ---------- Hinnakaart (nagu index.html-i „Elekter praegu“) ---------- */
+.card--hero {
+  border-top: 6px solid var(--hero-accent, var(--border));
+}
+.card--hero[data-category="roheline"] { --hero-accent: var(--cat-roheline); --hero-bg: var(--cat-roheline-bg); --hero-fg: var(--cat-roheline-fg); }
+.card--hero[data-category="kollane"]  { --hero-accent: var(--cat-kollane);  --hero-bg: var(--cat-kollane-bg);  --hero-fg: var(--cat-kollane-fg); }
+.card--hero[data-category="oranz"]    { --hero-accent: var(--cat-oranz);    --hero-bg: var(--cat-oranz-bg);    --hero-fg: var(--cat-oranz-fg); }
+.card--hero[data-category="punane"]   { --hero-accent: var(--cat-punane);   --hero-bg: var(--cat-punane-bg);   --hero-fg: var(--cat-punane-fg); }
+
+.hero-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+  margin: 0 0 var(--s3);
+}
+.verdict {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  margin: 0;
+  padding: 5px 14px 5px 11px;
+  border-radius: 999px;
+  background: var(--hero-bg, var(--surface-2));
+  color: var(--hero-fg, var(--text));
+  font-size: 17px;
+  font-weight: 700;
+}
+.verdict::before {
+  content: "";
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--hero-accent, var(--muted));
+  flex: none;
+}
+.hero-period {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--muted);
+  background: var(--surface-2);
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+.hero-price-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s2) var(--s4);
+}
+.hero-price {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s2);
+  margin: 0;
+}
+.hero-price__value {
+  font-size: 52px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  font-variant-numeric: proportional-nums;
+}
+.hero-price__unit {
+  font-size: 19px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.hero-final-pill {
+  display: inline-flex;
+  flex-direction: column;
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+.hero-final-pill__label {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.2;
+}
+.hero-final-pill__value {
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+.hero-meta {
+  margin: var(--s2) 0 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+.compare {
+  margin: var(--s2) 0 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+.stats--price { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.stats--price .stat__value { font-size: 18px; }
+.upcoming-label {
+  margin: var(--s4) 0 var(--s2);
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+}
+.upcoming {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 5px;
+}
+.upcoming li {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) 52px;
+  align-items: center;
+  gap: var(--s2);
+  font-size: 14px;
+}
+.upcoming li.is-now { font-weight: 700; }
+.upcoming__bar {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.upcoming__fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--fill, var(--muted));
+}
+.upcoming li span:last-child {
+  text-align: right;
+  font-weight: 700;
+}
+.facts {
+  list-style: none;
+  margin: var(--s3) 0 0;
+  padding: 0;
+  display: grid;
+  gap: var(--s2);
+}
+.facts li {
+  position: relative;
+  padding: 8px 10px 8px 24px;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  line-height: 1.35;
+}
+.facts li::before {
+  content: "";
+  position: absolute;
+  left: 10px;
+  top: 13px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--hero-accent, var(--muted));
+}
+
+/* ---------- Tabid ---------- */
+.tabs {
+  display: inline-flex;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+}
+.tab {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: 999px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+.tab[aria-selected="true"] {
+  background: var(--text);
+  color: var(--surface);
+}
+.tab__badge {
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.8;
+}
+.tab__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--cat-roheline);
+  display: inline-block;
+}
+
+/* ---------- Päeva graafik ---------- */
+.chart-status-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s1) var(--s3);
+  min-height: 26px;
+  margin: 0 0 var(--s2);
+}
+.chart-day {
+  margin: 0;
+  color: var(--muted);
+  font-size: 15px;
+}
+.chart-inspector {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--surface-2);
+  padding: 2px 10px;
+  border-radius: 999px;
+}
+.chart-wrapper {
+  position: relative;
+  min-width: 0;
+}
+.chart-host { width: 100%; min-width: 0; }
+.chart-stack {
+  display: grid;
+  gap: 2px;
+  border-radius: var(--radius-sm);
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: crosshair;
+}
+.chart-stack svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.bar { transition: opacity 0.1s ease; }
+.bar--past { opacity: 0.38; }
+.bar--active { stroke: var(--text); stroke-width: 2; opacity: 1 !important; }
+.bar-current { animation: pulse 2.4s ease-in-out infinite; }
+@keyframes pulse {
+  0%, 100% { stroke-opacity: 1; }
+  50% { stroke-opacity: 0.3; }
+}
+.crosshair {
+  stroke: var(--text);
+  stroke-width: 1;
+  stroke-opacity: 0.55;
+  pointer-events: none;
+}
+.pv-area { fill: var(--solar); fill-opacity: 0.16; pointer-events: none; }
+.pv-line, .load-line {
+  fill: none;
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+.pv-line { stroke: var(--solar); }
+.load-line { stroke: var(--home); }
+.now-line { stroke: var(--muted); stroke-width: 1; pointer-events: none; }
+.axis-unit { font-size: 11px; font-weight: 600; fill: var(--muted); }
+
+.tooltip {
+  position: absolute;
+  z-index: 2;
+  max-width: 260px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--text);
+  color: var(--surface);
+  font-size: 14px;
+  line-height: 1.35;
+  pointer-events: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+}
+.tooltip strong,
+.tooltip > span {
+  display: block;
+}
+.tooltip strong { font-size: 15px; }
+.tooltip__price {
+  font-size: 17px;
+  font-weight: 700;
+}
+.tooltip__row {
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+}
+.tooltip__row b { font-weight: 700; }
+.tooltip__sep {
+  margin-top: 3px;
+  padding-top: 3px;
+  border-top: 1px solid rgba(128, 128, 128, 0.35);
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s1) var(--s3);
+  margin: var(--s2) 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+.legend__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.legend__swatch {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  background: var(--swatch, var(--muted));
+}
+.legend__swatch--line {
+  width: 18px;
+  height: 0;
+  border-radius: 0;
+  background: none;
+  border-top: 2px dashed var(--avg-line);
+}
+.legend__swatch--current {
+  background: none;
+  border: 2px solid var(--text);
+}
+.legend__swatch--area {
+  background: color-mix(in srgb, var(--solar) 22%, var(--surface));
+  border-top: 2px solid var(--solar);
+  border-radius: 2px;
+}
+
+.table-view {
+  margin: var(--s3) 0 0;
+  border-top: 1px solid var(--border);
+  padding-top: var(--s1);
+}
+.table-view summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 10px 0;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  min-height: 44px;
+}
+.table-view summary::-webkit-details-marker { display: none; }
+.table-view summary::after {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted);
+  transform: rotate(45deg);
+  transition: transform 0.15s ease;
+  margin-top: -2px;
+}
+.table-view[open] summary::after { transform: rotate(-135deg); margin-top: 3px; }
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  white-space: nowrap;
+}
+.data-table th,
+.data-table td {
+  padding: 6px 10px 6px 0;
+  border-bottom: 1px solid var(--border);
+  text-align: right;
+  font-weight: 400;
+}
+.data-table th { color: var(--muted); font-size: 13px; font-weight: 600; }
+.data-table th:first-child,
+.data-table td:first-child { text-align: left; }
+.data-table tr.is-now td { font-weight: 700; }
+
+/* ---------- Otseühenduse dialoog ---------- */
+.dialog {
+  width: min(560px, calc(100vw - 24px));
+  max-height: calc(100vh - 24px);
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.28);
+}
+.dialog::backdrop { background: rgba(15, 22, 32, 0.55); }
+.dialog__body { padding: var(--s5) var(--s4); }
+.dialog__title { margin: 0 0 var(--s2); font-size: 19px; font-weight: 800; }
+.dialog__text { margin: 0 0 var(--s2); font-size: 14px; color: var(--muted); }
+.form-grid {
+  display: grid;
+  gap: var(--s3);
+  grid-template-columns: minmax(0, 1fr);
+  margin: var(--s3) 0 0;
+}
+.field { min-width: 0; }
+.field label {
+  display: block;
+  margin: 0 0 4px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.field input {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+}
+.field__hint {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+.dialog__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--s2);
+  margin: var(--s4) 0 0;
+}
+.dialog__actions .btn--danger { margin-right: auto; }
+
+/* ---------- Jalus ---------- */
+.app-footer {
+  margin: var(--s5) 0 var(--s3);
+  color: var(--muted);
+  font-size: 14px;
+}
+.app-footer p { margin: 0 0 var(--s2); }
+.app-footer__meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0 var(--s4);
+}
+
+/* ---------- Üldised abiklassid ---------- */
+.nowrap { white-space: nowrap; }
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+@media (hover: hover) {
+  .tab:not([aria-selected="true"]):hover { background: var(--surface); }
+  .btn--ghost:not([disabled]):hover { border-color: var(--muted); }
+  .table-view summary:hover { color: var(--focus); }
+}
+
+/* ---------- Laiem ekraan (tahvel) ---------- */
+@media (min-width: 768px) {
+  .app { padding: var(--s5); }
+  .layout {
+    gap: var(--s4);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-areas:
+      "advice advice"
+      "flow price"
+      "solar battery"
+      "chart chart";
+  }
+  #section-advice { grid-area: advice; }
+  #section-flow { grid-area: flow; }
+  #section-price { grid-area: price; }
+  #section-solar { grid-area: solar; }
+  #section-battery { grid-area: battery; }
+  #section-chart { grid-area: chart; }
+  .card {
+    padding: var(--s5);
+    display: flex;
+    flex-direction: column;
+  }
+  .card--advice { padding-top: var(--s4); padding-bottom: var(--s4); }
+  .card__body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
+  #section-solar .stats,
+  #section-battery .stats,
+  #price-body .facts { margin-top: auto; padding-top: var(--s3); }
+  .hero-price__value { font-size: 60px; }
+  .big-number { font-size: 48px; }
+  .stat__value { font-size: 22px; }
+  .dialog__body { padding: var(--s5); }
+  .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .field--wide { grid-column: 1 / -1; }
+}
+
+/* ---------- Laiem ekraan (desktop) ---------- */
+@media (min-width: 1024px) {
+  .app {
+    max-width: 1180px;
+    padding: var(--s5) var(--s6);
+  }
+  .app-title { font-size: 22px; }
+  .layout {
+    gap: 20px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-areas:
+      "advice advice advice"
+      "flow flow price"
+      "solar battery price"
+      "chart chart chart";
+  }
+  .card__title { font-size: 18px; }
+  .flow-layout { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); }
+  .advice-title { font-size: 21px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bar-current, .skeleton, .btn.is-loading .btn__icon { animation: none; }
+  .flow-dots { animation: none; stroke-dasharray: none; stroke-width: 2; stroke-opacity: 0.9; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="app-header">
+    <h1 id="app-title" class="app-title">Kauge 32 energia</h1>
+    <div class="header-actions">
+      <p id="status" class="status" role="status" aria-live="polite"></p>
+      <button type="button" class="btn btn--ghost" id="refresh-button">
+        <svg class="btn__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11.5A8 8 0 1 0 17.7 17"/><path d="M20 5v6.5h-6.5"/></svg>
+        <span id="refresh-label">Värskenda</span>
+      </button>
+    </div>
+  </header>
+
+  <noscript><p class="notice">Energiaandmete kuvamiseks peab brauseris olema JavaScript lubatud.</p></noscript>
+
+  <div id="banner" class="banner" role="alert" hidden>
+    <p id="banner-message" class="banner__text"></p>
+    <button type="button" class="btn" id="retry-button">Proovi uuesti</button>
+  </div>
+
+  <main class="layout" id="layout">
+
+    <!-- 1. Soovitus praegu -->
+    <section class="card card--advice" id="section-advice" aria-labelledby="h-advice" data-tone="neutral">
+      <h2 id="h-advice" class="visually-hidden">Soovitus praegu</h2>
+      <div class="card__body" id="advice-body">
+        <span class="skeleton skeleton--line skeleton--short" aria-hidden="true"></span>
+        <span class="skeleton skeleton--line skeleton--mid" aria-hidden="true"></span>
+        <span class="visually-hidden">Andmete laadimine…</span>
+      </div>
+    </section>
+
+    <!-- 2. Energiavoog -->
+    <section class="card" id="section-flow" aria-labelledby="h-flow">
+      <div class="card__head">
+        <h2 id="h-flow" class="card__title">Energiavoog praegu</h2>
+        <span id="flow-age" class="badge-pill" hidden></span>
+      </div>
+      <div class="card__body" id="flow-body">
+        <span class="skeleton skeleton--flow" aria-hidden="true"></span>
+        <span class="visually-hidden">Päikeseandmete laadimine…</span>
+      </div>
+    </section>
+
+    <!-- 3. Elektrihind praegu -->
+    <section class="card card--hero" id="section-price" aria-labelledby="h-price">
+      <div class="card__head">
+        <h2 id="h-price" class="card__title">Elektrihind praegu</h2>
+        <span class="card__hint">Elering · Nord Pool</span>
+      </div>
+      <div class="card__body" id="price-body">
+        <span class="skeleton skeleton--line skeleton--short" aria-hidden="true"></span>
+        <span class="skeleton skeleton--big" aria-hidden="true"></span>
+        <span class="skeleton skeleton--block" aria-hidden="true"></span>
+        <span class="visually-hidden">Elektrihindade laadimine…</span>
+      </div>
+    </section>
+
+    <!-- 4. Päikesepark -->
+    <section class="card" id="section-solar" aria-labelledby="h-solar">
+      <div class="card__head">
+        <h2 id="h-solar" class="card__title">Päikesepark</h2>
+        <span id="solar-capacity" class="badge-pill" hidden></span>
+      </div>
+      <div class="card__body" id="solar-body">
+        <span class="skeleton skeleton--big" aria-hidden="true"></span>
+        <span class="skeleton skeleton--line" aria-hidden="true"></span>
+        <span class="skeleton skeleton--block" aria-hidden="true"></span>
+      </div>
+    </section>
+
+    <!-- 5. Akupank -->
+    <section class="card" id="section-battery" aria-labelledby="h-battery">
+      <div class="card__head">
+        <h2 id="h-battery" class="card__title">Akupank</h2>
+        <span id="battery-state" class="state-pill" hidden></span>
+      </div>
+      <div class="card__body" id="battery-body">
+        <span class="skeleton skeleton--big" aria-hidden="true"></span>
+        <span class="skeleton skeleton--line" aria-hidden="true"></span>
+        <span class="skeleton skeleton--block" aria-hidden="true"></span>
+      </div>
+    </section>
+
+    <!-- 6. Päeva graafik: börsihind + päikesetoodang ja tarbimine -->
+    <section class="card" id="section-chart" aria-labelledby="h-chart">
+      <div class="card__head">
+        <h2 id="h-chart" class="card__title">Päeva ülevaade</h2>
+        <div class="tabs" role="tablist" aria-label="Päeva valik">
+          <button type="button" role="tab" id="tab-today" class="tab" data-day="today" aria-selected="true" aria-controls="chart-panel">Täna</button>
+          <button type="button" role="tab" id="tab-tomorrow" class="tab" data-day="tomorrow" aria-selected="false" aria-controls="chart-panel" tabindex="-1">Homme</button>
+        </div>
+      </div>
+      <div class="card__body" id="chart-panel" role="tabpanel" aria-labelledby="tab-today">
+        <div class="chart-status-bar">
+          <p id="chart-day-label" class="chart-day"></p>
+          <p id="chart-inspector" class="chart-inspector" aria-live="polite" hidden></p>
+        </div>
+        <div class="chart-wrapper" id="chart-wrapper">
+          <div id="chart-host" class="chart-host"><span class="skeleton skeleton--block" aria-hidden="true"></span></div>
+          <div id="chart-tooltip" class="tooltip" role="tooltip" hidden></div>
+        </div>
+        <p id="chart-notice" class="notice" hidden></p>
+        <div id="chart-legend" class="legend" aria-label="Graafiku selgitus"></div>
+        <div id="chart-stats" class="stats stats--price" role="group" aria-label="Valitud päeva madalaim, keskmine ja kõrgeim hind"></div>
+        <details class="table-view" id="chart-table">
+          <summary>Tabelivaade (tunni kaupa)</summary>
+          <div class="table-scroll" id="chart-table-body"></div>
+        </details>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="app-footer">
+    <p><strong>Andmeallikad:</strong> päikesepark ja akupank — Solarman OpenAPI; börsihind — Elering Live (Nord Pooli Eesti hinnapiirkond), sama andmefail, mida kasutab elektriinfo leht. Lõpphind ja soovitused on hinnangulised; tegelik arve sõltub elektri- ja võrgulepingust.</p>
+    <div class="app-footer__meta">
+      <p id="footer-sources">Andmeid pole veel laaditud</p>
+      <p><button type="button" class="link-btn" id="direct-open">Solarmani otseühendus</button> · <a href="index.html">Elektriinfo</a> · <span id="footer-version"></span></p>
+    </div>
+  </footer>
+</div>
+
+<dialog class="dialog" id="direct-dialog" aria-labelledby="direct-title">
+  <form class="dialog__body" id="direct-form" method="dialog" novalidate>
+    <h2 id="direct-title" class="dialog__title">Solarmani otseühendus</h2>
+    <p class="dialog__text">Vaikimisi loeb leht päikeseandmeid failist <strong>paike.json</strong>, mille GitHub Actions täidab GitHub Secretsis hoitud võtmetega — see on soovitatud ja turvaline viis.</p>
+    <p class="dialog__text">Otseühendus pärib andmed brauserist otse Solarmani API-st (värskem, ~5 min). Võtmed salvestatakse ainult selle seadme brauserisse (localStorage), parool ainult SHA-256 räsina. Kasuta seda ainult isiklikus seadmes. Solarmani API ei luba enamasti brauserist otse pärida (CORS), seega on tavaliselt vaja oma CORS-proksit.</p>
+    <div class="form-grid">
+      <div class="field">
+        <label for="f-app-id">App ID</label>
+        <input id="f-app-id" name="appId" autocomplete="off" spellcheck="false" required>
+      </div>
+      <div class="field">
+        <label for="f-app-secret">App Secret</label>
+        <input id="f-app-secret" name="appSecret" type="password" autocomplete="off" spellcheck="false">
+      </div>
+      <div class="field">
+        <label for="f-email">Solarmani e-post</label>
+        <input id="f-email" name="email" type="email" autocomplete="off" spellcheck="false" required>
+      </div>
+      <div class="field">
+        <label for="f-password">Parool või selle SHA-256 räsi</label>
+        <input id="f-password" name="password" type="password" autocomplete="new-password" spellcheck="false">
+      </div>
+      <div class="field">
+        <label for="f-station">Jaama ID (valikuline)</label>
+        <input id="f-station" name="stationId" inputmode="numeric" autocomplete="off" spellcheck="false">
+        <p class="field__hint">Tühi = konto esimene jaam.</p>
+      </div>
+      <div class="field">
+        <label for="f-proxy">CORS-proksi (valikuline)</label>
+        <input id="f-proxy" name="proxy" type="url" autocomplete="off" spellcheck="false" placeholder="https://minu-proksi.example/?url=">
+        <p class="field__hint">API aadress lisatakse lõppu URL-kodeeritult.</p>
+      </div>
+    </div>
+    <p id="direct-error" class="notice notice--error" role="alert" hidden></p>
+    <div class="dialog__actions">
+      <button type="button" class="btn btn--danger" id="direct-remove">Eemalda otseühendus</button>
+      <button type="button" class="btn btn--ghost" id="direct-cancel">Sulge</button>
+      <button type="submit" class="btn" id="direct-save">Salvesta ja ühenda</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+'use strict';
+
+/* ==========================================================================
+   1. CONFIG — kõik väärtused, mida maja haldaja võib muuta.
+   Muuda ainult numbreid ja tekste; jäta sulud, komad ja jutumärgid alles.
+   Solarmani võtmeid EI kirjutata siia: need on GitHub Actions Secretsis
+   (vt .github/workflows/uuenda-paike.yml) või otseühenduse dialoogis.
+   ========================================================================== */
+const CONFIG = {
+
+  // Maja nimi, kuvatakse lehe päises. Vaba tekst. Ohutu muuta.
+  majaNimi: "Kauge 32",
+
+  // Kui tihti andmeid automaatselt värskendatakse (minutites). Solarman uuendab
+  // andmeid umbes iga 5 minuti järel. Ohutu muuta, soovitatav 5–15.
+  uuendusMinutites: 5,
+
+  // Tariifid, hinnapiirid ja hinnasildid loetakse käivitumisel failist index.html
+  // (sama allikas, mida kasutab ka hinnad.json töövoog), et need oleksid ainult ühes
+  // kohas. Allolevaid väärtusi kasutatakse ainult siis, kui faili lugemine ebaõnnestub.
+  // Tühi ("") = kasuta alati allolevaid väärtusi.
+  tariifideFail: "index.html",
+
+  // Hinnakategooriate piirid, s/kWh KOOS käibemaksuga (roheline < kollane < oranz).
+  hinnapiirid: {
+    roheline: 5,
+    kollane: 10,
+    oranz: 20
+  },
+
+  // Hinnangute sõnad. Vaba tekst.
+  hinnasildid: {
+    vagaOdav: "Väga odav",
+    soodne: "Soodne",
+    moodukas: "Mõõdukas",
+    kallis: "Kallis"
+  },
+
+  // Maja elektripaketi tasud, s/kWh ILMA käibemaksuta (v.a "kuutasu" €/kuu ja "kaibemaks" %).
+  hinnad: {
+    marginaal: 0.6,
+    vorgutasuPaev: 3.49,
+    vorgutasuOo: 1.99,
+    taastuvenergiaTasu: 1.598,
+    aktsiis: 0.21,
+    kuutasu: 0.00,
+    kaibemaks: 24
+  },
+
+  // Öötariifi kehtivus Tallinna aja järgi täistundides (0–23).
+  ootariif: {
+    algus: 22,
+    lopp: 7,
+    nadalavahetusOnOo: true
+  },
+
+  // Homsed börsihinnad avaldatakse iga päev sel kellaajal (Eesti aja järgi, "HH:MM").
+  homsedHinnad: {
+    avaldamiseKell: "15:00",
+    hilinemiseTeadeMinutites: 30
+  },
+
+  // Börsihindade andmefail, mille kirjutab töövoog uuenda-hinnad.yml (sama, mida loeb index.html).
+  kohalikAndmefail: "hinnad.json",
+
+  // Varuvariant börsihindadele: CORS-proksi, mille lõppu lisatakse Eleringi API aadress.
+  // Jäta tühjaks (""), kui kasutad kohalikku andmefaili.
+  varuProksi: "",
+
+  solarman: {
+    // Andmefail, mille kirjutab töövoog .github/workflows/uuenda-paike.yml GitHub
+    // Secretsis hoitud Solarmani võtmetega. Tühi ("") lülitab välja.
+    andmefail: "paike.json",
+
+    // Kui viimane Solarmani mõõtmine on sellest vanem (minutites), kuvatakse hoiatus
+    // ja soovitused ei arvesta päikese ega aku hetkeseisu.
+    aegunudMinutites: 30,
+
+    // Solarman OpenAPI aadress (otseühenduse jaoks).
+    apiUrl: "https://globalapi.solarmanpv.com",
+
+    // Vaikimisi CORS-proksi otseühenduse jaoks. API aadress lisatakse lõppu URL-kodeeritult,
+    // nt "https://minu-proksi.example/?url=". Kasuta ainult enda hallatavat proksit:
+    // proksi näeb App Secretit ja parooli räsi. Tühi ("") = otse (CORS võib blokeerida).
+    proksi: "",
+
+    // Solarmani võimsuste märgikokkulepe. "auto" tuvastab selle energiabilansist
+    // (päike + ost + aku tühjenemine = maja + müük + aku laadimine). Kui suunad on
+    // ekraanil valepidi, määra käsitsi:
+    akuMark: "auto",    // "auto" | "positiivne-laeb" | "positiivne-tuhjeneb"
+    vorguMark: "auto"   // "auto" | "positiivne-muuk" | "positiivne-ost"
+  },
+
+  // Akupanga seaded soovituste ja ajahinnangute jaoks. Ohutu muuta.
+  aku: {
+    mahtKwh: 0,          // kasutatav mahutavus, kWh; 0 = laadimise/tühjenemise ajahinnangut ei kuvata
+    reservProtsent: 20,  // alla selle akut kallil ajal enam ei soovitata kasutada
+    taisProtsent: 95,    // sellest alates loetakse aku täis olevaks
+    sihtProtsent: 80,    // võrgust laadimise sihttase
+    kasutegur: 0.90      // laadimise ja tühjendamise koondkasutegur (0.90 = 10% kadu)
+  },
+
+  // Soovituste lävendid. Ohutu muuta.
+  soovitus: {
+    ylejaakKw: 0.2,        // päikese ülejääk (kW), millest alates soovitatakse ülejääki kasutada
+    minSaastProtsent: 15,  // võrgust laadimine: hilisem lõpphind peab olema vähemalt nii palju kõrgem (pärast kadusid)
+    vaatePiirTundides: 12  // kui kaugele ette hindu võrreldakse
+  },
+
+  // Võrku müüdud elektri hind: börsihind ILMA käibemaksuta miinus müügitasu (s/kWh).
+  muuk: {
+    tasu: 0.0
+  }
+};
+
+/* Tehnilised konstandid — neid ei ole tavakasutuses vaja muuta. */
+const APP_VERSION = '1.0.0';
+const TIME_ZONE = 'Europe/Tallinn';
+const API_URL = 'https://dashboard.elering.ee/api/nps/price';
+const PRICE_TIMEOUT_MS = 20000;
+const SOLAR_TIMEOUT_MS = 30000;
+const TARIFF_TIMEOUT_MS = 5000;
+const MAX_PERIOD_MINUTES = 60;
+const FRAME_SECONDS = 900;        // päikeseandmed koondatakse 15-min perioodideks (nagu hinnad)
+const FLOW_MIN_KW = 0.05;         // väiksem võimsus loetakse nulliks
+const MINUTE_MS = 60000;
+const HOUR_MS = 3600000;
+const DAY_MS = 86400000;
+const SOLAR_POWER_FIELDS = ['generationPower', 'usePower', 'gridPower', 'purchasePower', 'wirePower', 'chargePower', 'dischargePower', 'batteryPower'];
+const SOLAR_DAY_FIELDS = ['generationValue', 'useValue', 'gridValue', 'buyValue', 'chargeValue', 'dischargeValue'];
+const STORAGE = {
+  credentials: 'kauge32.energia.solarman',
+  token: 'kauge32.energia.solarmanToken',
+  station: 'kauge32.energia.solarmanJaam'
+};
+
+/* Kehtivad tariifid: CONFIG-i väärtused, mis kirjutatakse üle index.html-i omadega (vt loadTariffs). */
+const TARIFFS = {
+  hinnad: { ...CONFIG.hinnad },
+  ootariif: { ...CONFIG.ootariif },
+  hinnapiirid: { ...CONFIG.hinnapiirid },
+  hinnasildid: { ...CONFIG.hinnasildid },
+  source: 'CONFIG'
+};
+
+/* ==========================================================================
+   2. Olek — hoitakse ainult JavaScripti mälus
+   ========================================================================== */
+const state = {
+  prices: {
+    periods: [],          // normaliseeritud hinnaperioodid (vt normalizePrices)
+    intervalMinutes: 60,
+    loaded: false,        // vähemalt üks laadimiskatse on lõppenud
+    error: null,          // veateade, kui hindu pole kordagi saadud
+    refreshFailed: false, // viimane uuendus ebaõnnestus, kuvatakse varasemaid andmeid
+    lastUpdated: null,
+    version: 0
+  },
+  solar: {
+    data: null,           // normaliseeritud päikese/aku andmed (vt normalizeSolar)
+    loaded: false,
+    error: null,
+    refreshFailed: false,
+    source: null,         // 'fail' | 'otse'
+    note: null,           // lisateade (nt otseühendus ebaõnnestus, kasutati faili)
+    lastUpdated: null,
+    version: 0
+  },
+  loading: false,
+  lastRefresh: null,
+  nextRefreshAt: null,
+  refreshTimer: null,
+  selectedDay: 'today',   // 'today' | 'tomorrow'
+  derived: null,
+  chartKey: '',
+  chartItems: [],
+  chartCrosshairs: [],
+  tooltipIndex: null,
+  flowKey: ''
+};
+
+/* ==========================================================================
+   3. Aeg — kõik Tallinna aja järgi, DST-kindlalt (samad funktsioonid, mis index.html-is)
+   ========================================================================== */
+const tallinnPartsFormatter = new Intl.DateTimeFormat('en-US', {
+  timeZone: TIME_ZONE, hourCycle: 'h23', weekday: 'short',
+  year: 'numeric', month: '2-digit', day: '2-digit',
+  hour: '2-digit', minute: '2-digit', second: '2-digit'
+});
+const WEEKDAY_INDEX = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+
+/** Tagastab kuupäeva osad Tallinna kohalikus ajas. */
+function getTallinnDateParts(date) {
+  const parts = {};
+  for (const part of tallinnPartsFormatter.formatToParts(date)) parts[part.type] = part.value;
+  return {
+    year: Number(parts.year),
+    month: Number(parts.month),
+    day: Number(parts.day),
+    hour: Number(parts.hour) % 24,
+    minute: Number(parts.minute),
+    second: Number(parts.second),
+    weekday: WEEKDAY_INDEX[parts.weekday] ?? date.getUTCDay()
+  };
+}
+
+/** Tallinna ajavööndi nihe UTC suhtes antud hetkel (millisekundites). */
+function tallinnOffsetMs(date) {
+  const p = getTallinnDateParts(date);
+  const wallClockAsUtc = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second);
+  return wallClockAsUtc - Math.floor(date.getTime() / 1000) * 1000;
+}
+
+/** Teisendab Tallinna seinakella aja (aasta, kuu 1–12, päev, tund, minut) UTC hetkeks. */
+function tallinnLocalToUtc(year, month, day, hour = 0, minute = 0) {
+  const wall = Date.UTC(year, month - 1, day, hour, minute, 0);
+  let utc = wall - tallinnOffsetMs(new Date(wall));
+  utc = wall - tallinnOffsetMs(new Date(utc));
+  return new Date(utc);
+}
+
+/** Tallinna kohaliku päeva algus (00:00); dayOffset = 0 täna, 1 homme ... */
+function getTallinnDayStart(date, dayOffset = 0) {
+  const p = getTallinnDateParts(date);
+  return tallinnLocalToUtc(p.year, p.month, p.day + dayOffset, 0, 0);
+}
+
+/** Tallinna kuupäev kujul "AAAA-KK-PP" (Solarmani päringute jaoks). */
+function tallinnDateKey(date) {
+  const p = getTallinnDateParts(date);
+  return `${p.year}-${String(p.month).padStart(2, '0')}-${String(p.day).padStart(2, '0')}`;
+}
+
+/** Tänane homsete hindade avaldamise hetk Tallinna aja järgi. */
+function getTomorrowPublishTime(now) {
+  const match = /^(\d{1,2}):(\d{2})$/.exec(String(CONFIG.homsedHinnad?.avaldamiseKell ?? ''));
+  const hour = match ? Number(match[1]) : 15;
+  const minute = match ? Number(match[2]) : 0;
+  const p = getTallinnDateParts(now);
+  return tallinnLocalToUtc(p.year, p.month, p.day, hour, minute);
+}
+
+/** Eleringi API vahemik: eile 00:00 kuni ülehomme 00:00 Tallinna aja järgi (lõpp kaasa arvatud). */
+function buildApiRange(now) {
+  const start = getTallinnDayStart(now, -1);
+  const endExclusive = getTallinnDayStart(now, 2);
+  return { start: start.toISOString(), end: new Date(endExclusive.getTime() - 1).toISOString() };
+}
+
+/* ==========================================================================
+   4. Vormindamine — et-EE locale
+   ========================================================================== */
+const timeFormatter = new Intl.DateTimeFormat('et-EE', { timeZone: TIME_ZONE, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+const dateLongFormatter = new Intl.DateTimeFormat('et-EE', { timeZone: TIME_ZONE, weekday: 'long', day: 'numeric', month: 'long' });
+const dateShortFormatter = new Intl.DateTimeFormat('et-EE', { timeZone: TIME_ZONE, day: 'numeric', month: 'numeric' });
+const numberFormat = {
+  d2: new Intl.NumberFormat('et-EE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+  d1: new Intl.NumberFormat('et-EE', { minimumFractionDigits: 1, maximumFractionDigits: 1 }),
+  d0: new Intl.NumberFormat('et-EE', { maximumFractionDigits: 0, useGrouping: 'always' }),
+  pct: new Intl.NumberFormat('et-EE', { maximumFractionDigits: 0 }),
+  max1: new Intl.NumberFormat('et-EE', { maximumFractionDigits: 1 })
+};
+
+function formatTime(date) { return timeFormatter.format(date); }
+function formatTimeRange(start, end) { return `${formatTime(start)}–${formatTime(end)}`; }
+function formatCents(value, decimals = 2) {
+  return `${decimals === 1 ? numberFormat.d1.format(value) : numberFormat.d2.format(value)}\u00a0s/kWh`;
+}
+function formatEur(value) { return `${numberFormat.d2.format(value)}\u00a0€`; }
+function formatPct(value) { return `${numberFormat.pct.format(value)}%`; }
+function formatPercentAbs(value) { return `${numberFormat.pct.format(Math.abs(value))}%`; }
+function formatKw(kw) {
+  const value = Math.abs(kw) < 0.005 ? 0 : kw;
+  return `${(Math.abs(value) >= 10 ? numberFormat.d1 : numberFormat.d2).format(value)}\u00a0kW`;
+}
+function formatKwh(kwh) {
+  return `${(Math.abs(kwh) >= 100 ? numberFormat.d0 : numberFormat.d1).format(kwh)}\u00a0kWh`;
+}
+function formatDuration(minutes) {
+  const total = Math.max(0, Math.round(minutes));
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  if (h && m) return `${h} h ${m} min`;
+  if (h) return `${h} h`;
+  return `${m} min`;
+}
+function formatAgo(minutes) { return minutes < 1 ? 'just praegu' : `${formatDuration(minutes)} tagasi`; }
+function capitalize(text) { return text ? text.charAt(0).toUpperCase() + text.slice(1) : text; }
+
+/** Päeva sõna antud hetke jaoks: 'eile' | 'täna' | 'homme' | 'ülehomme'. */
+function dayWord(date, now) {
+  const t = date.getTime();
+  if (t < getTallinnDayStart(now, 0).getTime()) return 'eile';
+  if (t < getTallinnDayStart(now, 1).getTime()) return 'täna';
+  if (t < getTallinnDayStart(now, 2).getTime()) return 'homme';
+  return 'ülehomme';
+}
+
+/** "18:45" kui täna, muidu "homme 02:00". asEnd = true: keskööd loetakse lõppeva päeva osaks. */
+function describeTime(date, now, asEnd = false) {
+  const word = dayWord(asEnd ? new Date(date.getTime() - 1) : date, now);
+  return word === 'täna' ? formatTime(date) : `${word} ${formatTime(date)}`;
+}
+
+/** "Täna 16:15–18:15" või "Täna 23:00 – homme 02:00". */
+function describeRange(start, end, now) {
+  const startWord = dayWord(start, now);
+  const endWord = dayWord(new Date(end.getTime() - 1), now);
+  if (startWord === endWord) return `${capitalize(startWord)} ${formatTimeRange(start, end)}`;
+  return `${capitalize(startWord)} ${formatTime(start)} – ${endWord} ${formatTime(end)}`;
+}
+
+/** Lõplik arv või null (Solarman tagastab puuduva väärtuse null-ina). */
+function finiteOrNull(value) {
+  if (value == null || value === '' || typeof value === 'boolean') return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+function clamp(value, min, max) { return Math.min(max, Math.max(min, value)); }
+
+/* ==========================================================================
+   5. Tariifid — loetakse index.html CONFIG-ist, et need oleksid ühes kohas
+   ========================================================================== */
+async function loadTariffs() {
+  const file = typeof CONFIG.tariifideFail === 'string' ? CONFIG.tariifideFail.trim() : '';
+  if (!file || location.protocol === 'file:') return;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TARIFF_TIMEOUT_MS);
+  try {
+    const response = await fetch(file, { signal: controller.signal, cache: 'no-cache' });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const html = await response.text();
+    const block = /const\s+CONFIG\s*=\s*\{([\s\S]*?)\n\};/.exec(html);
+    if (!block) throw new Error('CONFIG objekti ei leitud');
+    const src = block[1];
+    const readNumber = key => {
+      const m = new RegExp(`\\b${key}\\s*:\\s*(-?\\d+(?:\\.\\d+)?)`).exec(src);
+      return m ? Number(m[1]) : null;
+    };
+    const readText = key => {
+      const m = new RegExp(`\\b${key}\\s*:\\s*"([^"]*)"`).exec(src);
+      return m ? m[1] : null;
+    };
+    for (const key of Object.keys(TARIFFS.hinnad)) {
+      const v = readNumber(key);
+      if (Number.isFinite(v)) TARIFFS.hinnad[key] = v;
+    }
+    for (const key of ['algus', 'lopp']) {
+      const v = readNumber(key);
+      if (Number.isFinite(v) && v >= 0 && v <= 24) TARIFFS.ootariif[key] = v;
+    }
+    const weekend = /\bnadalavahetusOnOo\s*:\s*(true|false)/.exec(src);
+    if (weekend) TARIFFS.ootariif.nadalavahetusOnOo = weekend[1] === 'true';
+    const limits = { roheline: readNumber('roheline'), kollane: readNumber('kollane'), oranz: readNumber('oranz') };
+    if ([limits.roheline, limits.kollane, limits.oranz].every(Number.isFinite) && limits.roheline < limits.kollane && limits.kollane < limits.oranz) {
+      TARIFFS.hinnapiirid = limits;
+    }
+    for (const key of Object.keys(TARIFFS.hinnasildid)) {
+      const v = readText(key);
+      if (v) TARIFFS.hinnasildid[key] = v;
+    }
+    TARIFFS.source = file;
+  } catch (error) {
+    console.error(`Tariife ei õnnestunud failist ${file} lugeda, kasutan CONFIG-i väärtusi:`, error);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/* ==========================================================================
+   6. Börsihinnad — hinnad.json (Elering), sama muster mis index.html-is
+   ========================================================================== */
+function vatFactor() { return 1 + Number(TARIFFS.hinnad.kaibemaks) / 100; }
+
+/** Perioodi pikkus (minutites) järjestikuste timestampide kõige sagedasema vahe järgi. */
+function detectInterval(sorted) {
+  const counts = new Map();
+  for (let i = 1; i < sorted.length; i++) {
+    const diff = (sorted[i].timestamp - sorted[i - 1].timestamp) / 60;
+    if (diff > 0 && diff <= MAX_PERIOD_MINUTES) counts.set(diff, (counts.get(diff) || 0) + 1);
+  }
+  let best = 60;
+  let bestCount = 0;
+  for (const [diff, count] of counts) {
+    if (count > bestCount) { best = diff; bestCount = count; }
+  }
+  return best;
+}
+
+/** Eleringi toorandmed -> { start, end, timestamp, spotExVatCentsKwh, spotIncVatCentsKwh, durationMinutes }. */
+function normalizePrices(rawList) {
+  const cleaned = [];
+  for (const item of rawList) {
+    if (!item || typeof item !== 'object') continue;
+    const timestamp = Number(item.timestamp);
+    const price = Number(item.price);
+    if (!Number.isFinite(timestamp) || !Number.isFinite(price)) continue;
+    cleaned.push({ timestamp: Math.round(timestamp), rawEurMwh: price });
+  }
+  cleaned.sort((a, b) => a.timestamp - b.timestamp);
+  const unique = [];
+  for (const item of cleaned) {
+    const last = unique[unique.length - 1];
+    if (last && last.timestamp === item.timestamp) unique[unique.length - 1] = item;
+    else unique.push(item);
+  }
+  const intervalMinutes = detectInterval(unique);
+  const vat = vatFactor();
+  const periods = unique.map((item, index) => {
+    const next = unique[index + 1];
+    let durationMinutes = intervalMinutes;
+    if (next) {
+      const gap = (next.timestamp - item.timestamp) / 60;
+      if (gap > 0 && gap <= MAX_PERIOD_MINUTES) durationMinutes = gap;
+    }
+    const start = new Date(item.timestamp * 1000);
+    const spotExVatCentsKwh = item.rawEurMwh / 10; // EUR/MWh -> s/kWh
+    return {
+      start,
+      end: new Date(start.getTime() + durationMinutes * MINUTE_MS),
+      timestamp: item.timestamp,
+      spotExVatCentsKwh,
+      spotIncVatCentsKwh: spotExVatCentsKwh * vat,
+      durationMinutes
+    };
+  });
+  return { periods, intervalMinutes };
+}
+
+async function requestPrices(url, signal) {
+  const response = await fetch(url, { signal, cache: 'no-store' });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  let json;
+  try {
+    json = await response.json();
+  } catch (parseError) {
+    throw new Error('Vigane JSON: ' + parseError.message);
+  }
+  if (!json || json.success !== true) throw new Error('API vastus: success !== true');
+  if (!json.data || !Array.isArray(json.data.ee)) throw new Error('API vastuses puudub data.ee massiiv');
+  const result = normalizePrices(json.data.ee);
+  if (!result.periods.length) throw new Error('API tagastas tühja andmestiku');
+  return result;
+}
+
+/** Andmeallikad eelistuse järjekorras: kohalik fail, otsepäring, varuproksi (nagu index.html-is). */
+function buildPriceSources() {
+  const range = buildApiRange(new Date());
+  const apiUrl = `${API_URL}?start=${encodeURIComponent(range.start)}&end=${encodeURIComponent(range.end)}`;
+  const localFile = location.protocol === 'file:' || typeof CONFIG.kohalikAndmefail !== 'string' ? '' : CONFIG.kohalikAndmefail.trim();
+  const proxy = typeof CONFIG.varuProksi === 'string' ? CONFIG.varuProksi.trim() : '';
+  const sources = [];
+  if (localFile) sources.push({ name: 'kohalik andmefail', url: `${localFile}?v=${Date.now()}` });
+  sources.push({ name: 'Eleringi otsepäring', url: apiUrl });
+  if (proxy) sources.push({ name: 'varuproksi', url: proxy + encodeURIComponent(apiUrl) });
+  return sources;
+}
+
+function priceErrorMessage() {
+  if (location.protocol === 'file:') {
+    return 'Börsihindu ei õnnestunud laadida: leht on avatud otse failina (file://). Ava leht GitHub Pagesi või kohaliku veebiserveri kaudu.';
+  }
+  return 'Börsihindu ei õnnestunud laadida. Kontrolli internetiühendust ja seda, et hinnad.json oleks repositooriumis olemas.';
+}
+
+async function refreshPrices(signal) {
+  const p = state.prices;
+  let result = null;
+  let fresh = false;
+  let lastError = null;
+  for (const source of buildPriceSources()) {
+    if (signal.aborted) break;
+    try {
+      const candidate = await requestPrices(source.url, signal);
+      if (getCurrentPricePeriod(candidate.periods, new Date())) { result = candidate; fresh = true; break; }
+      console.error(`Allikas "${source.name}" ei kata praegust hetke, proovin järgmist.`);
+      if (!result) result = candidate;
+    } catch (error) {
+      lastError = error;
+      console.error(`Hinnaallikas "${source.name}" ebaõnnestus:`, error);
+    }
+  }
+  if (result) {
+    p.periods = result.periods;
+    p.intervalMinutes = result.intervalMinutes;
+    p.lastUpdated = new Date();
+    p.error = null;
+    p.refreshFailed = !fresh;
+    p.version += 1;
+  } else {
+    console.error('Börsihindade laadimine ebaõnnestus:', lastError);
+    if (p.periods.length) p.refreshFailed = true;
+    else p.error = priceErrorMessage();
+  }
+  p.loaded = true;
+}
+
+/* ---------- Hinnaarvutused (samad reeglid, mis index.html-is) ---------- */
+function getDayPrices(periods, now, dayOffset) {
+  const start = getTallinnDayStart(now, dayOffset).getTime();
+  const end = getTallinnDayStart(now, dayOffset + 1).getTime();
+  return periods.filter(p => p.start.getTime() >= start && p.start.getTime() < end);
+}
+
+/** Kas Tallinna päev on andmetes tervenisti kaetud? Arvestab ka 23/25 h DST-päevi. */
+function isDayComplete(dayPeriods, now, dayOffset) {
+  const start = getTallinnDayStart(now, dayOffset).getTime();
+  const end = getTallinnDayStart(now, dayOffset + 1).getTime();
+  let covered = 0;
+  for (const p of dayPeriods) covered += Math.max(0, Math.min(p.end.getTime(), end) - Math.max(p.start.getTime(), start));
+  return covered >= end - start;
+}
+
+function getTomorrowStatus(now, hasTomorrow) {
+  if (hasTomorrow) return { state: 'available' };
+  const publish = getTomorrowPublishTime(now);
+  const graceMs = Number(CONFIG.homsedHinnad?.hilinemiseTeadeMinutites ?? 30) * MINUTE_MS;
+  const nowMs = now.getTime();
+  if (nowMs < publish.getTime()) return { state: 'upcoming', publish, minutesLeft: (publish.getTime() - nowMs) / MINUTE_MS };
+  if (nowMs < publish.getTime() + graceMs) return { state: 'pending', publish };
+  return { state: 'late', publish };
+}
+
+function tomorrowNotice(status) {
+  const at = status.publish ? formatTime(status.publish) : '';
+  if (status.state === 'upcoming') return `Homse päeva börsihinnad avaldatakse täna kell ${at} (${formatDuration(Math.ceil(status.minutesLeft))} pärast).`;
+  if (status.state === 'pending') return `Homse päeva börsihinnad peaksid ilmuma kell ${at}. Leht laadib need automaatselt.`;
+  if (status.state === 'late') return `Homse päeva börsihinnad pidid ilmuma kell ${at}, kuid pole veel lehele jõudnud. Leht proovib automaatselt uuesti.`;
+  return '';
+}
+
+function getCurrentPricePeriod(periods, now) {
+  const t = now.getTime();
+  return periods.find(p => p.start.getTime() <= t && t < p.end.getTime()) || null;
+}
+
+function calculateWeightedAverage(periods) {
+  let weighted = 0;
+  let minutes = 0;
+  for (const p of periods) {
+    weighted += p.spotIncVatCentsKwh * p.durationMinutes;
+    minutes += p.durationMinutes;
+  }
+  return minutes > 0 ? weighted / minutes : null;
+}
+
+function getMinMax(periods) {
+  if (!periods.length) return { min: null, max: null };
+  let min = periods[0];
+  let max = periods[0];
+  for (const p of periods) {
+    if (p.spotIncVatCentsKwh < min.spotIncVatCentsKwh) min = p;
+    if (p.spotIncVatCentsKwh > max.spotIncVatCentsKwh) max = p;
+  }
+  return { min, max };
+}
+
+function getPriceCategory(priceIncVat) {
+  const limits = TARIFFS.hinnapiirid;
+  if (priceIncVat < limits.roheline) return 'roheline';
+  if (priceIncVat < limits.kollane) return 'kollane';
+  if (priceIncVat < limits.oranz) return 'oranz';
+  return 'punane';
+}
+
+function getCategoryLabel(category) {
+  const labels = TARIFFS.hinnasildid;
+  return { roheline: labels.vagaOdav, kollane: labels.soodne, oranz: labels.moodukas, punane: labels.kallis }[category];
+}
+
+/** Arvutab akna [startTime, startTime + durationMinutes); null, kui andmetes on auk või need lõpevad. */
+function calculateWindow(periods, startIndex, startTime, durationMinutes) {
+  let remaining = durationMinutes;
+  let weighted = 0;
+  let used = 0;
+  for (let j = startIndex; j < periods.length && remaining > 1e-9; j++) {
+    const p = periods[j];
+    if (j > startIndex && p.start.getTime() !== periods[j - 1].end.getTime()) return null;
+    const from = Math.max(p.start.getTime(), startTime);
+    const available = (p.end.getTime() - from) / MINUTE_MS;
+    if (available <= 0) continue;
+    const take = Math.min(available, remaining);
+    weighted += p.spotIncVatCentsKwh * take;
+    used += take;
+    remaining -= take;
+  }
+  if (remaining > 1e-9) return null;
+  return { start: new Date(startTime), end: new Date(startTime + durationMinutes * MINUTE_MS), avg: weighted / used, durationMinutes };
+}
+
+function findBestWindow(periods, now, durationMinutes, horizonEnd) {
+  const nowMs = Math.floor(now.getTime() / MINUTE_MS) * MINUTE_MS;
+  let best = null;
+  for (let i = 0; i < periods.length; i++) {
+    const p = periods[i];
+    if (p.end.getTime() <= nowMs) continue;
+    const startTime = Math.max(p.start.getTime(), nowMs);
+    if (startTime + durationMinutes * MINUTE_MS > horizonEnd) break;
+    const w = calculateWindow(periods, i, startTime, durationMinutes);
+    if (w && (!best || w.avg < best.avg)) best = w;
+  }
+  return best;
+}
+
+/** Võrgutariif antud hetkel Tallinna aja järgi: 'oo' või 'paev'. */
+function getNetworkTariff(date) {
+  const p = getTallinnDateParts(date);
+  const rule = TARIFFS.ootariif;
+  const weekend = p.weekday === 0 || p.weekday === 6;
+  if (rule.nadalavahetusOnOo && weekend) return 'oo';
+  const hour = p.hour + p.minute / 60;
+  const start = Number(rule.algus);
+  const end = Number(rule.lopp);
+  const night = start > end ? (hour >= start || hour < end) : (hour >= start && hour < end);
+  return night ? 'oo' : 'paev';
+}
+
+/** Lõpphind s/kWh: börsihind ilma KM-ta + tasud, KM lisatakse kogu summale üks kord. */
+function calculateFinalPrice(spotExVatCentsKwh, date) {
+  const fees = TARIFFS.hinnad;
+  const tariff = getNetworkTariff(date);
+  const network = Number(tariff === 'oo' ? fees.vorgutasuOo : fees.vorgutasuPaev);
+  const subtotal = spotExVatCentsKwh + Number(fees.marginaal) + network + Number(fees.taastuvenergiaTasu) + Number(fees.aktsiis);
+  return { tariff, total: subtotal * (1 + Number(fees.kaibemaks) / 100) };
+}
+function finalCents(period) { return calculateFinalPrice(period.spotExVatCentsKwh, period.start).total; }
+/** Võrku müüdud kWh hind: börsihind ilma KM-ta miinus müügitasu. */
+function sellCents(period) { return period.spotExVatCentsKwh - Number(CONFIG.muuk?.tasu || 0); }
+
+function compareToDayAverage(price, avg) {
+  if (avg == null) return null;
+  const diff = price - avg;
+  const avgText = formatCents(avg);
+  if (Math.abs(diff) < 0.005) return `Sama, mis tänane keskmine (${avgText})`;
+  const direction = diff < 0 ? 'alla' : 'üle';
+  if (avg > 0 && price > 0) return `${formatPercentAbs(diff / avg * 100)} ${direction} tänase keskmise (${avgText})`;
+  return `${formatCents(Math.abs(diff), 1)} ${direction} tänase keskmise (${avgText})`;
+}
+
+/* ==========================================================================
+   7. Solarman — andmefail (GitHub Actions) või otseühendus (Solarman OpenAPI)
+   ========================================================================== */
+function readStore(key) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : null;
+  } catch (error) {
+    return null;
+  }
+}
+function writeStore(key, value) {
+  try {
+    if (value == null) localStorage.removeItem(key);
+    else localStorage.setItem(key, JSON.stringify(value));
+    return true;
+  } catch (error) {
+    console.error('localStorage pole kasutatav:', error);
+    return false;
+  }
+}
+
+/** SHA-256 räsi väiketähtedega hex-kujul (Solarman ootab parooli sellisena). */
+async function sha256Hex(text) {
+  if (!globalThis.crypto || !crypto.subtle) {
+    throw new Error('Brauser ei luba siin räsida (crypto.subtle vajab HTTPS-i või localhosti). Sisesta parooli asemel selle SHA-256 räsi.');
+  }
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+/** Parool -> räsi. 64 hex-märgiga sisend loetakse juba räsituks. */
+async function toPasswordHash(input) {
+  if (/^[0-9a-f]{64}$/i.test(input.trim())) return input.trim().toLowerCase();
+  return sha256Hex(input);
+}
+
+/** Otseühenduse võtmed sellest brauserist; null, kui otseühendust pole seadistatud. */
+function loadCredentials() {
+  const c = readStore(STORAGE.credentials);
+  if (!c || typeof c !== 'object') return null;
+  const ok = ['appId', 'appSecret', 'email', 'passwordHash'].every(k => typeof c[k] === 'string' && c[k]);
+  if (!ok || !/^[0-9a-f]{64}$/.test(c.passwordHash)) return null;
+  return {
+    appId: c.appId, appSecret: c.appSecret, email: c.email, passwordHash: c.passwordHash,
+    stationId: typeof c.stationId === 'string' ? c.stationId : '',
+    proxy: typeof c.proxy === 'string' ? c.proxy : ''
+  };
+}
+
+function credentialFingerprint(cred) { return `${cred.appId}|${cred.email}|${cred.passwordHash.slice(0, 16)}`; }
+
+function solarmanUrl(path, query, cred) {
+  const base = String(CONFIG.solarman.apiUrl || '').replace(/\/+$/, '');
+  const target = `${base}${path}?${new URLSearchParams(query)}`;
+  const proxy = String(cred.proxy || CONFIG.solarman.proksi || '').trim();
+  return proxy ? proxy + encodeURIComponent(target) : target;
+}
+
+/** POST Solarman OpenAPI-le. Viskab vea (auth = true, kui token/sisselogimine lükati tagasi). */
+async function solarmanPost(path, body, { token = null, query = { language: 'en' }, cred, signal }) {
+  const headers = { 'Content-Type': 'application/json', Accept: 'application/json' };
+  if (token) headers.Authorization = `Bearer ${token}`;
+  let response;
+  try {
+    response = await fetch(solarmanUrl(path, query, cred), { method: 'POST', headers, body: JSON.stringify(body), signal, cache: 'no-store' });
+  } catch (error) {
+    if (error.name === 'AbortError') throw error;
+    throw Object.assign(new Error('võrgu- või CORS-viga'), { network: true });
+  }
+  if (response.status === 401 || response.status === 403) throw Object.assign(new Error(`HTTP ${response.status}`), { auth: true });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  let json;
+  try {
+    json = await response.json();
+  } catch (parseError) {
+    throw new Error('Vigane JSON: ' + parseError.message);
+  }
+  if (!json || json.success !== true) {
+    const info = json ? `${json.code ?? ''} ${json.msg ?? ''}`.trim() : '';
+    throw Object.assign(new Error(`Solarman: ${info || 'success !== true'}`), { auth: /token|auth|password|appsecret|login/i.test(info) });
+  }
+  return json;
+}
+
+/** Bearer token: localStorage-ist (koos aegumisajaga) või uus päring. */
+async function getSolarmanToken(cred, signal, force = false) {
+  const fp = credentialFingerprint(cred);
+  const cached = readStore(STORAGE.token);
+  if (!force && cached && cached.fp === fp && typeof cached.token === 'string' && Date.now() < cached.refreshAt) return cached.token;
+  let json;
+  try {
+    json = await solarmanPost('/account/v1.0/token',
+      { appSecret: cred.appSecret, email: cred.email, password: cred.passwordHash },
+      { query: { appId: cred.appId, language: 'en' }, cred, signal });
+  } catch (error) {
+    if (error.auth) error.login = true; // võtmed on valed: uus tokenipäring ei aitaks
+    throw error;
+  }
+  if (!json.access_token) throw new Error('Solarman ei tagastanud access_token-it');
+  const expiresSec = Number(json.expires_in);
+  const ttl = Number.isFinite(expiresSec) && expiresSec > 0 ? expiresSec * 1000 : DAY_MS;
+  // Uuenda tokenit enne aegumist (10% või max 1 h varem), et päring ei jääks kunagi aegunud tokeniga
+  writeStore(STORAGE.token, { fp, token: json.access_token, refreshAt: Date.now() + ttl - Math.min(HOUR_MS, ttl * 0.1) });
+  return json.access_token;
+}
+
+/** Jaama ID ja paigaldatud võimsus (kW): vahemälust või /station/v1.0/list päringust. */
+async function resolveStation(cred, token, signal) {
+  const fp = credentialFingerprint(cred);
+  const cached = readStore(STORAGE.station);
+  if (cached && cached.fp === fp && cached.id && (!cred.stationId || String(cached.id) === cred.stationId)) return cached;
+  let stations = [];
+  try {
+    const json = await solarmanPost('/station/v1.0/list', { page: 1, size: 50 }, { token, cred, signal });
+    stations = Array.isArray(json.stationList) ? json.stationList.filter(s => s && typeof s === 'object') : [];
+  } catch (error) {
+    if (!cred.stationId || error.auth) throw error;
+    console.error('Jaamade nimekirja ei õnnestunud laadida:', error);
+  }
+  const chosen = cred.stationId ? stations.find(s => String(s.id) === cred.stationId) : stations[0];
+  if (!chosen && !cred.stationId) throw new Error('Solarmani kontol ei leitud ühtegi jaama');
+  const capacity = chosen ? finiteOrNull(chosen.installedCapacity) : null;
+  const station = { fp, id: chosen ? String(chosen.id) : cred.stationId, capacityKw: capacity > 0 ? capacity : null };
+  writeStore(STORAGE.station, station);
+  return station;
+}
+
+/** Unix sekundid (mõni Solarmani vastus annab millisekundid). */
+function toUnixSeconds(value) {
+  const n = finiteOrNull(value);
+  if (n == null || n <= 0) return null;
+  return Math.round(n > 1e11 ? n / 1000 : n);
+}
+
+/** Koondab kaadrid 15-min keskmisteks alates dayStartSec (sama loogika, mis töövoos; korduv rakendamine ei muuda tulemust). */
+function bucketFrames(items, dayStartSec) {
+  const buckets = new Map();
+  for (const item of items) {
+    if (!item || typeof item !== 'object') continue;
+    const ts = toUnixSeconds(item.dateTime);
+    if (ts == null || ts < dayStartSec) continue;
+    const key = ts - (ts % FRAME_SECONDS);
+    const acc = buckets.get(key) || {};
+    for (const field of [...SOLAR_POWER_FIELDS, 'batterySoc']) {
+      const v = finiteOrNull(item[field]);
+      if (v == null) continue;
+      const [sum, count] = acc[field] || [0, 0];
+      acc[field] = [sum + v, count + 1];
+    }
+    buckets.set(key, acc);
+  }
+  return [...buckets.keys()].sort((a, b) => a - b).map(key => {
+    const row = { dateTime: key };
+    for (const [field, [sum, count]] of Object.entries(buckets.get(key))) row[field] = sum / count;
+    return row;
+  });
+}
+
+/** Solarmani toorvastused -> sama kuju, mida kirjutab töövoog faili paike.json (data). */
+function buildSolarPayload({ realTime, dayItems, frameItems, capacityKw, now }) {
+  const rt = {};
+  for (const field of SOLAR_POWER_FIELDS) {
+    const v = finiteOrNull(realTime[field]);
+    if (v != null) rt[field] = v;
+  }
+  const soc = finiteOrNull(realTime.batterySoc);
+  if (soc != null && soc >= 0 && soc <= 100) rt.batterySoc = soc;
+  const day = { date: tallinnDateKey(now) };
+  const item = Array.isArray(dayItems) && dayItems.length ? dayItems[dayItems.length - 1] : null;
+  if (item) {
+    for (const field of SOLAR_DAY_FIELDS) {
+      const v = finiteOrNull(item[field]);
+      if (v != null && v >= 0) day[field] = v;
+    }
+  }
+  const dayStartSec = Math.floor(getTallinnDayStart(now, 0).getTime() / 1000);
+  return {
+    lastUpdateTime: toUnixSeconds(realTime.lastUpdateTime),
+    installedCapacityKw: capacityKw,
+    realTime: rt,
+    day,
+    frames: bucketFrames(Array.isArray(frameItems) ? frameItems : [], dayStartSec)
+  };
+}
+
+/** Otseühendus: token -> jaam -> realTime + tänane päev. Aegunud tokeni korral küsitakse kord uus. */
+async function fetchSolarDirect(cred, signal) {
+  const run = async forceToken => {
+    const token = await getSolarmanToken(cred, signal, forceToken);
+    const station = await resolveStation(cred, token, signal);
+    const stationId = /^\d+$/.test(station.id) ? Number(station.id) : station.id;
+    const now = new Date();
+    const today = tallinnDateKey(now);
+    // Päringud järjest, et mitte ületada Solarmani päringusageduse piirangut
+    const realTime = await solarmanPost('/station/v1.0/realTime', { stationId }, { token, cred, signal });
+    const history = async timeType => {
+      try {
+        const json = await solarmanPost('/station/v1.0/history', { stationId, startTime: today, endTime: today, timeType }, { token, cred, signal });
+        return Array.isArray(json.stationDataItems) ? json.stationDataItems : [];
+      } catch (error) {
+        if (error.auth || error.name === 'AbortError') throw error;
+        console.error(`Solarmani ajaloo päring (timeType ${timeType}) ebaõnnestus:`, error);
+        return null;
+      }
+    };
+    const dayItems = await history(2);
+    const frameItems = await history(1);
+    return buildSolarPayload({ realTime, dayItems, frameItems, capacityKw: station.capacityKw, now });
+  };
+  try {
+    return await run(false);
+  } catch (error) {
+    if (!error.auth || error.login) throw error;
+    writeStore(STORAGE.token, null);
+    return run(true);
+  }
+}
+
+/** GitHub Actionsi kirjutatud paike.json samast domeenist. */
+async function fetchSolarFile(signal) {
+  const file = String(CONFIG.solarman.andmefail || '').trim();
+  const response = await fetch(`${file}?v=${Date.now()}`, { signal, cache: 'no-store' });
+  if (response.status === 404) throw Object.assign(new Error('HTTP 404'), { missing: true });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  let json;
+  try {
+    json = await response.json();
+  } catch (parseError) {
+    throw new Error('Vigane JSON: ' + parseError.message);
+  }
+  if (!json || json.success !== true || !json.data) throw new Error('paike.json: success !== true või data puudub');
+  const generatedAt = json.generatedAt ? new Date(json.generatedAt) : null;
+  return { data: json.data, generatedAt: generatedAt && Number.isFinite(generatedAt.getTime()) ? generatedAt : null };
+}
+
+/** Solarmani väljad: võimsused W, märgid sõltuvad seadmest (vt detectSigns). */
+function parseRawSample(raw) {
+  const v = key => finiteOrNull(raw[key]);
+  const charge = v('chargePower');
+  const discharge = v('dischargePower');
+  const split = (charge != null || discharge != null) && ((charge || 0) !== 0 || (discharge || 0) !== 0)
+    ? Math.abs(charge || 0) - Math.abs(discharge || 0) : null;
+  const gridRaw = v('gridPower') ?? v('wirePower');
+  const purchase = v('purchasePower');
+  return {
+    pv: v('generationPower'),
+    load: v('usePower'),
+    batKnown: split,                // eraldi laadimise/tühjenemise väljad: märk teada (+ = laeb)
+    batRaw: v('batteryPower'),      // ühine väli: märk tuvastatakse
+    gridKnown: purchase != null && purchase > 0 && (gridRaw == null || Math.abs(gridRaw) < 1) ? purchase : null,
+    gridRaw,
+    soc: v('batterySoc')
+  };
+}
+
+/**
+ * Märgikokkulepe: battery = +1, kui batteryPower > 0 tähendab laadimist; grid = +1, kui
+ * gridPower > 0 tähendab müüki võrku. "auto" valib variandi, mis rahuldab energiabilanssi
+ * (päike + ost = maja + aku laadimine) kõige paremini; ebaselge tulemuse korral jääb vaikimisi.
+ */
+function detectSigns(rawSamples) {
+  const cfg = CONFIG.solarman;
+  const fixedB = cfg.akuMark === 'positiivne-tuhjeneb' ? -1 : cfg.akuMark === 'positiivne-laeb' ? 1 : null;
+  const fixedG = cfg.vorguMark === 'positiivne-ost' ? -1 : cfg.vorguMark === 'positiivne-muuk' ? 1 : null;
+  const defaults = { battery: fixedB ?? 1, grid: fixedG ?? 1, auto: false };
+  if (fixedB != null && fixedG != null) return defaults;
+  const usable = rawSamples.map(parseRawSample).filter(r =>
+    r.pv != null && r.load != null &&
+    (r.batKnown != null || r.batRaw != null) && (r.gridKnown != null || r.gridRaw != null) &&
+    (r.batKnown == null ? Math.abs(r.batRaw) : 0) + (r.gridKnown == null ? Math.abs(r.gridRaw) : 0) >= 50);
+  if (!usable.length) return defaults;
+  const residual = (b, g) => usable.reduce((sum, r) => {
+    const bat = r.batKnown ?? b * r.batRaw;
+    const imp = r.gridKnown ?? -g * r.gridRaw;
+    return sum + Math.abs(r.pv + imp - r.load - bat);
+  }, 0);
+  const options = [];
+  for (const b of fixedB != null ? [fixedB] : [1, -1]) {
+    for (const g of fixedG != null ? [fixedG] : [1, -1]) options.push({ b, g, err: residual(b, g) });
+  }
+  const base = options[0];
+  const best = options.reduce((m, o) => (o.err < m.err ? o : m), base);
+  return best !== base && best.err < base.err * 0.6 ? { battery: best.b, grid: best.g, auto: true } : defaults;
+}
+
+/** Ühtne hetkeseis kW-des: batteryKw > 0 laeb, gridKw > 0 ost võrgust (< 0 müük). */
+function sampleFromRaw(raw, signs) {
+  const r = parseRawSample(raw);
+  const toKw = w => (w == null ? null : w / 1000);
+  const pv = r.pv != null ? Math.max(0, r.pv) : null;
+  let load = r.load != null ? Math.max(0, r.load) : null;
+  const bat = r.batKnown ?? (r.batRaw != null ? signs.battery * r.batRaw : null);
+  const grid = r.gridKnown ?? (r.gridRaw != null ? -signs.grid * r.gridRaw : null);
+  // Kui maja tarbimist ei mõõdeta, tuletatakse see energiabilansist
+  if (load == null && pv != null && (bat != null || grid != null)) load = Math.max(0, pv + (grid ?? 0) - (bat ?? 0));
+  return {
+    pvKw: toKw(pv),
+    loadKw: toKw(load),
+    batteryKw: toKw(bat),
+    gridKw: toKw(grid),
+    soc: r.soc != null && r.soc >= 0 && r.soc <= 100 ? r.soc : null
+  };
+}
+
+/** paike.json / otseühenduse andmed -> { updated, capacityKw, now, series, day, signs }. */
+function normalizeSolar(data, fallbackTime) {
+  if (!data || typeof data !== 'object' || !data.realTime || typeof data.realTime !== 'object') {
+    throw new Error('andmetes puudub realTime');
+  }
+  const now = new Date();
+  const dayStartSec = Math.floor(getTallinnDayStart(now, 0).getTime() / 1000);
+  const frames = bucketFrames(Array.isArray(data.frames) ? data.frames : [], dayStartSec);
+  const signs = detectSigns([data.realTime, ...frames]);
+  const current = sampleFromRaw(data.realTime, signs);
+  if ([current.pvKw, current.loadKw, current.batteryKw, current.gridKw].every(v => v == null)) {
+    throw new Error('realTime vastuses puuduvad võimsusandmed');
+  }
+  const updatedSec = toUnixSeconds(data.lastUpdateTime);
+  const capacity = finiteOrNull(data.installedCapacityKw);
+  const day = data.day && typeof data.day === 'object' && data.day.date === tallinnDateKey(now) ? data.day : null;
+  return {
+    updated: updatedSec ? new Date(updatedSec * 1000) : fallbackTime,
+    capacityKw: capacity > 0 ? capacity : null,
+    now: current,
+    series: frames.map(f => ({ t: f.dateTime * 1000, ...sampleFromRaw(f, signs) })),
+    day,
+    signs
+  };
+}
+
+function solarErrorMessage(error, mode) {
+  if (mode === 'otse') {
+    if (error.network) return 'Solarmani API-le ei saanud brauserist ühendust (tõenäoliselt CORS-piirang). Lisa otseühenduse seadetes CORS-proksi.';
+    if (error.auth) return 'Solarman lükkas sisselogimise tagasi. Kontrolli App ID-d, App Secretit, e-posti ja parooli.';
+    return `Solarmani otseühendus ebaõnnestus (${error.message}).`;
+  }
+  if (location.protocol === 'file:') return 'Päikeseandmeid ei saa laadida, sest leht on avatud otse failina (file://). Ava leht GitHub Pagesi kaudu.';
+  if (error.missing) return 'Faili paike.json ei leitud. Lisa GitHubi repositooriumi Secrets SOLARMAN_APP_ID, SOLARMAN_APP_SECRET, SOLARMAN_EMAIL ja SOLARMAN_PASSWORD ning käivita töövoog „Uuenda päikeseandmed“.';
+  return `Päikeseandmete laadimine ebaõnnestus (${error.message}).`;
+}
+
+async function refreshSolar(signal) {
+  const s = state.solar;
+  const cred = loadCredentials();
+  const fileEnabled = Boolean(String(CONFIG.solarman.andmefail || '').trim());
+  let payload = null;
+  let source = null;
+  let fallbackTime = null;
+  let directError = null;
+  let fileError = null;
+
+  if (cred) {
+    try {
+      payload = await fetchSolarDirect(cred, signal);
+      source = 'otse';
+      fallbackTime = new Date();
+    } catch (error) {
+      directError = error;
+      console.error('Solarmani otseühendus ebaõnnestus:', error);
+    }
+  }
+  if (!payload && fileEnabled && !signal.aborted) {
+    try {
+      const file = await fetchSolarFile(signal);
+      payload = file.data;
+      fallbackTime = file.generatedAt;
+      source = 'fail';
+    } catch (error) {
+      fileError = error;
+      console.error('paike.json laadimine ebaõnnestus:', error);
+    }
+  }
+
+  let normalized = null;
+  let normalizeError = null;
+  if (payload) {
+    try {
+      normalized = normalizeSolar(payload, fallbackTime);
+    } catch (error) {
+      normalizeError = error;
+      console.error('Päikeseandmed on vigased:', error);
+    }
+  }
+
+  s.note = directError && normalized ? `${solarErrorMessage(directError, 'otse')} Kuvatakse andmefaili paike.json andmeid.` : null;
+  if (normalized) {
+    s.data = normalized;
+    s.source = source;
+    s.error = null;
+    s.refreshFailed = false;
+    s.lastUpdated = new Date();
+    s.version += 1;
+  } else {
+    const message = normalizeError
+      ? `Päikeseandmed on vigased (${normalizeError.message}).`
+      : directError ? `${solarErrorMessage(directError, 'otse')}${fileError ? ' Ka andmefaili paike.json ei õnnestunud laadida.' : ''}`
+        : fileError ? solarErrorMessage(fileError, 'fail')
+          : 'Päikeseandmete allikas pole seadistatud (CONFIG.solarman.andmefail on tühi).';
+    if (s.data) s.refreshFailed = true;
+    s.error = message;
+  }
+  s.loaded = true;
+}
+
+/* ==========================================================================
+   8. Analüüs — tänased kogused, energiavood ja soovitus
+   ========================================================================== */
+/** Tänased kWh (Solarmani päevaandmetest, puudumisel 15-min graafikust) ning võrgu ost/müük eurodes. */
+function computeDayTotals(solar, periods, now) {
+  const acc = { pv: 0, load: 0, imp: 0, exp: 0, charge: 0, discharge: 0, impEur: 0, expEur: 0, impPriced: 0, expPriced: 0 };
+  const has = { load: false, grid: false, bat: false };
+  let peak = null;
+  let socMin = null;
+  let socMax = null;
+  const series = solar.series;
+  series.forEach((s, i) => {
+    const next = series[i + 1];
+    const endMs = Math.min(s.t + FRAME_SECONDS * 1000, next ? next.t : Infinity, now.getTime());
+    const h = Math.max(0, endMs - s.t) / HOUR_MS;
+    if (s.pvKw != null && (!peak || s.pvKw > peak.kw)) peak = { kw: s.pvKw, t: new Date(s.t) };
+    if (s.soc != null) {
+      socMin = socMin == null ? s.soc : Math.min(socMin, s.soc);
+      socMax = socMax == null ? s.soc : Math.max(socMax, s.soc);
+    }
+    if (!h) return;
+    if (s.pvKw != null) acc.pv += s.pvKw * h;
+    if (s.loadKw != null) { acc.load += s.loadKw * h; has.load = true; }
+    if (s.gridKw != null) {
+      has.grid = true;
+      const imp = Math.max(0, s.gridKw) * h;
+      const exp = Math.max(0, -s.gridKw) * h;
+      acc.imp += imp;
+      acc.exp += exp;
+      const period = getCurrentPricePeriod(periods, new Date(s.t + MINUTE_MS));
+      if (period) {
+        acc.impEur += imp * finalCents(period) / 100;
+        acc.expEur += exp * sellCents(period) / 100;
+        acc.impPriced += imp;
+        acc.expPriced += exp;
+      }
+    }
+    if (s.batteryKw != null) {
+      has.bat = true;
+      acc.charge += Math.max(0, s.batteryKw) * h;
+      acc.discharge += Math.max(0, -s.batteryKw) * h;
+    }
+  });
+  const day = solar.day || {};
+  const pick = (field, integrated, available) => {
+    const v = finiteOrNull(day[field]);
+    if (v != null && v >= 0) return v;
+    return available && series.length ? integrated : null;
+  };
+  const totals = {
+    pvKwh: pick('generationValue', acc.pv, true),
+    loadKwh: pick('useValue', acc.load, has.load),
+    importKwh: pick('buyValue', acc.imp, has.grid),
+    exportKwh: pick('gridValue', acc.exp, has.grid),
+    chargeKwh: pick('chargeValue', acc.charge, has.bat),
+    dischargeKwh: pick('dischargeValue', acc.discharge, has.bat),
+    fromApi: SOLAR_DAY_FIELDS.some(f => finiteOrNull(day[f]) != null),
+    peak, socMin, socMax
+  };
+  // Eurod 15-min perioodide hinnaga; kui päeva kWh tuleb Solarmanist, skaleeritakse sama hinnaprofiiliga
+  const euros = (eur, priced, kwh) => (kwh == null ? null : kwh === 0 ? 0 : priced > 0 ? eur * kwh / priced : null);
+  totals.importEur = euros(acc.impEur, acc.impPriced, totals.importKwh);
+  totals.exportEur = euros(acc.expEur, acc.expPriced, totals.exportKwh);
+  totals.selfSufficiency = totals.loadKwh > 0 && totals.importKwh != null ? clamp(1 - totals.importKwh / totals.loadKwh, 0, 1) : null;
+  totals.selfConsumption = totals.pvKwh > 0 && totals.exportKwh != null ? clamp(1 - totals.exportKwh / totals.pvKwh, 0, 1) : null;
+  return totals;
+}
+
+/** Jagab hetkevõimsused allikate ja tarbijate vahel (päike eelistatult majale, siis akule, siis võrku). */
+function allocateFlows(s) {
+  const zero = v => (v != null && v > FLOW_MIN_KW ? v : 0);
+  let pv = zero(s.pvKw);
+  let discharge = zero(s.batteryKw != null ? -s.batteryKw : null);
+  let imp = zero(s.gridKw);
+  let load = zero(s.loadKw);
+  let charge = zero(s.batteryKw);
+  let exp = zero(s.gridKw != null ? -s.gridKw : null);
+  const move = (from, to) => Math.min(from, to);
+  const flows = {};
+  flows.solarToHome = move(pv, load); pv -= flows.solarToHome; load -= flows.solarToHome;
+  flows.solarToBattery = move(pv, charge); pv -= flows.solarToBattery; charge -= flows.solarToBattery;
+  flows.solarToGrid = move(pv, exp); pv -= flows.solarToGrid; exp -= flows.solarToGrid;
+  flows.batteryToHome = move(discharge, load); discharge -= flows.batteryToHome; load -= flows.batteryToHome;
+  flows.batteryToGrid = move(discharge, exp); discharge -= flows.batteryToGrid; exp -= flows.batteryToGrid;
+  flows.gridToHome = move(imp, load); imp -= flows.gridToHome; load -= flows.gridToHome;
+  flows.gridToBattery = move(imp, charge);
+  return flows;
+}
+
+/** Hinnanguline aeg (min), kuni aku jõuab täis- või reservtasemeni; null, kui mahtu pole määratud. */
+function batteryEta(s) {
+  const capacity = Number(CONFIG.aku.mahtKwh);
+  if (!(capacity > 0) || s.soc == null || s.batteryKw == null || Math.abs(s.batteryKw) <= FLOW_MIN_KW) return null;
+  if (s.batteryKw > 0) {
+    const kwh = (100 - s.soc) / 100 * capacity;
+    return { kind: 'full', minutes: kwh / s.batteryKw * 60 };
+  }
+  const kwh = (s.soc - Number(CONFIG.aku.reservProtsent)) / 100 * capacity;
+  return kwh > 0 ? { kind: 'reserve', minutes: kwh / -s.batteryKw * 60 } : null;
+}
+
+/** Tuletatud andmed praeguse hetke jaoks. */
+function derive() {
+  const now = new Date();
+  const all = state.prices.periods;
+  const today = getDayPrices(all, now, 0);
+  const tomorrowRaw = getDayPrices(all, now, 1);
+  const tomorrow = isDayComplete(tomorrowRaw, now, 1) ? tomorrowRaw : [];
+  const current = getCurrentPricePeriod(all, now);
+  const horizonEnd = now.getTime() + DAY_MS;
+  const future = all.filter(p => p.end.getTime() > now.getTime() && p.start.getTime() < horizonEnd);
+  const solar = state.solar.data;
+  const solarAgeMin = solar && solar.updated ? Math.max(0, (now.getTime() - solar.updated.getTime()) / MINUTE_MS) : null;
+  const solarFresh = Boolean(solar) && (solarAgeMin == null || solarAgeMin <= Number(CONFIG.solarman.aegunudMinutites));
+  return {
+    now, all, today, tomorrow, current, future, horizonEnd,
+    todayAvg: calculateWeightedAverage(today),
+    hasTomorrow: tomorrow.length > 0,
+    tomorrowStatus: getTomorrowStatus(now, tomorrow.length > 0),
+    best2h: findBestWindow(future, now, 120, horizonEnd),
+    solar, solarAgeMin, solarFresh,
+    totals: solar ? computeDayTotals(solar, all, now) : null,
+    flows: solar ? allocateFlows(solar.now) : null
+  };
+}
+
+/**
+ * Soovituslik staatus: kas laadida akut võrgust, kasutada akut, müüa või tarbida.
+ * Reeglid (järjekorras): negatiivne hind -> päikese ülejääk -> võrgust laadimise tasuvus ->
+ * kallis hind (aku / säästa) -> odav hind -> tavarežiim. Aegunud päikeseandmeid ei arvestata.
+ */
+function buildAdvice(d) {
+  const p = d.current;
+  const s = d.solar && d.solarFresh ? d.solar.now : null;
+  if (!p && !s) return null;
+  const A = CONFIG.aku;
+  const S = CONFIG.soovitus;
+  const soc = s && s.soc != null ? s.soc : null;
+  const hasBattery = soc != null;
+  const surplus = s && s.pvKw != null && s.loadKw != null ? s.pvKw - s.loadKw : null;
+  const reasons = [];
+  if (p) reasons.push(`Börsihind ${formatCents(p.spotIncVatCentsKwh)}`);
+  if (s && s.pvKw != null) reasons.push(`Päike ${formatKw(s.pvKw)}`);
+  if (s && s.loadKw != null) reasons.push(`Maja ${formatKw(s.loadKw)}`);
+  if (hasBattery) reasons.push(`Aku ${formatPct(soc)}`);
+  if (d.solar && !d.solarFresh) reasons.push('päikeseandmed aegunud');
+  const advice = (tone, chip, title, text) => ({ tone, chip, title, text, reasons });
+
+  if (p && p.spotExVatCentsKwh <= 0) {
+    return advice('good', 'Tarbi võrgust', 'Börsihind on null või negatiivne',
+      hasBattery && soc < A.taisProtsent
+        ? 'Lae akut võrgust ja kasuta praegu võrguelektrit. Võrku müümine on praegu kahjumlik.'
+        : 'Kasuta praegu võrguelektrit. Võrku müümine on praegu kahjumlik.');
+  }
+
+  const avg = d.todayAvg;
+  if (surplus != null && surplus > Number(S.ylejaakKw)) {
+    if (hasBattery && soc < A.taisProtsent) {
+      return advice('good', 'Päike laeb akut', 'Päikese ülejääk läheb akusse',
+        `Ülejääk ${formatKw(surplus)}. Hea aeg ka ise tarbida: pesumasin, boiler või elektriauto.`);
+    }
+    const prefix = hasBattery ? 'Aku on täis. ' : '';
+    if (p && avg != null && p.spotIncVatCentsKwh >= avg) {
+      return advice('good', 'Müü võrku', 'Müü päikese ülejääk võrku',
+        `${prefix}Börsihind on üle päeva keskmise, müügihind praegu ${formatCents(sellCents(p))}.`);
+    }
+    return advice('good', 'Tarbi ise', 'Kasuta päikese ülejääk ise ära',
+      `${prefix}${p ? `Müügihind on madal (${formatCents(sellCents(p))}). ` : ''}Lülita sisse suurem tarbija: boiler, elektriauto või pesumasin.`);
+  }
+
+  if (!p) {
+    if (hasBattery && soc <= A.reservProtsent) {
+      return advice('warn', 'Säästa', 'Aku on reservtasemel', 'Maja tarbib võrgust. Hinnaandmed puuduvad, seega ajastamissoovitust ei saa anda.');
+    }
+    return advice('neutral', 'Tavarežiim', 'Päike ja aku katavad tarbimist', 'Hinnaandmed pole praegu saadaval, soovitus põhineb ainult päikese ja aku seisul.');
+  }
+
+  const price = p.spotIncVatCentsKwh;
+  const category = getPriceCategory(price);
+  const lookEnd = d.now.getTime() + Number(S.vaatePiirTundides) * HOUR_MS;
+  const ahead = d.all.filter(x => x.start.getTime() >= p.end.getTime() && x.start.getTime() < lookEnd);
+  const peak = ahead.reduce((m, x) => (!m || finalCents(x) > finalCents(m) ? x : m), null);
+  const lowRank = ahead.length ? ahead.filter(x => x.spotIncVatCentsKwh < price).length / ahead.length : 1;
+  const expensive = avg != null ? price > avg * 1.1 && category !== 'roheline' : category === 'punane';
+  const cheap = category === 'roheline' || (avg != null && price < avg * 0.9);
+  const nextCheaper = ahead.find(x => x.spotIncVatCentsKwh < (avg != null ? Math.min(avg, price) : price * 0.8)) || null;
+
+  if (hasBattery) {
+    const efficiency = clamp(Number(A.kasutegur) || 0.9, 0.5, 1);
+    const nowFinal = finalCents(p);
+    const worthIt = peak && nowFinal / efficiency <= finalCents(peak) * (1 - Number(S.minSaastProtsent) / 100);
+    if (worthIt && lowRank <= 0.25 && soc < A.sihtProtsent) {
+      return advice('good', 'Lae akut', 'Lae akut võrgust',
+        `Praegu ${formatCents(nowFinal)} koos tasudega, ${describeTime(peak.start, d.now)} kuni ${formatCents(finalCents(peak))}. Lae akut kuni ${formatPct(A.sihtProtsent)}.`);
+    }
+    if (expensive && soc > A.reservProtsent) {
+      const eta = batteryEta(s);
+      return advice('warn', 'Kasuta akut', 'Kasuta akut, väldi võrgust ostmist',
+        `Börsihind on üle päeva keskmise (${formatCents(avg ?? price)}).${eta && eta.kind === 'reserve' ? ` Aku jätkub reservini umbes ${formatDuration(eta.minutes)}.` : ''}`);
+    }
+    if (expensive) {
+      return advice('bad', 'Säästa', 'Aku on reservis – vähenda tarbimist',
+        nextCheaper ? `Hind on kõrge. Odavam periood algab ${describeTime(nextCheaper.start, d.now)}.` : 'Hind on kõrge ja aku on reservtasemel.');
+    }
+  }
+  if (cheap) {
+    const rise = avg != null ? ahead.find(x => x.spotIncVatCentsKwh >= avg) : null;
+    const until = rise ? `Hind püsib alla päeva keskmise kuni ${describeTime(rise.start, d.now, true)}.` : 'Hind on alla tänase päeva keskmise.';
+    return advice('good', 'Tarbi', 'Hea aeg elektrit tarbida', `${until}${hasBattery ? ' Hoia akut kallimaks ajaks.' : ''}`);
+  }
+  if (expensive) {
+    return advice('bad', 'Oota', 'Võimalusel lükka tarbimine edasi',
+      nextCheaper ? `Odavam periood algab ${describeTime(nextCheaper.start, d.now)}.` : 'Saadaolevate hindade põhjal lähiajal odavamat perioodi ei paista.');
+  }
+  return advice('neutral', 'Tavarežiim', 'Tavapärane tarbimine',
+    `Hind on päeva keskmise lähedal${avg != null ? ` (${formatCents(avg)})` : ''}.${hasBattery ? ' Aku ja päike katavad tarbimist vastavalt vajadusele.' : ''}`);
+}
+
+/* ==========================================================================
+   9. DOM abifunktsioonid — sisu lisatakse alati textContent/createElement kaudu
+   ========================================================================== */
+const SVG_NS = 'http://www.w3.org/2000/svg';
+function byId(id) { return document.getElementById(id); }
+
+function el(tag, attrs = {}, children = []) {
+  const node = document.createElement(tag);
+  for (const [key, value] of Object.entries(attrs)) {
+    if (value == null || value === false) continue;
+    if (key === 'class') node.className = value;
+    else if (key === 'text') node.textContent = value;
+    else node.setAttribute(key, value === true ? '' : value);
+  }
+  for (const child of [].concat(children)) {
+    if (child == null) continue;
+    node.append(typeof child === 'string' ? document.createTextNode(child) : child);
+  }
+  return node;
+}
+
+function svgEl(tag, attrs = {}, children = []) {
+  const node = document.createElementNS(SVG_NS, tag);
+  for (const [key, value] of Object.entries(attrs)) {
+    if (value == null || value === false) continue;
+    if (key === 'text') node.textContent = value;
+    else node.setAttribute(key, value);
+  }
+  for (const child of [].concat(children)) if (child) node.append(child);
+  return node;
+}
+
+function statTile(label, value, sub, modifier = '') {
+  return el('div', { class: 'stat' }, [
+    el('p', { class: 'stat__label', text: label }),
+    el('p', { class: modifier ? `stat__value ${modifier}` : 'stat__value', text: value }),
+    sub ? el('p', { class: 'stat__time', text: sub }) : null
+  ]);
+}
+
+/** "Ilusad" teljejaotised: umbes `count` sammu, sammud 1/2/5 × 10^n. */
+function niceTicks(min, max, count = 4) {
+  const span = Math.max(max - min, 1e-9);
+  const magnitude = Math.pow(10, Math.floor(Math.log10(span / count)));
+  const candidates = [1, 2, 5, 10, 20, 50].map(m => m * magnitude);
+  const step = candidates.find(s => span / s <= count + 3) || candidates[candidates.length - 1];
+  const ticks = [];
+  for (let v = Math.ceil(min / step - 1e-9) * step; v <= max + 1e-9; v += step) ticks.push(Number(v.toFixed(6)));
+  return { ticks, step, format: step < 1 ? numberFormat.d1 : numberFormat.d0 };
+}
+
+/** Asendab elemendi sisu; null/undefined lapsed jäetakse vahele (replaceChildren teeks neist teksti "null"). */
+function setChildren(host, ...nodes) {
+  host.replaceChildren(...nodes.filter(node => node != null));
+}
+
+/** Kaardi sisu, kui päikeseandmeid pole (veel) saadaval. Täielik juhis on energiavoo kaardil, mujal lühiviide. */
+function solarUnavailable(host, text, short = false) {
+  const message = short && state.solar.error ? 'Päikeseandmed pole saadaval – vaata selgitust kaardil „Energiavoog praegu“.' : text;
+  host.replaceChildren(el('p', { class: state.solar.error ? 'notice notice--warn' : 'placeholder', text: message }));
+}
+
+/* ==========================================================================
+   10. Renderdamine
+   ========================================================================== */
+function renderStatus() {
+  const status = byId('status');
+  const button = byId('refresh-button');
+  const anyLoaded = state.prices.loaded || state.solar.loaded;
+  button.disabled = state.loading;
+  button.classList.toggle('is-loading', state.loading);
+  button.setAttribute('aria-busy', state.loading ? 'true' : 'false');
+  byId('refresh-label').textContent = state.loading ? 'Uuendan…' : 'Värskenda';
+  byId('layout').classList.toggle('is-refreshing', state.loading && anyLoaded);
+
+  if (state.loading) status.textContent = anyLoaded ? 'Uuendan andmeid…' : 'Andmete laadimine…';
+  else if (state.lastRefresh) {
+    const next = state.nextRefreshAt ? ` · järgmine ${formatTime(new Date(state.nextRefreshAt))}` : '';
+    status.textContent = `Uuendatud ${formatTime(state.lastRefresh)}${next}`;
+  } else status.textContent = '';
+
+  // Teated: punane, kui ühtegi andmeallikat pole; kollane, kui midagi on aegunud või ebaõnnestus.
+  // Värskendamise ajal jääb eelmine teade nähtavale (ei vilgu iga uuenduse ajal).
+  const banner = byId('banner');
+  const message = byId('banner-message');
+  const lines = [];
+  let severe = false;
+  if (anyLoaded) {
+    const d = state.derived;
+    const noPrices = state.prices.loaded && !state.prices.periods.length;
+    const noSolar = state.solar.loaded && !state.solar.data;
+    if (noPrices && noSolar) {
+      severe = true;
+      lines.push('Andmeid ei õnnestunud laadida. Kontrolli internetiühendust ja proovi uuesti.');
+    } else {
+      if (state.prices.refreshFailed) lines.push(state.prices.periods.length && d && !d.current
+        ? 'Hinnaandmed on aegunud: praegust hetke katvaid hindu ei õnnestunud laadida.'
+        : `Börsihindade uuendamine ebaõnnestus, kuvatakse kell ${formatTime(state.prices.lastUpdated)} laaditud hindu.`);
+      if (state.solar.refreshFailed) lines.push(`Päikeseandmete uuendamine ebaõnnestus, kuvatakse kell ${formatTime(state.solar.lastUpdated)} laaditud andmeid.`);
+      if (state.solar.note) lines.push(state.solar.note);
+      if (d && d.solar && !d.solarFresh) lines.push(`Solarmani viimane mõõtmine on ${formatAgo(d.solarAgeMin)} (${formatTime(d.solar.updated)}). Soovitus ei arvesta päikese ja aku hetkeseisu.`);
+    }
+  }
+  banner.hidden = lines.length === 0;
+  banner.classList.toggle('banner--warn', !severe);
+  message.replaceChildren(...lines.map(text => el('span', { text })));
+  byId('retry-button').hidden = !severe && !state.prices.refreshFailed && !state.solar.refreshFailed;
+
+  // Jalus: andmeallikad ja nende värskus
+  const parts = [];
+  if (state.solar.data) {
+    const src = state.solar.source === 'otse' ? 'Solarmani otseühendus' : `${CONFIG.solarman.andmefail} (GitHub Actions)`;
+    parts.push(`Päike ja aku: ${src}${state.solar.data.updated ? `, mõõdetud ${formatTime(state.solar.data.updated)}` : ''}`);
+  }
+  if (state.prices.periods.length) parts.push(`Börsihinnad: ${CONFIG.kohalikAndmefail}`);
+  parts.push(`Tariifid: ${TARIFFS.source}`);
+  byId('footer-sources').textContent = parts.join(' · ');
+  byId('footer-version').textContent = `v${APP_VERSION}`;
+}
+
+function renderAdvice(d) {
+  const section = byId('section-advice');
+  const host = byId('advice-body');
+  if (!state.prices.loaded && !state.solar.loaded) return;
+  const advice = buildAdvice(d);
+  if (!advice) {
+    section.dataset.tone = 'neutral';
+    host.replaceChildren(el('p', { class: 'placeholder', text: 'Soovituse andmiseks on vaja hinna- või päikeseandmeid.' }));
+    return;
+  }
+  section.dataset.tone = advice.tone;
+  setChildren(host,
+    el('div', { class: 'advice-row' }, [
+      el('p', { class: 'chip' }, [el('span', { class: 'visually-hidden', text: 'Soovitus: ' }), advice.chip]),
+      el('div', { class: 'advice-main' }, [
+        el('p', { class: 'advice-title', text: advice.title }),
+        advice.text ? el('p', { class: 'advice-text', text: advice.text }) : null
+      ])
+    ]),
+    advice.reasons.length ? el('ul', { class: 'advice-reasons', 'aria-label': 'Soovituse alus' }, advice.reasons.map(r => el('li', { text: r }))) : null
+  );
+}
+
+/* ---------- Energiavoo diagramm ---------- */
+const FLOW_GEOMETRY = {
+  width: 360,
+  height: 392,
+  radius: 36,
+  center: { x: 180, y: 204 },
+  nodes: {
+    solar: { x: 180, y: 84 },
+    grid: { x: 62, y: 204 },
+    home: { x: 298, y: 204 },
+    battery: { x: 180, y: 314 }
+  }
+};
+const FLOW_LINES = {
+  'solar-home': { from: 'solar', to: 'home', bow: 12 },
+  'solar-grid': { from: 'solar', to: 'grid', bow: 12 },
+  'solar-battery': { from: 'solar', to: 'battery', bow: 0 },
+  'grid-home': { from: 'grid', to: 'home', bow: 0 },
+  'grid-battery': { from: 'grid', to: 'battery', bow: 12 },
+  'battery-home': { from: 'battery', to: 'home', bow: 12 }
+};
+const FLOW_ROUTES = [
+  { key: 'solarToHome', line: 'solar-home', color: 'var(--solar)', label: 'Päike → maja' },
+  { key: 'solarToBattery', line: 'solar-battery', color: 'var(--solar)', label: 'Päike → aku' },
+  { key: 'solarToGrid', line: 'solar-grid', color: 'var(--solar)', label: 'Päike → võrk (müük)' },
+  { key: 'batteryToHome', line: 'battery-home', color: 'var(--battery)', label: 'Aku → maja' },
+  { key: 'batteryToGrid', line: 'grid-battery', color: 'var(--battery)', label: 'Aku → võrk (müük)', reverse: true },
+  { key: 'gridToHome', line: 'grid-home', color: 'var(--grid)', label: 'Võrk → maja (ost)' },
+  { key: 'gridToBattery', line: 'grid-battery', color: 'var(--grid)', label: 'Võrk → aku (ost)' }
+];
+
+/** Joon kahe sõlme servade vahel; kaarjoon kaardub diagrammi keskelt eemale. */
+function flowPath(line) {
+  const { nodes, radius, center } = FLOW_GEOMETRY;
+  const a = nodes[line.from];
+  const b = nodes[line.to];
+  const len = Math.hypot(b.x - a.x, b.y - a.y);
+  const ux = (b.x - a.x) / len;
+  const uy = (b.y - a.y) / len;
+  const gap = radius + 6;
+  const s = { x: a.x + ux * gap, y: a.y + uy * gap };
+  const e = { x: b.x - ux * gap, y: b.y - uy * gap };
+  const f = n => n.toFixed(1);
+  if (!line.bow) return `M ${f(s.x)} ${f(s.y)} L ${f(e.x)} ${f(e.y)}`;
+  const mx = (s.x + e.x) / 2;
+  const my = (s.y + e.y) / 2;
+  let nx = -uy;
+  let ny = ux;
+  if ((mx - center.x) * nx + (my - center.y) * ny < 0) { nx = -nx; ny = -ny; }
+  return `M ${f(s.x)} ${f(s.y)} Q ${f(mx + nx * line.bow * 2)} ${f(my + ny * line.bow * 2)} ${f(e.x)} ${f(e.y)}`;
+}
+
+/** Ikoonid 24×24 koordinaatides. */
+function flowIcon(kind, color, soc) {
+  const g = svgEl('g', { class: 'flow-node__icon', stroke: color });
+  if (kind === 'solar') {
+    g.append(svgEl('circle', { cx: 12, cy: 12, r: 4.2 }));
+    for (let i = 0; i < 8; i++) {
+      const a = i * Math.PI / 4;
+      g.append(svgEl('line', { x1: 12 + Math.cos(a) * 7.2, y1: 12 + Math.sin(a) * 7.2, x2: 12 + Math.cos(a) * 10, y2: 12 + Math.sin(a) * 10 }));
+    }
+  } else if (kind === 'home') {
+    g.append(svgEl('path', { d: 'M3.5 11.5 L12 4.5 L20.5 11.5 M6 9.8 V20 H18 V9.8 M10 20 V14.5 H14 V20' }));
+  } else if (kind === 'battery') {
+    g.append(svgEl('rect', { x: 2.5, y: 7, width: 17, height: 10, rx: 2.2 }));
+    g.append(svgEl('path', { d: 'M21.5 10.5 V13.5' }));
+    const level = soc != null ? clamp(soc / 100, 0, 1) : 0;
+    if (level > 0) g.append(svgEl('rect', { x: 4.5, y: 9, width: Math.max(1, 13 * level), height: 6, rx: 1, fill: color, stroke: 'none' }));
+  } else {
+    g.append(svgEl('path', { d: 'M12 3 L7 21 M12 3 L17 21 M4.5 8 H19.5 M8.3 15.5 H15.7 M6.6 8 L12 12.5 L17.4 8' }));
+  }
+  return g;
+}
+
+function buildFlowSvg(s, flows, capacityKw) {
+  const { width, height, radius, nodes } = FLOW_GEOMETRY;
+  const active = Object.values(flows).filter(v => v > FLOW_MIN_KW);
+  const refKw = Math.max(capacityKw || 0, ...active, 3);
+  const svg = svgEl('svg', { class: 'flow-svg', viewBox: `0 0 ${width} ${height}`, role: 'img', 'aria-label': describeFlowsForReader(s, flows) });
+
+  // Rajad (alati nähtavad) ja aktiivsed vood
+  for (const line of Object.values(FLOW_LINES)) svg.append(svgEl('path', { class: 'flow-track', d: flowPath(line) }));
+  for (const route of FLOW_ROUTES) {
+    const kw = flows[route.key];
+    if (!(kw > FLOW_MIN_KW)) continue;
+    const d = flowPath(FLOW_LINES[route.line]);
+    const duration = Math.max(0.55, 2.6 - 2.0 * Math.min(1, kw / refKw));
+    svg.append(svgEl('path', { class: 'flow-line', d, stroke: route.color }));
+    svg.append(svgEl('path', {
+      class: route.reverse ? 'flow-dots flow-dots--rev' : 'flow-dots', d, stroke: route.color,
+      style: `--flow-dur:${duration.toFixed(2)}s`
+    }));
+  }
+  svg.append(svgEl('circle', { class: 'flow-hub', cx: FLOW_GEOMETRY.center.x, cy: FLOW_GEOMETRY.center.y, r: 5 }));
+
+  const batteryState = s.batteryKw == null ? null : s.batteryKw > FLOW_MIN_KW ? 'laeb' : s.batteryKw < -FLOW_MIN_KW ? 'tühjeneb' : 'ootel';
+  const gridState = s.gridKw == null ? null : s.gridKw > FLOW_MIN_KW ? 'ost' : s.gridKw < -FLOW_MIN_KW ? 'müük' : 'ootel';
+  const pvShare = s.pvKw != null && capacityKw ? clamp(s.pvKw / capacityKw, 0, 1) : null;
+  const solarCover = s.pvKw != null && s.loadKw > FLOW_MIN_KW ? clamp(s.pvKw / s.loadKw, 0, 1) : null;
+
+  const nodeSpecs = [
+    {
+      key: 'solar', color: 'var(--solar)', ring: pvShare, labelAbove: true,
+      active: s.pvKw > FLOW_MIN_KW, value: s.pvKw != null ? formatKw(s.pvKw) : '—',
+      name: 'Päike', sub: s.pvKw == null ? 'andmed puuduvad' : s.pvKw > FLOW_MIN_KW ? (pvShare != null ? `${formatPct(pvShare * 100)} võimsusest` : 'toodab') : 'ei tooda'
+    },
+    {
+      key: 'grid', color: 'var(--grid)', ring: null,
+      active: gridState === 'ost' || gridState === 'müük', value: s.gridKw != null ? formatKw(Math.abs(s.gridKw)) : '—',
+      name: 'Võrk', sub: gridState === 'ost' ? 'ost' : gridState === 'müük' ? 'müük' : gridState === 'ootel' ? 'vahetus puudub' : 'andmed puuduvad'
+    },
+    {
+      key: 'home', color: 'var(--home)', ring: solarCover,
+      active: s.loadKw > FLOW_MIN_KW, value: s.loadKw != null ? formatKw(s.loadKw) : '—',
+      name: 'Maja', sub: solarCover != null && solarCover > 0 ? `päike katab ${formatPct(solarCover * 100)}` : 'tarbimine'
+    },
+    {
+      key: 'battery', color: 'var(--battery)', ring: s.soc != null ? s.soc / 100 : null,
+      active: batteryState === 'laeb' || batteryState === 'tühjeneb', value: s.soc != null ? formatPct(s.soc) : '—',
+      name: 'Aku', sub: batteryState === 'laeb' ? `laeb ${formatKw(s.batteryKw)}` : batteryState === 'tühjeneb' ? `tühjeneb ${formatKw(-s.batteryKw)}` : batteryState === 'ootel' ? 'ootel' : 'andmed puuduvad'
+    }
+  ];
+
+  for (const spec of nodeSpecs) {
+    const { x, y } = nodes[spec.key];
+    const g = svgEl('g', { class: spec.active ? 'flow-node' : 'flow-node flow-node--idle' });
+    g.append(svgEl('circle', { class: 'flow-node__bg', cx: x, cy: y, r: radius }));
+    const circumference = 2 * Math.PI * radius;
+    if (spec.ring != null) {
+      if (spec.ring > 0) {
+        g.append(svgEl('circle', {
+          class: 'flow-node__ring', cx: x, cy: y, r: radius, stroke: spec.color,
+          'stroke-dasharray': `${(circumference * spec.ring).toFixed(1)} ${circumference.toFixed(1)}`,
+          transform: `rotate(-90 ${x} ${y})`
+        }));
+      }
+    } else {
+      g.append(svgEl('circle', { class: 'flow-node__ring', cx: x, cy: y, r: radius, stroke: spec.color }));
+    }
+    const icon = flowIcon(spec.key, spec.color, s.soc);
+    icon.setAttribute('transform', `translate(${x - 11} ${y - 27}) scale(0.92)`);
+    g.append(icon);
+    g.append(svgEl('text', { class: 'flow-value', x, y: y + 15, 'text-anchor': 'middle', text: spec.value }));
+    const nameY = spec.labelAbove ? y - radius - 24 : y + radius + 19;
+    g.append(svgEl('text', { class: 'flow-name', x, y: nameY, 'text-anchor': 'middle', text: spec.name }));
+    g.append(svgEl('text', { class: 'flow-sub', x, y: nameY + 15, 'text-anchor': 'middle', text: spec.sub }));
+    svg.append(g);
+  }
+  return svg;
+}
+
+function describeFlowsForReader(s, flows) {
+  const parts = [];
+  if (s.pvKw != null) parts.push(`Päike toodab ${formatKw(s.pvKw)}.`);
+  if (s.loadKw != null) parts.push(`Maja tarbib ${formatKw(s.loadKw)}.`);
+  if (s.batteryKw != null) {
+    const soc = s.soc != null ? ` (laetus ${formatPct(s.soc)})` : '';
+    parts.push(s.batteryKw > FLOW_MIN_KW ? `Aku laeb ${formatKw(s.batteryKw)}${soc}.` : s.batteryKw < -FLOW_MIN_KW ? `Aku tühjeneb ${formatKw(-s.batteryKw)}${soc}.` : `Aku on ootel${soc}.`);
+  }
+  if (s.gridKw != null) parts.push(s.gridKw > FLOW_MIN_KW ? `Võrgust ostetakse ${formatKw(s.gridKw)}.` : s.gridKw < -FLOW_MIN_KW ? `Võrku müüakse ${formatKw(-s.gridKw)}.` : 'Võrguga vahetust ei toimu.');
+  const routes = FLOW_ROUTES.filter(r => flows[r.key] > FLOW_MIN_KW).map(r => `${r.label} ${formatKw(flows[r.key])}`);
+  if (routes.length) parts.push(`Energiavood: ${routes.join(', ')}.`);
+  return parts.join(' ');
+}
+
+function renderFlowAge(d) {
+  const badge = byId('flow-age');
+  if (!d.solar || !d.solar.updated) { badge.hidden = true; return; }
+  badge.hidden = false;
+  badge.classList.toggle('badge-pill--warn', !d.solarFresh);
+  badge.textContent = `${state.solar.source === 'otse' ? 'Solarman otse' : 'Solarman'} ${formatTime(d.solar.updated)} · ${formatAgo(d.solarAgeMin)}`;
+}
+
+function renderFlow(d) {
+  const host = byId('flow-body');
+  renderFlowAge(d);
+  if (!state.solar.loaded) return;
+  if (!d.solar) {
+    state.flowKey = '';
+    solarUnavailable(host, state.solar.error || 'Päikeseandmeid pole veel laaditud.');
+    return;
+  }
+  const s = d.solar.now;
+  const t = d.totals;
+  const key = [state.solar.version, state.prices.version, Math.floor(d.now.getTime() / (5 * MINUTE_MS))].join('|');
+  if (key === state.flowKey && host.firstChild) return;
+  state.flowKey = key;
+
+  const routes = FLOW_ROUTES.filter(r => d.flows[r.key] > FLOW_MIN_KW).sort((a, b) => d.flows[b.key] - d.flows[a.key]);
+  const list = routes.length
+    ? el('ul', { class: 'flow-list' }, routes.map(r => el('li', {}, [
+      el('span', { class: 'line-key', style: `--key:${r.color}`, 'aria-hidden': 'true' }),
+      el('span', { text: r.label }),
+      el('span', { text: formatKw(d.flows[r.key]) })
+    ])))
+    : el('p', { class: 'notice', text: 'Märkimisväärseid energiavoogusid praegu ei ole.' });
+
+  const euroText = (kwh, eur) => (kwh == null ? 'andmed puuduvad' : `täna ${formatKwh(kwh)}${eur != null ? ` · ≈\u00a0${formatEur(eur)}` : ''}`);
+  const importing = s.gridKw != null && s.gridKw > FLOW_MIN_KW;
+  const exporting = s.gridKw != null && s.gridKw < -FLOW_MIN_KW;
+  const tiles = [
+    statTile('Maja tarbib', s.loadKw != null ? formatKw(s.loadKw) : '—', t.loadKwh != null ? `täna ${formatKwh(t.loadKwh)}` : ''),
+    statTile('Võrgust ost', s.gridKw == null ? '—' : formatKw(importing ? s.gridKw : 0), euroText(t.importKwh, t.importEur)),
+    statTile('Võrku müük', s.gridKw == null ? '—' : formatKw(exporting ? -s.gridKw : 0), euroText(t.exportKwh, t.exportEur)),
+    statTile('Isevarustatus', t.selfSufficiency != null ? formatPct(t.selfSufficiency * 100) : '—', 'täna päike + aku', t.selfSufficiency >= 0.5 ? 'stat__value--good' : '')
+  ];
+
+  host.replaceChildren(el('div', { class: 'flow-layout' }, [
+    buildFlowSvg(s, d.flows, d.solar.capacityKw),
+    el('div', { class: 'flow-side' }, [
+      el('p', { class: 'flow-side__label', text: 'Kuhu energia liigub' }),
+      list,
+      el('div', { class: 'stats' }, tiles)
+    ])
+  ]));
+}
+
+/* ---------- Päikesepark ---------- */
+function renderSolar(d) {
+  const host = byId('solar-body');
+  const badge = byId('solar-capacity');
+  if (!state.solar.loaded) return;
+  if (!d.solar) {
+    badge.hidden = true;
+    solarUnavailable(host, state.solar.error || 'Päikeseandmeid pole veel laaditud.', true);
+    return;
+  }
+  const s = d.solar.now;
+  const t = d.totals;
+  const capacity = d.solar.capacityKw;
+  badge.hidden = !capacity;
+  badge.textContent = capacity ? `${numberFormat.max1.format(capacity)} kWp` : '';
+  const share = capacity && s.pvKw != null ? clamp(s.pvKw / capacity, 0, 1) : null;
+  const cover = s.pvKw != null && s.loadKw > FLOW_MIN_KW ? clamp(s.pvKw / s.loadKw, 0, 1) : null;
+  const pvText = s.pvKw != null ? numberFormat.d2.format(Math.abs(s.pvKw) >= 10 ? Math.round(s.pvKw * 10) / 10 : s.pvKw) : '—';
+
+  setChildren(host,
+    el('p', { class: 'big-number' }, [pvText, ' ', el('small', { text: 'kW' })]),
+    el('p', { class: 'kpi-caption', text: s.pvKw > FLOW_MIN_KW ? 'hetke tootmine' : 'praegu ei tooda' }),
+    share != null ? el('div', { class: 'meter', role: 'meter', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': String(Math.round(share * 100)), 'aria-label': 'Tootmine paigaldatud võimsusest' }, [
+      el('div', { class: 'meter__fill', style: `width:${(share * 100).toFixed(1)}%` })
+    ]) : null,
+    share != null ? el('p', { class: 'meter-label' }, [
+      el('span', { text: `${formatPct(share * 100)} paigaldatud võimsusest` }),
+      el('span', { text: `${numberFormat.max1.format(capacity)} kWp` })
+    ]) : null,
+    el('div', { class: 'stats' }, [
+      statTile('Täna toodetud', t.pvKwh != null ? formatKwh(t.pvKwh) : '—', t.fromApi ? 'Solarmani päevaandmed' : (d.solar.series.length ? `graafikust kuni ${formatTime(d.solar.updated || d.now)}` : '')),
+      statTile('Tänane tipp', t.peak ? formatKw(t.peak.kw) : '—', t.peak ? `kell ${formatTime(t.peak.t)}` : ''),
+      statTile('Ise tarbitud', t.selfConsumption != null ? formatPct(t.selfConsumption * 100) : '—', t.exportKwh != null ? `võrku ${formatKwh(t.exportKwh)}` : ''),
+      statTile('Katab maja', cover != null ? formatPct(cover * 100) : '—', 'praegusest tarbimisest')
+    ])
+  );
+}
+
+/* ---------- Akupank ---------- */
+function batteryColor(soc) {
+  if (soc <= Number(CONFIG.aku.reservProtsent)) return 'var(--cat-punane)';
+  if (soc < 50) return 'var(--cat-kollane)';
+  return 'var(--battery)';
+}
+
+function buildBatterySvg(soc) {
+  const level = clamp(soc / 100, 0, 1);
+  const svg = svgEl('svg', { viewBox: '0 0 220 80', role: 'img', 'aria-label': `Aku laetus ${formatPct(soc)}` });
+  svg.append(svgEl('rect', { x: 2, y: 6, width: 200, height: 68, rx: 14, fill: 'var(--surface-2)', stroke: 'var(--border)', 'stroke-width': 2 }));
+  svg.append(svgEl('rect', { x: 205, y: 26, width: 11, height: 28, rx: 4, fill: 'var(--border)' }));
+  if (level > 0) svg.append(svgEl('rect', { x: 9, y: 13, width: Math.max(4, 186 * level), height: 54, rx: 9, fill: batteryColor(soc) }));
+  for (const mark of [0.25, 0.5, 0.75]) {
+    svg.append(svgEl('line', { x1: 9 + 186 * mark, x2: 9 + 186 * mark, y1: 13, y2: 67, stroke: 'var(--surface)', 'stroke-width': 2, 'stroke-opacity': 0.8 }));
+  }
+  return svg;
+}
+
+function renderBattery(d) {
+  const host = byId('battery-body');
+  const pill = byId('battery-state');
+  if (!state.solar.loaded) return;
+  if (!d.solar) {
+    pill.hidden = true;
+    solarUnavailable(host, state.solar.error || 'Akuandmeid pole veel laaditud.', true);
+    return;
+  }
+  const s = d.solar.now;
+  const t = d.totals;
+  if (s.soc == null && s.batteryKw == null) {
+    pill.hidden = true;
+    host.replaceChildren(el('p', { class: 'placeholder', text: 'Solarman ei tagasta selle jaama kohta akuandmeid.' }));
+    return;
+  }
+  const charging = s.batteryKw != null && s.batteryKw > FLOW_MIN_KW;
+  const discharging = s.batteryKw != null && s.batteryKw < -FLOW_MIN_KW;
+  pill.hidden = false;
+  pill.textContent = charging ? 'Laeb' : discharging ? 'Tühjeneb' : 'Ootel';
+  pill.style.setProperty('--pill-dot', charging ? 'var(--cat-roheline)' : discharging ? 'var(--cat-kollane)' : 'var(--muted)');
+
+  const eta = batteryEta(s);
+  const etaText = eta
+    ? eta.kind === 'full' ? `Täis umbes ${formatDuration(eta.minutes)} pärast` : `Jätkub reservini (${formatPct(CONFIG.aku.reservProtsent)}) umbes ${formatDuration(eta.minutes)}`
+    : null;
+  const powerText = s.batteryKw == null ? 'Võimsus teadmata'
+    : charging ? `+${formatKw(s.batteryKw)} · laeb` : discharging ? `−${formatKw(-s.batteryKw)} · tühjeneb` : `${formatKw(0)} · ootel`;
+  const capacity = Number(CONFIG.aku.mahtKwh);
+  const fourth = capacity > 0 && s.soc != null
+    ? statTile('Salvestatud', formatKwh(s.soc / 100 * capacity), `mahust ${formatKwh(capacity)}`)
+    : statTile('Reservtase', formatPct(CONFIG.aku.reservProtsent), `sihttase ${formatPct(CONFIG.aku.sihtProtsent)}`);
+
+  setChildren(host,
+    s.soc != null ? el('div', { class: 'battery-visual' }, [
+      buildBatterySvg(s.soc),
+      el('p', { class: 'big-number' }, [numberFormat.pct.format(s.soc), el('small', { text: '%' })])
+    ]) : el('p', { class: 'placeholder', text: 'Laetuse tase (SoC) puudub.' }),
+    el('p', { class: 'battery-power', text: powerText }),
+    etaText ? el('p', { class: 'battery-eta', text: etaText }) : null,
+    el('div', { class: 'stats' }, [
+      statTile('Täna laetud', t.chargeKwh != null ? formatKwh(t.chargeKwh) : '—', ''),
+      statTile('Täna tühjendatud', t.dischargeKwh != null ? formatKwh(t.dischargeKwh) : '—', ''),
+      statTile('Tänane vahemik', t.socMin != null ? `${numberFormat.pct.format(t.socMin)}–${formatPct(t.socMax)}` : '—', 'laetus (SoC)'),
+      fourth
+    ])
+  );
+}
+
+/* ---------- Elektrihind praegu ---------- */
+/** Järgmiste tundide keskmine börsihind minitulpadena (praegune tund esimesena). */
+function buildUpcomingHours(d, count = 8) {
+  const rows = [];
+  for (let hour = Math.floor(d.now.getTime() / HOUR_MS); rows.length < count; hour++) {
+    const from = hour * HOUR_MS;
+    const periods = d.all.filter(p => p.start.getTime() >= from && p.start.getTime() < from + HOUR_MS);
+    if (!periods.length) break;
+    rows.push({ start: new Date(from), avg: calculateWeightedAverage(periods), isNow: rows.length === 0 });
+  }
+  if (rows.length < 2) return null;
+  const max = Math.max(1, ...rows.map(r => r.avg));
+  return [
+    el('p', { class: 'upcoming-label', text: 'Järgmised tunnid · keskmine s/kWh' }),
+    el('ul', { class: 'upcoming' }, rows.map(r => el('li', { class: r.isNow ? 'is-now' : null }, [
+      el('span', { text: r.isNow ? 'praegu' : describeTime(r.start, d.now) }),
+      el('span', { class: 'upcoming__bar', 'aria-hidden': 'true' }, el('span', {
+        class: 'upcoming__fill',
+        style: `display:block;width:${(clamp(r.avg / max, 0, 1) * 100).toFixed(1)}%;--fill:var(--cat-${getPriceCategory(r.avg)})`
+      })),
+      el('span', { text: numberFormat.d2.format(r.avg) })
+    ])))
+  ];
+}
+
+function renderPrice(d) {
+  const section = byId('section-price');
+  const host = byId('price-body');
+  if (!state.prices.loaded) return;
+  if (!d.current) {
+    section.removeAttribute('data-category');
+    const text = state.prices.periods.length ? 'Praeguse hetke hinnaperiood puudub andmetes. Hinnad uuendatakse automaatselt.' : (state.prices.error || 'Hinnaandmed pole saadaval.');
+    host.replaceChildren(el('p', { class: state.prices.error ? 'notice notice--warn' : 'placeholder', text }));
+    return;
+  }
+  const current = d.current;
+  const price = current.spotIncVatCentsKwh;
+  const category = getPriceCategory(price);
+  section.dataset.category = category;
+  const finalPrice = calculateFinalPrice(current.spotExVatCentsKwh, d.now);
+  const { min, max } = getMinMax(d.today);
+  const facts = [];
+  if (d.best2h) facts.push(`Odavaim 2 h aken: ${describeRange(d.best2h.start, d.best2h.end, d.now)} (${formatCents(d.best2h.avg)}).`);
+  facts.push(`Müügihind praegu ${formatCents(sellCents(current))} (börsihind ilma KM-ta${Number(CONFIG.muuk?.tasu) ? ' − müügitasu' : ''}).`);
+  facts.push(`Kehtib ${finalPrice.tariff === 'oo' ? 'öötariif' : 'päevatariif'} (võrgutasu ${formatCents(finalPrice.tariff === 'oo' ? TARIFFS.hinnad.vorgutasuOo : TARIFFS.hinnad.vorgutasuPaev)} ilma KM-ta).`);
+  facts.push(d.hasTomorrow ? 'Homsed börsihinnad on saadaval (vt graafikul „Homme“).' : tomorrowNotice(d.tomorrowStatus));
+
+  setChildren(host,
+    el('div', { class: 'hero-top' }, [
+      el('p', { class: 'verdict' }, [el('span', { class: 'visually-hidden', text: 'Hinnang: ' }), getCategoryLabel(category)]),
+      el('p', { class: 'hero-period', text: `Kehtib ${formatTimeRange(current.start, current.end)}` })
+    ]),
+    el('div', { class: 'hero-price-row' }, [
+      el('p', { class: 'hero-price' }, [
+        el('span', { class: 'hero-price__value', text: numberFormat.d2.format(price) }),
+        el('span', { class: 'hero-price__unit', text: 's/kWh' })
+      ]),
+      el('div', { class: 'hero-final-pill', title: 'Maja hinnanguline lõpphind koos võrgutasude, aktsiisi ja käibemaksuga' }, [
+        el('span', { class: 'hero-final-pill__label', text: 'Koos tasudega' }),
+        el('span', { class: 'hero-final-pill__value', text: formatCents(finalPrice.total) })
+      ])
+    ]),
+    el('p', { class: 'hero-meta', text: `Börsihind koos ${numberFormat.pct.format(TARIFFS.hinnad.kaibemaks)}% käibemaksuga` }),
+    d.todayAvg != null ? el('p', { class: 'compare', text: compareToDayAverage(price, d.todayAvg) }) : null,
+    min ? el('div', { class: 'stats stats--price' }, [
+      statTile('Madalaim', numberFormat.d2.format(min.spotIncVatCentsKwh), `${formatTime(min.start)} · s/kWh`, 'stat__value--good'),
+      statTile('Keskmine', numberFormat.d2.format(d.todayAvg), 'täna · s/kWh'),
+      statTile('Kõrgeim', numberFormat.d2.format(max.spotIncVatCentsKwh), `${formatTime(max.start)} · s/kWh`)
+    ]) : null,
+    ...(buildUpcomingHours(d) || []),
+    el('ul', { class: 'facts' }, facts.filter(Boolean).map(text => el('li', { text })))
+  );
+}
+
+/* ---------- Päeva graafik: börsihind (s/kWh) ja võimsus (kW) eraldi, ühise ajateljega ---------- */
+function updateTomorrowTab(d) {
+  const tab = byId('tab-tomorrow');
+  if (!state.prices.periods.length) { tab.replaceChildren('Homme'); return; }
+  if (d.hasTomorrow) tab.replaceChildren('Homme', el('span', { class: 'tab__dot', title: 'Homsed hinnad on saadaval', 'aria-hidden': 'true' }));
+  else tab.replaceChildren('Homme', el('span', { class: 'tab__badge', text: `(${d.tomorrowStatus.publish ? formatTime(d.tomorrowStatus.publish) : '15:00'})` }));
+}
+
+/** Graafiku perioodid: hinnaperioodid või (kui hindu pole) 15-min sammud; lisatakse keskmised võimsused. */
+function buildChartSlots(d, offset, series) {
+  const periods = offset === 0 ? d.today : d.tomorrow;
+  let slots;
+  if (periods.length) {
+    slots = periods.map(p => ({ start: p.start, end: p.end, period: p }));
+  } else if (offset === 0 && series.length) {
+    slots = [];
+    const start = getTallinnDayStart(d.now, 0).getTime();
+    const end = getTallinnDayStart(d.now, 1).getTime();
+    for (let t = start; t < end; t += FRAME_SECONDS * 1000) slots.push({ start: new Date(t), end: new Date(Math.min(end, t + FRAME_SECONDS * 1000)), period: null });
+  } else {
+    return [];
+  }
+  for (const slot of slots) {
+    const pts = series.filter(s => s.t >= slot.start.getTime() && s.t < slot.end.getTime());
+    const avg = key => {
+      const values = pts.map(p => p[key]).filter(v => v != null);
+      return values.length ? values.reduce((a, b) => a + b, 0) / values.length : null;
+    };
+    slot.pvKw = avg('pvKw');
+    slot.loadKw = avg('loadKw');
+    slot.gridKw = avg('gridKw');
+    const socs = pts.map(p => p.soc).filter(v => v != null);
+    slot.soc = socs.length ? socs[socs.length - 1] : null;
+  }
+  return slots;
+}
+
+function renderChartLegend(hasPrices, hasPower, isToday) {
+  const legend = byId('chart-legend');
+  const limits = TARIFFS.hinnapiirid;
+  const labels = TARIFFS.hinnasildid;
+  const fmt = v => numberFormat.d0.format(v);
+  const nodes = [];
+  if (hasPrices) {
+    nodes.push(...[
+      ['var(--cat-roheline)', `${labels.vagaOdav} (<${fmt(limits.roheline)})`],
+      ['var(--cat-kollane)', `${labels.soodne} (${fmt(limits.roheline)}–${fmt(limits.kollane)})`],
+      ['var(--cat-oranz)', `${labels.moodukas} (${fmt(limits.kollane)}–${fmt(limits.oranz)})`],
+      ['var(--cat-punane)', `${labels.kallis} (≥${fmt(limits.oranz)})`]
+    ].map(([color, text]) => el('span', { class: 'legend__item' }, [el('span', { class: 'legend__swatch', style: `--swatch:${color}`, 'aria-hidden': 'true' }), text])));
+    nodes.push(el('span', { class: 'legend__item' }, [el('span', { class: 'legend__swatch legend__swatch--line', 'aria-hidden': 'true' }), 'päeva keskmine']));
+    if (isToday) nodes.push(el('span', { class: 'legend__item' }, [el('span', { class: 'legend__swatch legend__swatch--current', 'aria-hidden': 'true' }), 'praegune periood']));
+  }
+  if (hasPower) {
+    nodes.push(
+      el('span', { class: 'legend__item' }, [el('span', { class: 'legend__swatch legend__swatch--area', 'aria-hidden': 'true' }), 'päikesetoodang (kW)']),
+      el('span', { class: 'legend__item' }, [el('span', { class: 'line-key', style: '--key:var(--home)', 'aria-hidden': 'true' }), 'maja tarbimine (kW)'])
+    );
+  }
+  legend.replaceChildren(...nodes);
+}
+
+function xAxisLabels(svg, { dayStart, dayEnd, x, y, width }) {
+  const hourStep = width >= 600 ? 2 : 4;
+  const dayStartParts = getTallinnDateParts(dayStart);
+  for (let h = 0; h < 24; h += hourStep) {
+    const t = tallinnLocalToUtc(dayStartParts.year, dayStartParts.month, dayStartParts.day, h, 0).getTime();
+    if (t < dayStart.getTime() || t >= dayEnd.getTime()) continue;
+    const lx = x(t);
+    svg.append(svgEl('line', { x1: lx, x2: lx, y1: y, y2: y + 4, stroke: 'var(--muted)', 'stroke-width': 1 }));
+    svg.append(svgEl('text', { x: lx, y: y + 17, 'text-anchor': h === 0 ? 'start' : 'middle', 'font-size': 12, fill: 'var(--muted)', text: String(h).padStart(2, '0') }));
+  }
+}
+
+function buildDayChart({ slots, dayStart, dayEnd, width, nowMs, isToday, currentTs, avg, series, hasPrices, hasPower }) {
+  const padL = 40;
+  const padR = 10;
+  const plotW = width - padL - padR;
+  const dayStartMs = dayStart.getTime();
+  const dayMs = dayEnd.getTime() - dayStartMs;
+  const x = t => padL + (t - dayStartMs) / dayMs * plotW;
+  const stack = el('div', { class: 'chart-stack', tabindex: '0', role: 'group', 'aria-roledescription': 'graafik' });
+  const items = slots.map(slot => {
+    const slotX = x(slot.start.getTime());
+    return { slot, slotX, slotW: Math.max(1, x(slot.end.getTime()) - slotX), rect: null, top: 0 };
+  });
+  const crosshairs = [];
+  const ariaParts = [];
+
+  // --- Börsihinna tulbad ---
+  if (hasPrices) {
+    const height = (width >= 640 ? 196 : 164) + (hasPower ? 0 : 26);
+    const padT = 18;
+    const padB = hasPower ? 6 : 26;
+    const plotH = height - padT - padB;
+    const prices = slots.filter(s => s.period).map(s => s.period.spotIncVatCentsKwh);
+    let yMin = Math.min(0, ...prices);
+    let yMax = Math.max(0, ...prices);
+    if (yMax - yMin < 1) yMax = yMin + 1;
+    const span = yMax - yMin;
+    yMax += span * 0.08;
+    if (yMin < 0) yMin -= span * 0.08;
+    const y = v => padT + (yMax - v) / (yMax - yMin) * plotH;
+    const zeroY = y(0);
+    const svg = svgEl('svg', { viewBox: `0 0 ${width} ${height}`, width, height, 'aria-hidden': 'true' });
+    const axis = niceTicks(yMin, yMax, 4);
+    for (const tick of axis.ticks) {
+      const ty = y(tick);
+      svg.append(svgEl('line', { x1: padL, x2: width - padR, y1: ty, y2: ty, stroke: 'var(--border)', 'stroke-width': 1 }));
+      svg.append(svgEl('text', { x: padL - 6, y: ty + 4, 'text-anchor': 'end', 'font-size': 12, fill: 'var(--muted)', text: axis.format.format(tick) }));
+    }
+    svg.append(svgEl('text', { class: 'axis-unit', x: 2, y: 11, text: 's/kWh' }));
+    for (const item of items) {
+      const p = item.slot.period;
+      if (!p) continue;
+      const gap = item.slotW > 6 ? 2 : item.slotW > 3 ? 1 : 0.5;
+      const barW = Math.max(1, item.slotW - gap);
+      const top = Math.min(y(p.spotIncVatCentsKwh), zeroY);
+      const isCurrent = currentTs != null && p.timestamp === currentTs;
+      const isPast = isToday && !isCurrent && p.end.getTime() <= nowMs;
+      item.top = top;
+      item.isCurrent = isCurrent;
+      item.rect = svgEl('rect', {
+        class: isPast ? 'bar bar--past' : 'bar',
+        x: item.slotX + gap / 2, y: top, width: barW, height: Math.max(1, Math.abs(y(p.spotIncVatCentsKwh) - zeroY)),
+        rx: Math.min(2, barW / 2), fill: `var(--cat-${getPriceCategory(p.spotIncVatCentsKwh)})`
+      });
+      svg.append(item.rect);
+    }
+    if (prices.some(v => v < 0)) svg.append(svgEl('line', { x1: padL, x2: width - padR, y1: zeroY, y2: zeroY, stroke: 'var(--text)', 'stroke-width': 1.5 }));
+    if (avg != null) {
+      const ay = y(avg);
+      svg.append(svgEl('line', { x1: padL, x2: width - padR, y1: ay, y2: ay, stroke: 'var(--avg-line)', 'stroke-width': 1.5, 'stroke-dasharray': '5 4' }));
+      svg.append(svgEl('text', {
+        x: width - padR - 4, y: ay > padT + 18 ? ay - 6 : ay + 14, 'text-anchor': 'end', 'font-size': 11, 'font-weight': 700,
+        fill: 'var(--text)', stroke: 'var(--surface)', 'stroke-width': 4, 'paint-order': 'stroke', text: `keskmine ${numberFormat.d2.format(avg)}`
+      }));
+    }
+    const currentItem = items.find(i => i.isCurrent);
+    if (currentItem) {
+      svg.append(svgEl('rect', {
+        class: 'bar-current', x: currentItem.slotX, y: currentItem.top - 2, width: Math.max(2, currentItem.slotW),
+        height: Math.max(3, zeroY - currentItem.top + 4), fill: 'none', stroke: 'var(--text)', 'stroke-width': 2, rx: 2
+      }));
+    }
+    svg.append(svgEl('line', { x1: padL, x2: width - padR, y1: height - padB, y2: height - padB, stroke: 'var(--border)', 'stroke-width': 1 }));
+    if (!hasPower) xAxisLabels(svg, { dayStart, dayEnd, x, y: height - padB, width });
+    const cross = svgEl('line', { class: 'crosshair', x1: 0, x2: 0, y1: padT - 4, y2: height - padB, visibility: 'hidden' });
+    svg.append(cross);
+    crosshairs.push(cross);
+    stack.append(svg);
+    const { min, max } = getMinMax(slots.filter(s => s.period).map(s => s.period));
+    ariaParts.push(`Börsihind: madalaim ${formatCents(min.spotIncVatCentsKwh)} kell ${formatTime(min.start)}, kõrgeim ${formatCents(max.spotIncVatCentsKwh)} kell ${formatTime(max.start)}, keskmine ${formatCents(avg)}.`);
+  }
+
+  // --- Päikesetoodang ja maja tarbimine (kW) ---
+  if (hasPower) {
+    const height = width >= 640 ? 158 : 136;
+    const padT = 16;
+    const padB = 26;
+    const plotH = height - padT - padB;
+    const maxKw = Math.max(0.5, ...series.flatMap(s => [s.pvKw ?? 0, s.loadKw ?? 0])) * 1.12;
+    const y = v => padT + (1 - Math.max(0, v) / maxKw) * plotH;
+    const svg = svgEl('svg', { viewBox: `0 0 ${width} ${height}`, width, height, 'aria-hidden': 'true' });
+    const axis = niceTicks(0, maxKw, 3);
+    for (const tick of axis.ticks) {
+      const ty = y(tick);
+      svg.append(svgEl('line', { x1: padL, x2: width - padR, y1: ty, y2: ty, stroke: 'var(--border)', 'stroke-width': 1 }));
+      svg.append(svgEl('text', { x: padL - 6, y: ty + 4, 'text-anchor': 'end', 'font-size': 12, fill: 'var(--muted)', text: axis.format.format(tick) }));
+    }
+    svg.append(svgEl('text', { class: 'axis-unit', x: 2, y: 11, text: 'kW' }));
+    // Jooned katkestatakse, kui andmetes on üle 30 min auk
+    const segments = [];
+    let currentSeg = [];
+    series.forEach((s, i) => {
+      if (i > 0 && s.t - series[i - 1].t > 30 * MINUTE_MS) { segments.push(currentSeg); currentSeg = []; }
+      currentSeg.push(s);
+    });
+    if (currentSeg.length) segments.push(currentSeg);
+    const cx = s => x(s.t + FRAME_SECONDS * 500);
+    const f = n => n.toFixed(1);
+    for (const seg of segments) {
+      const pv = seg.filter(s => s.pvKw != null);
+      if (pv.length >= 2) {
+        const line = pv.map((s, i) => `${i ? 'L' : 'M'} ${f(cx(s))} ${f(y(s.pvKw))}`).join(' ');
+        svg.append(svgEl('path', { class: 'pv-area', d: `${line} L ${f(cx(pv[pv.length - 1]))} ${f(y(0))} L ${f(cx(pv[0]))} ${f(y(0))} Z` }));
+        svg.append(svgEl('path', { class: 'pv-line', d: line }));
+      } else if (pv.length === 1) {
+        svg.append(svgEl('circle', { cx: cx(pv[0]), cy: y(pv[0].pvKw), r: 4, fill: 'var(--solar)', stroke: 'var(--surface)', 'stroke-width': 2 }));
+      }
+      const load = seg.filter(s => s.loadKw != null);
+      if (load.length >= 2) {
+        svg.append(svgEl('path', { class: 'load-line', d: load.map((s, i) => `${i ? 'L' : 'M'} ${f(cx(s))} ${f(y(s.loadKw))}`).join(' ') }));
+      }
+    }
+    if (isToday && nowMs >= dayStartMs && nowMs < dayEnd.getTime()) {
+      svg.append(svgEl('line', { class: 'now-line', x1: x(nowMs), x2: x(nowMs), y1: padT - 4, y2: height - padB }));
+    }
+    svg.append(svgEl('line', { x1: padL, x2: width - padR, y1: height - padB, y2: height - padB, stroke: 'var(--border)', 'stroke-width': 1 }));
+    xAxisLabels(svg, { dayStart, dayEnd, x, y: height - padB, width });
+    const cross = svgEl('line', { class: 'crosshair', x1: 0, x2: 0, y1: padT - 4, y2: height - padB, visibility: 'hidden' });
+    svg.append(cross);
+    crosshairs.push(cross);
+    stack.append(svg);
+    const peak = series.reduce((m, s) => (s.pvKw != null && (!m || s.pvKw > m.pvKw) ? s : m), null);
+    if (peak) ariaParts.push(`Päikesetoodangu tipp ${formatKw(peak.pvKw)} kell ${formatTime(new Date(peak.t))}.`);
+  }
+  stack.setAttribute('aria-label', `${ariaParts.join(' ')} Nooleklahvidega või sõrmega libistades saab perioode ükshaaval vaadata.`);
+  return { node: stack, items, crosshairs };
+}
+
+function renderChart(d) {
+  const host = byId('chart-host');
+  const notice = byId('chart-notice');
+  const isToday = state.selectedDay !== 'tomorrow';
+  const offset = isToday ? 0 : 1;
+  const dayStart = getTallinnDayStart(d.now, offset);
+  const dayEnd = getTallinnDayStart(d.now, offset + 1);
+  byId('chart-day-label').textContent = `${isToday ? 'Täna' : 'Homme'}, ${dateLongFormatter.format(dayStart)}`;
+  updateTomorrowTab(d);
+  if (!state.prices.loaded && !state.solar.loaded) return;
+
+  const series = isToday && d.solar ? d.solar.series : [];
+  const slots = buildChartSlots(d, offset, series);
+  const hasPrices = slots.some(s => s.period);
+  const hasPower = series.length > 0 && slots.length > 0;
+  renderChartLegend(hasPrices, hasPower, isToday);
+  renderChartStats(d, isToday);
+
+  const notes = [];
+  if (!hasPrices) {
+    if (!isToday) notes.push(state.prices.periods.length ? tomorrowNotice(d.tomorrowStatus) : (state.prices.error || 'Hinnaandmed pole saadaval.'));
+    else notes.push(state.prices.error || 'Tänased börsihinnad puuduvad andmetes.');
+  }
+  if (isToday && !hasPower) notes.push(d.solar ? 'Tänaseid päikesetoodangu graafikuandmeid veel pole.' : (state.solar.error ? 'Päikeseandmed pole saadaval.' : ''));
+  if (!isToday && hasPrices) notes.push('Päikesetoodangu graafik on ainult tänase päeva kohta.');
+  const noteText = notes.filter(Boolean).join(' ');
+  notice.hidden = !noteText;
+  notice.textContent = noteText;
+  notice.classList.toggle('notice--warn', !isToday && !hasPrices && d.tomorrowStatus.state === 'late');
+
+  if (!slots.length || (!hasPrices && !hasPower)) {
+    hideTooltip();
+    host.replaceChildren();
+    state.chartKey = '';
+    state.chartItems = [];
+    state.chartCrosshairs = [];
+    renderChartTable([], d, isToday);
+    return;
+  }
+
+  const width = Math.max(260, Math.floor(host.clientWidth || 320));
+  const currentTs = d.current ? d.current.timestamp : null;
+  const key = [state.selectedDay, state.prices.version, state.solar.version, width, currentTs, Math.floor(d.now.getTime() / (5 * MINUTE_MS))].join('|');
+  if (key === state.chartKey && host.firstChild) return;
+  state.chartKey = key;
+  const hadFocus = host.firstChild && host.firstChild.contains(document.activeElement);
+  hideTooltip();
+  const avg = calculateWeightedAverage(slots.filter(s => s.period).map(s => s.period));
+  const chart = buildDayChart({ slots, dayStart, dayEnd, width, nowMs: d.now.getTime(), isToday, currentTs, avg, series, hasPrices, hasPower });
+  state.chartItems = chart.items;
+  state.chartCrosshairs = chart.crosshairs;
+  host.replaceChildren(chart.node);
+  attachChartInteraction(chart.node, chart.items);
+  if (hadFocus) chart.node.focus();
+  renderChartTable(slots, d, isToday);
+}
+
+function renderChartStats(d, isToday) {
+  const host = byId('chart-stats');
+  const periods = isToday ? d.today : d.tomorrow;
+  if (!periods.length) { host.replaceChildren(); return; }
+  const { min, max } = getMinMax(periods);
+  const avg = calculateWeightedAverage(periods);
+  host.replaceChildren(
+    statTile('Madalaim', numberFormat.d2.format(min.spotIncVatCentsKwh), `${formatTime(min.start)} · s/kWh`, 'stat__value--good'),
+    statTile('Keskmine', numberFormat.d2.format(avg), 's/kWh'),
+    statTile('Kõrgeim', numberFormat.d2.format(max.spotIncVatCentsKwh), `${formatTime(max.start)} · s/kWh`)
+  );
+}
+
+/** Tabelivaade: sama info tunni kaupa (ligipääsetav alternatiiv graafikule). */
+function renderChartTable(slots, d, isToday) {
+  const host = byId('chart-table-body');
+  const details = byId('chart-table');
+  details.hidden = !slots.length;
+  if (!slots.length) { host.replaceChildren(); return; }
+  const groups = new Map();
+  for (const slot of slots) {
+    const hourKey = Math.floor(slot.start.getTime() / HOUR_MS);
+    if (!groups.has(hourKey)) groups.set(hourKey, []);
+    groups.get(hourKey).push(slot);
+  }
+  const mean = (list, pick) => {
+    const values = list.map(pick).filter(v => v != null);
+    return values.length ? values.reduce((a, b) => a + b, 0) / values.length : null;
+  };
+  const showPower = isToday && slots.some(s => s.pvKw != null || s.loadKw != null);
+  const nowHour = Math.floor(d.now.getTime() / HOUR_MS);
+  const dash = '—';
+  const header = ['Kell', 'Börs s/kWh', 'Lõpphind s/kWh'];
+  if (showPower) header.push('Päike kW', 'Maja kW', 'Võrk kW', 'Aku %');
+  const rows = [...groups.entries()].map(([hourKey, list]) => {
+    const priced = list.filter(s => s.period);
+    const spot = mean(priced, s => s.period.spotIncVatCentsKwh);
+    const fin = mean(priced, s => finalCents(s.period));
+    const cells = [formatTime(list[0].start), spot != null ? numberFormat.d2.format(spot) : dash, fin != null ? numberFormat.d2.format(fin) : dash];
+    if (showPower) {
+      const pv = mean(list, s => s.pvKw);
+      const load = mean(list, s => s.loadKw);
+      const grid = mean(list, s => s.gridKw);
+      const soc = list.map(s => s.soc).filter(v => v != null).pop();
+      cells.push(
+        pv != null ? numberFormat.d2.format(pv) : dash,
+        load != null ? numberFormat.d2.format(load) : dash,
+        grid != null ? `${grid > 0 ? 'ost ' : grid < 0 ? 'müük ' : ''}${numberFormat.d2.format(Math.abs(grid))}` : dash,
+        soc != null ? numberFormat.pct.format(soc) : dash
+      );
+    }
+    return el('tr', { class: isToday && hourKey === nowHour ? 'is-now' : null }, cells.map(text => el('td', { text })));
+  });
+  host.replaceChildren(el('table', { class: 'data-table' }, [
+    el('caption', { class: 'visually-hidden', text: 'Börsihind ja võimsused tunni kaupa' }),
+    el('thead', {}, el('tr', {}, header.map(text => el('th', { scope: 'col', text })))),
+    el('tbody', {}, rows)
+  ]));
+}
+
+function hideTooltip() {
+  const tooltip = byId('chart-tooltip');
+  const inspector = byId('chart-inspector');
+  tooltip.hidden = true;
+  tooltip.replaceChildren();
+  inspector.hidden = true;
+  inspector.textContent = '';
+  for (const item of state.chartItems) if (item.rect) item.rect.classList.remove('bar--active');
+  for (const line of state.chartCrosshairs) line.setAttribute('visibility', 'hidden');
+  state.tooltipIndex = null;
+}
+
+function tooltipRow(color, value, label, extraClass = '') {
+  return el('span', { class: `tooltip__row${extraClass ? ` ${extraClass}` : ''}` }, [
+    el('span', { class: 'line-key', style: `--key:${color}`, 'aria-hidden': 'true' }),
+    el('b', { text: value }),
+    ` ${label}`
+  ]);
+}
+
+function showTooltip(index, pointerType = 'mouse') {
+  const items = state.chartItems;
+  if (!items.length) return;
+  index = clamp(index, 0, items.length - 1);
+  const item = items[index];
+  const slot = item.slot;
+  const tooltip = byId('chart-tooltip');
+  const inspector = byId('chart-inspector');
+  const wrapper = byId('chart-wrapper');
+  for (const other of items) if (other.rect) other.rect.classList.remove('bar--active');
+  if (item.rect) item.rect.classList.add('bar--active');
+  const centerX = item.slotX + item.slotW / 2;
+  for (const line of state.chartCrosshairs) {
+    line.setAttribute('x1', centerX);
+    line.setAttribute('x2', centerX);
+    line.setAttribute('visibility', 'visible');
+  }
+  state.tooltipIndex = index;
+
+  const timeText = formatTimeRange(slot.start, slot.end);
+  const lines = [el('strong', { text: timeText })];
+  const summary = [timeText];
+  if (slot.period) {
+    const priceText = formatCents(slot.period.spotIncVatCentsKwh);
+    lines.push(el('span', { class: 'tooltip__price', text: priceText }));
+    lines.push(el('span', { text: `koos tasudega ${formatCents(finalCents(slot.period))}` }));
+    summary.push(priceText);
+  }
+  let first = true;
+  const sep = () => { const cls = first && slot.period ? 'tooltip__sep' : ''; first = false; return cls; };
+  if (slot.pvKw != null) { lines.push(tooltipRow('var(--solar)', formatKw(slot.pvKw), 'päike', sep())); summary.push(`päike ${formatKw(slot.pvKw)}`); }
+  if (slot.loadKw != null) { lines.push(tooltipRow('var(--home)', formatKw(slot.loadKw), 'maja', sep())); summary.push(`maja ${formatKw(slot.loadKw)}`); }
+  if (slot.gridKw != null && Math.abs(slot.gridKw) > FLOW_MIN_KW) lines.push(tooltipRow('var(--grid)', formatKw(Math.abs(slot.gridKw)), slot.gridKw > 0 ? 'võrgust' : 'võrku', sep()));
+  if (slot.soc != null) lines.push(tooltipRow('var(--battery)', formatPct(slot.soc), 'aku', sep()));
+  tooltip.replaceChildren(...lines);
+  tooltip.hidden = false;
+  inspector.textContent = summary.join(' · ');
+  inspector.hidden = false;
+
+  const firstSvg = wrapper.querySelector('svg');
+  const scale = firstSvg && firstSvg.viewBox.baseVal.width ? firstSvg.getBoundingClientRect().width / firstSvg.viewBox.baseVal.width : 1;
+  const tw = tooltip.offsetWidth;
+  const maxLeft = Math.max(0, wrapper.clientWidth - tw);
+  const px = centerX * scale;
+  // Tooltip pannakse perioodi kõrvale, et see ei kataks vaadeldavat tulpa
+  const left = px + 14 + tw <= wrapper.clientWidth ? px + 14 : px - 14 - tw;
+  tooltip.style.left = `${Math.round(clamp(left, 0, maxLeft))}px`;
+  tooltip.style.top = pointerType === 'touch' ? '0px' : `${Math.round(Math.max(0, item.top * scale - 10))}px`;
+}
+
+function attachChartInteraction(stack, items) {
+  const indexFromClientX = clientX => {
+    const svg = stack.querySelector('svg');
+    const rect = svg.getBoundingClientRect();
+    const scale = rect.width ? svg.viewBox.baseVal.width / rect.width : 1;
+    const px = (clientX - rect.left) * scale;
+    let best = null;
+    let bestDistance = Infinity;
+    items.forEach((item, index) => {
+      if (px >= item.slotX && px < item.slotX + item.slotW) { best = index; bestDistance = 0; return; }
+      const distance = Math.min(Math.abs(px - item.slotX), Math.abs(px - item.slotX - item.slotW));
+      if (bestDistance > 0 && distance < bestDistance && distance < 16) { best = index; bestDistance = distance; }
+    });
+    return best;
+  };
+  const nowMs = Date.now();
+  const defaultIndex = Math.max(0, items.findIndex(i => i.slot.start.getTime() <= nowMs && nowMs < i.slot.end.getTime()));
+  let touchActive = false;
+  stack.addEventListener('pointerdown', event => {
+    if (event.pointerType === 'touch') touchActive = true;
+    const index = indexFromClientX(event.clientX);
+    if (index != null) showTooltip(index, event.pointerType);
+  });
+  stack.addEventListener('pointermove', event => {
+    if (event.pointerType === 'touch' && !touchActive) return;
+    const index = indexFromClientX(event.clientX);
+    if (index != null) showTooltip(index, event.pointerType);
+  });
+  stack.addEventListener('pointerup', () => { touchActive = false; });
+  stack.addEventListener('pointercancel', () => { touchActive = false; });
+  stack.addEventListener('pointerleave', event => {
+    touchActive = false;
+    if (event.pointerType !== 'touch' && document.activeElement !== stack) hideTooltip();
+  });
+  stack.addEventListener('focus', () => showTooltip(state.tooltipIndex ?? defaultIndex));
+  stack.addEventListener('blur', hideTooltip);
+  stack.addEventListener('keydown', event => {
+    const index = state.tooltipIndex ?? defaultIndex;
+    let next = null;
+    if (event.key === 'ArrowRight' || event.key === 'ArrowUp') next = index + 1;
+    else if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') next = index - 1;
+    else if (event.key === 'Home') next = 0;
+    else if (event.key === 'End') next = items.length - 1;
+    else if (event.key === 'Escape') { hideTooltip(); return; }
+    if (next == null) return;
+    event.preventDefault();
+    showTooltip(next);
+  });
+}
+
+function renderAll() {
+  const d = derive();
+  state.derived = d;
+  renderStatus();
+  renderAdvice(d);
+  renderFlow(d);
+  renderSolar(d);
+  renderBattery(d);
+  renderPrice(d);
+  renderChart(d);
+}
+
+/* ==========================================================================
+   11. Värskendamine, juhtelemendid ja käivitus
+   ========================================================================== */
+function refreshIntervalMs() {
+  const minutes = Number(CONFIG.uuendusMinutites);
+  return (Number.isFinite(minutes) && minutes >= 1 ? minutes : 5) * MINUTE_MS;
+}
+
+/** Laeb kõik allikad paralleelselt; ühe allika viga ei takista teiste kuvamist. */
+async function refreshAll() {
+  if (state.loading) return;
+  state.loading = true;
+  renderStatus();
+  const priceController = new AbortController();
+  const solarController = new AbortController();
+  const priceTimer = setTimeout(() => priceController.abort(), PRICE_TIMEOUT_MS);
+  const solarTimer = setTimeout(() => solarController.abort(), SOLAR_TIMEOUT_MS);
+  try {
+    await Promise.allSettled([refreshPrices(priceController.signal), refreshSolar(solarController.signal)]);
+  } finally {
+    clearTimeout(priceTimer);
+    clearTimeout(solarTimer);
+    state.loading = false;
+    state.lastRefresh = new Date();
+    renderAll();
+  }
+}
+
+function scheduleNextRefresh() {
+  clearTimeout(state.refreshTimer);
+  const delay = refreshIntervalMs();
+  state.nextRefreshAt = Date.now() + delay;
+  state.refreshTimer = setTimeout(async () => {
+    if (document.visibilityState === 'visible') await refreshAll();
+    scheduleNextRefresh();
+  }, delay);
+  renderStatus();
+}
+
+async function refreshNow() {
+  await refreshAll();
+  scheduleNextRefresh();
+}
+
+function selectDay(day) {
+  if (day !== 'today' && day !== 'tomorrow') return;
+  state.selectedDay = day;
+  for (const tab of document.querySelectorAll('.tab')) {
+    const selected = tab.dataset.day === day;
+    tab.setAttribute('aria-selected', selected ? 'true' : 'false');
+    tab.tabIndex = selected ? 0 : -1;
+  }
+  byId('chart-panel').setAttribute('aria-labelledby', `tab-${day}`);
+  if (state.derived) renderChart(state.derived);
+}
+
+function setupDirectDialog() {
+  const dialog = byId('direct-dialog');
+  const errorEl = byId('direct-error');
+  const showError = text => { errorEl.textContent = text; errorEl.hidden = !text; };
+  const fill = () => {
+    const cred = loadCredentials();
+    byId('f-app-id').value = cred ? cred.appId : '';
+    byId('f-app-secret').value = '';
+    byId('f-app-secret').placeholder = cred ? 'salvestatud (tühi = jääb samaks)' : '';
+    byId('f-email').value = cred ? cred.email : '';
+    byId('f-password').value = '';
+    byId('f-password').placeholder = cred ? 'salvestatud räsina (tühi = jääb samaks)' : '';
+    byId('f-station').value = cred ? cred.stationId : '';
+    byId('f-proxy').value = cred ? cred.proxy : String(CONFIG.solarman.proksi || '');
+    byId('direct-remove').hidden = !cred;
+    showError('');
+  };
+  byId('direct-open').addEventListener('click', () => {
+    fill();
+    if (typeof dialog.showModal === 'function') dialog.showModal();
+    else dialog.setAttribute('open', '');
+  });
+  byId('direct-cancel').addEventListener('click', () => dialog.close());
+  byId('direct-remove').addEventListener('click', () => {
+    writeStore(STORAGE.credentials, null);
+    writeStore(STORAGE.token, null);
+    writeStore(STORAGE.station, null);
+    dialog.close();
+    refreshNow();
+  });
+  byId('direct-form').addEventListener('submit', async event => {
+    event.preventDefault();
+    const existing = loadCredentials();
+    const appId = byId('f-app-id').value.trim();
+    const appSecret = byId('f-app-secret').value.trim() || (existing ? existing.appSecret : '');
+    const email = byId('f-email').value.trim();
+    const passwordInput = byId('f-password').value;
+    const stationId = byId('f-station').value.trim();
+    const proxy = byId('f-proxy').value.trim();
+    if (!appId || !appSecret || !email) { showError('Täida App ID, App Secret ja e-post.'); return; }
+    if (stationId && !/^[\w-]+$/.test(stationId)) { showError('Jaama ID võib sisaldada ainult numbreid ja tähti.'); return; }
+    if (proxy && !/^https:\/\//i.test(proxy) && !/^http:\/\/localhost/i.test(proxy)) { showError('CORS-proksi aadress peab algama https://-ga.'); return; }
+    let passwordHash = existing && existing.email === email && existing.appId === appId ? existing.passwordHash : '';
+    try {
+      if (passwordInput) passwordHash = await toPasswordHash(passwordInput);
+    } catch (error) {
+      showError(error.message);
+      return;
+    }
+    if (!passwordHash) { showError('Sisesta parool või selle SHA-256 räsi.'); return; }
+    const saved = writeStore(STORAGE.credentials, { appId, appSecret, email, passwordHash, stationId, proxy });
+    if (!saved) { showError('Brauser ei luba seadeid salvestada (localStorage on keelatud).'); return; }
+    writeStore(STORAGE.token, null);
+    writeStore(STORAGE.station, null);
+    byId('f-password').value = '';
+    byId('f-app-secret').value = '';
+    dialog.close();
+    refreshNow();
+  });
+}
+
+function setupControls() {
+  byId('app-title').textContent = `${CONFIG.majaNimi} energia`;
+  document.title = `${CONFIG.majaNimi} energia`;
+  byId('refresh-button').addEventListener('click', () => refreshNow());
+  byId('retry-button').addEventListener('click', () => refreshNow());
+
+  const tabs = [...document.querySelectorAll('.tab')];
+  for (const tab of tabs) {
+    tab.addEventListener('click', () => selectDay(tab.dataset.day));
+    tab.addEventListener('keydown', event => {
+      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+      event.preventDefault();
+      const index = tabs.indexOf(tab);
+      let next = index;
+      if (event.key === 'ArrowRight') next = (index + 1) % tabs.length;
+      else if (event.key === 'ArrowLeft') next = (index - 1 + tabs.length) % tabs.length;
+      else if (event.key === 'Home') next = 0;
+      else next = tabs.length - 1;
+      selectDay(tabs[next].dataset.day);
+      tabs[next].focus();
+    });
+  }
+
+  document.addEventListener('pointerdown', event => {
+    if (state.tooltipIndex != null && !byId('chart-wrapper').contains(event.target)) hideTooltip();
+  });
+
+  let resizeTimer = null;
+  let lastWidth = byId('layout').clientWidth;
+  const onResize = () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      const width = byId('layout').clientWidth;
+      if (width === lastWidth) return;
+      lastWidth = width;
+      if (state.derived) renderChart(state.derived);
+    }, 120);
+  };
+  if (typeof ResizeObserver === 'function') new ResizeObserver(onResize).observe(byId('layout'));
+  else window.addEventListener('resize', onResize);
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible' || state.loading) return;
+    const stale = !state.lastRefresh || Date.now() - state.lastRefresh.getTime() > refreshIntervalMs();
+    if (stale) refreshNow();
+  });
+  setupDirectDialog();
+}
+
+/** Kerge UI ajakontroll kord minutis: andmete vanus, praegune hinnaperiood, soovitus. */
+function startMinuteTick() {
+  const tick = () => {
+    if (!state.loading && (state.prices.loaded || state.solar.loaded)) renderAll();
+    setTimeout(tick, MINUTE_MS - (Date.now() % MINUTE_MS) + 50);
+  };
+  setTimeout(tick, MINUTE_MS - (Date.now() % MINUTE_MS) + 50);
+}
+
+async function init() {
+  setupControls();
+  renderStatus();
+  state.loading = true;   // tariifide lugemise ajal on värskendusnupp hõivatud
+  renderStatus();
+  await loadTariffs();
+  state.loading = false;
+  await refreshNow();
+  startMinuteTick();
+}
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+else init();
+</script>
+</body>
+</html>

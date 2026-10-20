@@ -4,6 +4,29 @@ See fail kirjeldab rakenduse `index.html` versioonimuudatusi, arhitektuurilisi k
 
 ---
 
+## energy-dashboard.html [1.0.0] — 2026-10-20
+
+### Ülevaade
+Uus eraldiseisev leht `energy-dashboard.html` (`APP_VERSION = '1.0.0'`), mis koondab päikesepargi, akupanga ja börsihinna ühte reaalajas vaatesse. Kasutab sama disainikeelt (tokenid, kaardid, `.stat`, `.card--hero`, tabid, tooltip) ja samu reegleid nagu `index.html`: üks fail, `el()`/`svgEl()` + `textContent`, Tallinna aeg `getTallinnDateParts`/`getTallinnDayStart` kaudu.
+
+### 1. Solarman OpenAPI ja GitHub Actions (`.github/workflows/uuenda-paike.yml`)
+- Secrets `SOLARMAN_APP_ID`, `SOLARMAN_APP_SECRET`, `SOLARMAN_EMAIL`, `SOLARMAN_PASSWORD` (tavatekst või SHA-256), valikuline `SOLARMAN_STATION_ID`.
+- Päringud: `POST /account/v1.0/token?appId=…&language=en` → `/station/v1.0/list` (ainult kui jaama ID või võimsus on teadmata) → `/station/v1.0/realTime` → `/station/v1.0/history` (`timeType` 2 = päeva kogused, 1 = 5-min kaadrid, koondatakse 15-min keskmisteks).
+- Väljund `paike.json`: `data.realTime` (W, Solarmani väljanimed), `data.day` (kWh), `data.frames`, `data.lastUpdateTime`, `data.installedCapacityKw`. Commit ainult muutuse korral; cron `*/10` (GitHub Pagesi 10 avaldamist/h piirang).
+
+### 2. Lehe plokid
+- **Soovitus** (`#section-advice` / `buildAdvice`): negatiivne hind → päikese ülejääk (lae akut / müü / tarbi ise) → võrgust laadimise tasuvus (lõpphind ÷ kasutegur vs. järgmise 12 h tipp) → kallis hind (kasuta akut / säästa) → odav hind → tavarežiim. Aegunud päikeseandmeid (`CONFIG.solarman.aegunudMinutites`) ei arvestata.
+- **Energiavoog** (`#section-flow` / `buildFlowSvg`): Päike, Võrk, Maja, Aku sõlmed; animeeritud vood (`allocateFlows`: päike → maja → aku → võrk), SoC ja tootmisprotsendi rõngad, tekstiline voogude nimekiri ning ost/müük/isevarustatus koos € hinnanguga.
+- **Päikesepark**, **Akupank** (SoC indikaator, laeb/tühjeneb, valikuline ajahinnang `CONFIG.aku.mahtKwh` põhjal), **Elektrihind praegu** (nagu `index.html`-i „Elekter praegu“ + järgmised tunnid).
+- **Päeva ülevaade**: börsihinna tulbad (s/kWh) ja päikesetoodang + tarbimine (kW) kahe eraldi teljega graafikuna ühise ajatelje, ristkursori ja tooltipiga; „Homme“ vahekaart; tabelivaade tunni kaupa.
+
+### 3. Andmed ja olekud
+- Märgikokkulepe: `CONFIG.solarman.akuMark` / `vorguMark` (`"auto"` tuvastab energiabilansist).
+- Otseühendus (valikuline dialoog): `crypto.subtle.digest('SHA-256')` väiketähtedega hex, token `localStorage`-is koos aegumisajaga, jaama vahemälu, CORS-proksi tugi; ebaõnnestumisel varuks `paike.json`.
+- Värskendus iga `CONFIG.uuendusMinutites` (5) järel ja „Värskenda“ nupuga; skeletonid esmalaadimisel, värskendamisel jääb eelmine vaade poolläbipaistvana nähtavale; allikapõhised veateated ja aegunud andmete hoiatus.
+
+---
+
 ## [2.3.0] — 2026-10-18
 
 ### Ülevaade
