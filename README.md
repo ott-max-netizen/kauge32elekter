@@ -60,9 +60,51 @@ Accept: application/vnd.github+json
 
 `timestamp` on perioodi algus (Unix sekundites, UTC), `price` on börsihind €/MWh ilma käibemaksuta ja `kwh` on 15-minutilise perioodi tarbimine kilovatt-tundides.
 
+## Energia töölaud (`energy-dashboard.html`)
+
+Eraldi leht, mis koondab ühte vaatesse päikesepargi tootmise, akupanga oleku, võrgu
+ostu/müügi, maja tarbimise ja börsihinna koos soovitusega (lae akut võrgust, kasuta
+akut, müü või tarbi). Disain ja koodimustrid on samad, mis `index.html`-is.
+
+```
+Solarman OpenAPI → GitHub Actions (uuenda-paike.yml) → paike.json ┐
+Elering API      → GitHub Actions (uuenda-hinnad.yml) → hinnad.json ┴→ GitHub Pages → energy-dashboard.html
+```
+
+- Solarmani võtmed on GitHub Actions Secretsis, mitte lehe koodis. Lisa
+  **Settings → Secrets and variables → Actions** alla:
+  - `SOLARMAN_APP_ID` – Solarman OpenAPI App ID
+  - `SOLARMAN_APP_SECRET` – Solarman OpenAPI App Secret
+  - `SOLARMAN_EMAIL` – Solarmani konto e-post
+  - `SOLARMAN_PASSWORD` – parool tavatekstina või selle SHA-256 räsi (64 hex-märki);
+    tavatekst räsitakse enne päringut väiketähtedega hex-kujule
+  - `SOLARMAN_STATION_ID` (valikuline) – jaama ID; puudumisel kasutatakse konto esimest jaama
+- Seejärel käivita **Actions → Uuenda päikeseandmed → Run workflow**. Töövoog
+  käivitub edaspidi iga 10 minuti järel ja teeb commit'i ainult siis, kui andmed muutusid.
+  10 minutit tuleneb GitHub Pagesi pehmest piirangust (10 avaldamist tunnis koos
+  `hinnad.json`-iga); leht ise kontrollib faili iga 5 minuti järel.
+- `paike.json` sisaldab ainult võimsusi ja energiakoguseid (ilma jaama asukoha ja
+  võtmeteta). GitHub Pagesi leht on avalik, seega on avalikud ka need andmed.
+- Tariifid, hinnapiirid ja hinnasildid loeb töölaud `index.html`-i `CONFIG`-ist, nii et
+  neid tuleb muuta ainult ühes kohas.
+- Kui aku või võrgu suund kuvatakse valepidi, määra `energy-dashboard.html` `CONFIG`-is
+  `solarman.akuMark` / `solarman.vorguMark` käsitsi (vaikimisi tuvastatakse
+  energiabilansist automaatselt). Aku mahtu (`aku.mahtKwh`) on vaja laadimis- ja
+  tühjenemisaja hinnanguks.
+
+**Otseühendus (valikuline):** jaluse lingi „Solarmani otseühendus“ kaudu saab ühes
+seadmes pärida andmed brauserist otse Solarmani API-st (token salvestatakse koos
+aegumisajaga `localStorage`-isse, parool ainult SHA-256 räsina). Solarmani API ei luba
+enamasti brauserist otse pärida (CORS), seega on vaja enda hallatavat CORS-proksit, mille
+lõppu lisatakse API aadress URL-kodeeritult. Kasuta seda ainult isiklikus seadmes;
+avalikul lehel jäävad võtmed GitHub Secretsisse.
+
 ## Piirangud
 
 - Lõpphind on hinnang; tegelik arve sõltub elektri- ja võrgulepingust.
+- Solarmani välja `batteryPower`/`gridPower` märgikokkulepe ja päevakoguste
+  (`gridValue` = müük, `buyValue` = ost) tähendus ei ole Solarmani dokumentatsioonis
+  üheselt kirjeldatud; kontrolli esimestel päevadel, et suunad vastavad inverteri rakendusele.
 
 ## Versioon ja muudatuste ajalugu
 
