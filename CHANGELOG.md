@@ -4,6 +4,25 @@ See fail kirjeldab rakenduse `index.html` versioonimuudatusi, arhitektuurilisi k
 
 ---
 
+## [2.4.1] — 2026-10-20
+
+### Ülevaade
+Versioon `2.4.1` (defineeritud konstandina `APP_VERSION = '2.4.1'` failis `index.html`) viib andmete kuvamise vastavusse reaalsete mõõtmisallikatega:
+- **Enefiti / Estfeedi andmed = Elektri ost võrgust (`Ostetud võrgust (Enefit)`)**:
+  - Võrguettevõtja ja elektrimüüja (Enefit / Elektrilevi) arvesti mõõdab ainult võrguühenduspunkti läbivat elektrit ehk seda mahtu, mis ostetakse võrgust juurde. See on elektriarve tegelik alus.
+- **Inverteri andmed = Maja reaalne tarbimine ja päikesetoodang (`Maja reaalne tarbimine (Inverter)`)**:
+  - Inverter mõõdab katuselt toodetud päikeseenergiat ning hoone tegelikku kogukoormust:
+    $$\text{Maja reaalne tarbimine (Inverter)} = \text{Elektri ost võrgust (Enefit)} + \text{Päikese omatarbimine (Inverter)}$$
+  - Päikeseenergia omatarbimine asendab otseselt võrgust ostetavat elektrit, säästes börsihinna, võrgutasu (päeva/öö), taastuvenergiatasu, aktsiisi ja käibemaksu.
+- **Kuvade ja terminite parandused**:
+  - **Hinnagraafiku legend ja joon**: lillakas joon on nüüd selgelt sildistatud kui `ost võrgust (Enefit, kWh)` ning kuldne kõver kui `päikesetoodang (Inverter, kW)`.
+  - **Tööriistavihje (Tooltip & Inspector)**: kuvab eraldi rea `Ost võrgust (Enefit)`, `Päikese toodang (Inverter)` ja `Maja reaalne tarbimine (Inverter)` (koos päikese omatarbe ja säästu summaga).
+  - **Päeva KPI-kaardid (`renderDaySummary`)**: näitab kõrvuti `Ostetud võrgust (Enefit)` (kWh ja arve maksumus) ning `Maja reaalne tarbimine (Inverter)` ja `Päikese sääst (Inverter)`.
+  - **Reaalajas energiavoog (`renderSolarDashboard`)**: selgitab voolusõlmi: Päikesepark (Inverter) ➔ Maja reaalne tarbimine (Inverter) ➔ Elektrivõrk (Enefit, ost või müük).
+  - **Maja üldelektri moodul (`#section-building`)**: pealkiri ja sildid täpsustatud: `Maja üldelekter (ost võrgust)`, tulpade selgitus `viimased 12 kuud: ost võrgust (Enefiti arvesti)`.
+
+---
+
 ## [2.4.0] — 2026-10-20
 
 ### Ülevaade
