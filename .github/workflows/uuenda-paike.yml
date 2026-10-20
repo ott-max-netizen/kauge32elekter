@@ -1,0 +1,282 @@
+# GitHub Actions töövoog: laadib Solarman OpenAPI-st päikesepargi ja akupanga
+# reaalaja andmed ning tänase päeva toodangu ja salvestab need faili paike.json.
+# energy-dashboard.html loeb faili samast repost, nii et Solarmani võtmed jäävad
+# GitHub Secretsisse ega jõua kunagi brauserisse ning CORS-piirang ei sega
+# (sama arhitektuur, mis hinnad.json-il ja uuenda-hinnad.yml-il).
+#
+# Vajalikud GitHub Actions Repository Secrets (Settings -> Secrets and variables -> Actions):
+#   SOLARMAN_APP_ID      - Solarman OpenAPI App ID (appId)
+#   SOLARMAN_APP_SECRET  - Solarman OpenAPI App Secret (appSecret)
+#   SOLARMAN_EMAIL       - Solarmani konto e-post
+#   SOLARMAN_PASSWORD    - Solarmani konto parool tavatekstina VÕI selle SHA-256 räsi
+#                          (64 hex-märki); tavatekst räsitakse enne päringut väiketähtedega hex-iks
+# Valikuline:
+#   SOLARMAN_STATION_ID  - jaama ID; kui puudub, kasutatakse konto esimest jaama
+#                          (määratuna jääb ära üks päring iga käivituse kohta)
+
+name: Uuenda päikeseandmed
+
+on:
+  schedule:
+    # Solarman uuendab andmeid umbes iga 5 minuti järel. GitHub Pagesi pehme piirang on
+    # 10 avaldamist tunnis (koos hinnad.json-i uuendustega), seega on samm 10 minutit.
+    # GitHub võib ajastatud käivitusi koormuse korral edasi lükata.
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/uuenda-paike.yml"
+
+permissions: {}
+
+concurrency:
+  group: uuenda-paike
+  cancel-in-progress: false
+
+jobs:
+  uuenda:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Võta repositoorium
+        uses: actions/checkout@v5
+
+      - name: Lae Solarmani reaalaja ja tänase päeva andmed
+        env:
+          SOLARMAN_APP_ID: ${{ secrets.SOLARMAN_APP_ID }}
+          SOLARMAN_APP_SECRET: ${{ secrets.SOLARMAN_APP_SECRET }}
+          SOLARMAN_EMAIL: ${{ secrets.SOLARMAN_EMAIL }}
+          SOLARMAN_PASSWORD: ${{ secrets.SOLARMAN_PASSWORD }}
+          SOLARMAN_STATION_ID: ${{ secrets.SOLARMAN_STATION_ID }}
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, math, os, re, sys, time, urllib.error, urllib.parse, urllib.request
+          from datetime import datetime, timezone
+          from zoneinfo import ZoneInfo
+
+          TZ = ZoneInfo("Europe/Tallinn")
+          BASE = os.environ.get("SOLARMAN_URL", "https://globalapi.solarmanpv.com").rstrip("/")
+          OUT = "paike.json"
+          UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+          FRAME_S = 900  # 5-min kaadrid koondatakse 15-min keskmisteks (sama samm, mis börsihindadel)
+
+          # Solarmani välja nimed jäetakse muutmata; märgikokkuleppe tõlgendab energy-dashboard.html.
+          POWER_FIELDS = ("generationPower", "usePower", "gridPower", "purchasePower", "wirePower",
+                          "chargePower", "dischargePower", "batteryPower")
+          DAY_FIELDS = ("generationValue", "useValue", "gridValue", "buyValue", "chargeValue", "dischargeValue")
+
+          def fail(msg):
+              print(f"::error::{msg}")
+              sys.exit(1)
+
+          def warn(msg):
+              print(f"::warning::{msg}")
+
+          def secret(name):
+              return os.environ.get(name, "").strip().strip('"').strip("'")
+
+          def reject_constant(name):  # Python lubaks NaN/Infinity, brauseri JSON.parse mitte
+              raise ValueError(f"lubamatu JSON väärtus {name}")
+
+          def num(value, lo=-1e7, hi=1e7):
+              """Lõplik arv lubatud vahemikus või None (Solarman tagastab puuduva väärtuse null-ina)."""
+              if value is None or isinstance(value, bool):
+                  return None
+              try:
+                  v = float(value)
+              except (TypeError, ValueError):
+                  return None
+              return v if math.isfinite(v) and lo <= v <= hi else None
+
+          def unix_seconds(value):
+              v = num(value, 1, 1e14)
+              if v is None:
+                  return None
+              return int(v / 1000) if v > 1e11 else int(v)  # mõni vastus annab millisekundid
+
+          def call(path, body, token=None, query="language=en"):
+              """POST Solarman OpenAPI-le. Tagastab JSON-vastuse või None; võtmeid logisse ei kirjutata."""
+              url = f"{BASE}{path}?{query}"
+              headers = {"Content-Type": "application/json", "Accept": "application/json", "User-Agent": UA}
+              if token:
+                  headers["Authorization"] = f"Bearer {token}"
+              data = json.dumps(body).encode("utf-8")
+              for attempt in range(1, 4):
+                  try:
+                      req = urllib.request.Request(url, data=data, headers=headers, method="POST")
+                      with urllib.request.urlopen(req, timeout=30) as r:
+                          resp = json.loads(r.read(), parse_constant=reject_constant)
+                  except urllib.error.HTTPError as e:
+                      if e.code == 429 or e.code >= 500:
+                          print(f"{path}: HTTP {e.code}, proovin uuesti ({attempt}/3)...")
+                          time.sleep(5 * attempt)
+                          continue
+                      warn(f"{path}: HTTP {e.code}")
+                      return None
+                  except Exception as e:
+                      print(f"{path}: võrguviga ({attempt}/3): {e}")
+                      time.sleep(5 * attempt)
+                      continue
+                  if not isinstance(resp, dict) or resp.get("success") is not True:
+                      info = resp if not isinstance(resp, dict) else f"{resp.get('code')} - {resp.get('msg')}"
+                      warn(f"{path}: Solarman vastas veaga: {info}")
+                      return None
+                  return resp
+              warn(f"{path}: Solarman ei vastanud")
+              return None
+
+          def bucket_frames(items, day_start):
+              """Koondab tänased 5-min kaadrid 15-min keskmisteks; dateTime = perioodi algus (Unix s)."""
+              buckets = {}
+              for item in items if isinstance(items, list) else []:
+                  if not isinstance(item, dict):
+                      continue
+                  ts = unix_seconds(item.get("dateTime"))
+                  if ts is None or ts < day_start:
+                      continue
+                  acc = buckets.setdefault(ts - ts % FRAME_S, {})
+                  for key in POWER_FIELDS + ("batterySoc",):
+                      v = num(item.get(key), 0, 100) if key == "batterySoc" else num(item.get(key))
+                      if v is not None:
+                          s, n = acc.get(key, (0.0, 0))
+                          acc[key] = (s + v, n + 1)
+              frames = []
+              for ts in sorted(buckets):
+                  row = {"dateTime": ts}
+                  for key, (s, n) in buckets[ts].items():
+                      row[key] = round(s / n, 1) if key == "batterySoc" else int(round(s / n))
+                  frames.append(row)
+              return frames
+
+          # 1. Võtmed GitHub Secretsist
+          app_id = secret("SOLARMAN_APP_ID")
+          app_secret = secret("SOLARMAN_APP_SECRET")
+          email = secret("SOLARMAN_EMAIL")
+          password = os.environ.get("SOLARMAN_PASSWORD", "")
+          station_id = secret("SOLARMAN_STATION_ID")
+          if not (app_id and app_secret and email and password):
+              warn("SOLARMAN_APP_ID / SOLARMAN_APP_SECRET / SOLARMAN_EMAIL / SOLARMAN_PASSWORD puudub — päikeseandmeid ei päritud.")
+              sys.exit(0)
+          # Solarman ootab parooli SHA-256 räsi väiketähtedega hex-kujul
+          pass_hash = password.strip().lower() if re.fullmatch(r"\s*[0-9a-fA-F]{64}\s*", password) \
+              else hashlib.sha256(password.encode("utf-8")).hexdigest()
+
+          # 2. Olemasolev fail (jaama võimsuse vahemälu ja varuandmed)
+          old = None
+          try:
+              with open(OUT, encoding="utf-8") as f:
+                  old = json.load(f)
+          except (OSError, ValueError):
+              pass
+          old_data = (old or {}).get("data") or {}
+
+          # 3. Ligipääsutoken (appId peab olema URL-i query-parameetrites)
+          tok = call("/account/v1.0/token", {"appSecret": app_secret, "email": email, "password": pass_hash},
+                     query=f"appId={urllib.parse.quote(app_id)}&language=en")
+          token = (tok or {}).get("access_token")
+          if not token:
+              fail("Solarmani autentimine ebaõnnestus (kontrolli App ID-d, App Secretit, e-posti ja parooli)")
+
+          # 4. Jaam ja paigaldatud võimsus
+          capacity = num(old_data.get("installedCapacityKw"), 0, 1e5)
+          if not station_id or capacity is None:
+              lst = call("/station/v1.0/list", {"page": 1, "size": 50}, token)
+              stations = [s for s in ((lst or {}).get("stationList") or []) if isinstance(s, dict)]
+              chosen = next((s for s in stations if str(s.get("id")) == station_id), None) if station_id \
+                  else (stations[0] if stations else None)
+              if chosen:
+                  station_id = str(chosen.get("id"))
+                  capacity = num(chosen.get("installedCapacity"), 0, 1e5)
+                  if len(stations) > 1 and not secret("SOLARMAN_STATION_ID"):
+                      print(f"Kontol on {len(stations)} jaama, kasutan esimest. Täpsemaks valikuks lisa SOLARMAN_STATION_ID.")
+              elif not station_id:
+                  fail("Solarmani kontol ei leitud ühtegi jaama")
+          sid = int(station_id) if station_id.isdigit() else station_id
+
+          # 5. Reaalaja andmed (kohustuslik; ebaõnnestumisel jääb vana fail alles)
+          rt = call("/station/v1.0/realTime", {"stationId": sid}, token)
+          if not rt:
+              fail("Solarmani realTime päring ebaõnnestus; jätan vana paike.json alles")
+          real_time = {}
+          for key in POWER_FIELDS:
+              v = num(rt.get(key))
+              if v is not None:
+                  real_time[key] = int(round(v))
+          soc = num(rt.get("batterySoc"), 0, 100)
+          if soc is not None:
+              real_time["batterySoc"] = round(soc, 1)
+          if not any(k in real_time for k in POWER_FIELDS):
+              fail("Solarmani realTime vastuses puuduvad võimsusandmed")
+          last_update = unix_seconds(rt.get("lastUpdateTime"))
+
+          # 6. Tänane päev: kogused (timeType 2) ja 5-min kaadrid (timeType 1)
+          now = datetime.now(TZ)
+          today = now.strftime("%Y-%m-%d")
+          day_start = int(now.replace(hour=0, minute=0, second=0, microsecond=0).timestamp())
+          old_day = old_data.get("day") if isinstance(old_data.get("day"), dict) else {}
+
+          day = {"date": today}
+          hist_day = call("/station/v1.0/history", {"stationId": sid, "startTime": today, "endTime": today, "timeType": 2}, token)
+          items = [i for i in ((hist_day or {}).get("stationDataItems") or []) if isinstance(i, dict)]
+          if items:
+              for key in DAY_FIELDS:
+                  v = num(items[-1].get(key), 0, 1e6)
+                  if v is not None:
+                      day[key] = round(v, 2)
+          elif old_day.get("date") == today:
+              day = old_day  # päring ebaõnnestus: hoia sama päeva varasemad väärtused
+
+          hist_frames = call("/station/v1.0/history", {"stationId": sid, "startTime": today, "endTime": today, "timeType": 1}, token)
+          frames = bucket_frames((hist_frames or {}).get("stationDataItems"), day_start)
+          if not frames:
+              frames = [f for f in (old_data.get("frames") or []) if isinstance(f, dict) and (unix_seconds(f.get("dateTime")) or 0) >= day_start]
+
+          data_out = {"realTime": real_time, "day": day, "frames": frames}
+          if last_update:
+              data_out["lastUpdateTime"] = last_update
+          if capacity:
+              data_out["installedCapacityKw"] = round(capacity, 2)
+
+          if old_data == data_out:
+              print("Päikeseandmed ei muutunud.")
+              sys.exit(0)
+
+          out = {
+              "success": True,
+              "generatedAt": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+              "source": "Solarman OpenAPI (station realTime + history)",
+              "data": data_out,
+          }
+          tmp = OUT + ".tmp"
+          with open(tmp, "w", encoding="utf-8") as f:
+              json.dump(out, f, separators=(",", ":"), allow_nan=False)
+          os.replace(tmp, OUT)  # aatomiline asendus
+          stamp = datetime.fromtimestamp(last_update, TZ).strftime("%d.%m %H:%M") if last_update else "teadmata"
+          print(f"Korras: {len(frames)} 15-min perioodi, viimane mõõtmine {stamp}")
+          PY
+
+      - name: Salvesta muudatus
+        run: |
+          set -euo pipefail
+          if [ ! -f paike.json ]; then
+            echo "paike.json puudub (Secrets seadistamata?), commit'i ei tehta."
+            exit 0
+          fi
+          git add paike.json
+          if git diff --staged --quiet; then
+            echo "Päikeseandmed ei muutunud, uut commit'i ei tehta."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Uuenda päikeseandmed"
+          for attempt in 1 2 3; do
+            if git push origin "HEAD:${GITHUB_REF_NAME}"; then exit 0; fi
+            echo "Push lükati tagasi (repot muudeti samal ajal), proovin uuesti ($attempt/3)..."
+            git pull --rebase origin "${GITHUB_REF_NAME}"
+          done
+          exit 1
