@@ -12,7 +12,7 @@
 <title>Kauge 32 · Elektri ja päikese dashboard</title>
 <style>
 /* ==========================================================================
-   Kauge 32 · Elektri ja päikese dashboard — v2.4.0
+   Kauge 32 · Elektri ja päikese dashboard — v2.4.1
    Kõik värvid, raadiused ja vahed on defineeritud custom property'tena.
    ========================================================================== */
 :root {
@@ -1734,7 +1734,7 @@ const CONFIG = {
 };
 
 /* Tehnilised konstandid — neid ei ole tavakasutuses vaja muuta. */
-const APP_VERSION = '2.4.0';
+const APP_VERSION = '2.4.1';
 const TIME_ZONE = 'Europe/Tallinn';
 const API_URL = 'https://dashboard.elering.ee/api/nps/price';
 const API_TIMEOUT_MS = 20000;
@@ -2419,7 +2419,7 @@ function getSolarMetrics(date, panelKw = (CONFIG.paike && CONFIG.paike.paneelide
   };
 }
 
-/** Arvutab antud päeva perioodide päikesetoodangu, omatarbimise, võrku müügi ja säästu. */
+/** Arvutab päikesetoodangu, elektri ostu võrgust (Enefit) ja maja reaalse kogutarbimise (Inverter). */
 function calculateSolarDay(dayPeriods, now) {
   if (!dayPeriods || !dayPeriods.length) return null;
   const panelKw = (CONFIG.paike && CONFIG.paike.paneelideKw) ? CONFIG.paike.paneelideKw : 15.0;
@@ -2428,9 +2428,10 @@ function calculateSolarDay(dayPeriods, now) {
   let totalSolarKwh = 0;
   let totalSelfKwh = 0;
   let totalExportKwh = 0;
+  let totalGridImportKwh = 0;
+  let totalRealHouseKwh = 0;
   let totalSavingsEur = 0;
   let totalExportEur = 0;
-  let totalHouseKwh = 0;
   let peakKw = 0;
   let bestWindowStart = null;
   let bestWindowEnd = null;
@@ -2446,23 +2447,32 @@ function calculateSolarDay(dayPeriods, now) {
     totalSolarKwh += solarKwh;
     if (s.powerKw > peakKw) peakKw = s.powerKw;
     
-    const hasMeasuredKwh = bar.kwh != null && Number.isFinite(bar.kwh);
-    const houseKwh = hasMeasuredKwh ? bar.kwh : (solarKwh > 0 ? (solarKwh * defaultSelfShare) : 1.2 * durationHours);
-    totalHouseKwh += houseKwh;
+    // Enefitist saadud andmed = elektri ost võrgust
+    const hasImport = bar.kwh != null && Number.isFinite(bar.kwh);
+    const gridImportKwh = hasImport ? bar.kwh : 0;
+    totalGridImportKwh += gridImportKwh;
 
-    const selfKwh = Math.min(solarKwh, houseKwh);
-    const exportKwh = Math.max(0, solarKwh - houseKwh);
-    const importKwh = Math.max(0, houseKwh - solarKwh);
+    // Inverteri päikese omatarve ja maja reaalne tarbimine:
+    // Maja reaalne tarbimine = elektri ost võrgust (Enefit) + päikese omatarve (Inverter)
+    const selfKwh = solarKwh > 0 ? (solarKwh * defaultSelfShare) : 0;
+    const exportKwh = Math.max(0, solarKwh - selfKwh);
+    const realHouseKwh = gridImportKwh + selfKwh;
+
+    bar.gridImportKwh = gridImportKwh;
     bar.selfKwh = selfKwh;
     bar.exportKwh = exportKwh;
-    bar.importKwh = importKwh;
+    bar.realHouseKwh = realHouseKwh;
 
     totalSelfKwh += selfKwh;
     totalExportKwh += exportKwh;
+    totalRealHouseKwh += realHouseKwh;
 
-    // Sääst: omatarve asendab lõpphinnaga ostu
+    // Sääst: omatarve asendab lõpphinnaga võrgust ostu (börs + võrgutasu + aktsiis + taastuvenergia + KM)
     const finalPrice = bar.finalCentsKwh || calculateFinalPrice(bar.spotExVatCentsKwh, bar.start).total;
-    totalSavingsEur += (selfKwh * finalPrice) / 100;
+    const solarSaving = (selfKwh * finalPrice) / 100;
+    bar.solarSavingsEur = solarSaving;
+    totalSavingsEur += solarSaving;
+
     // Müük: ületoodang müüakse Nord Pooli börsihinnaga
     totalExportEur += (exportKwh * (bar.spotIncVatCentsKwh || bar.spotExVatCentsKwh * vatFactor())) / 100;
 
@@ -2472,31 +2482,34 @@ function calculateSolarDay(dayPeriods, now) {
     }
   }
 
-  // Hetke päikesenäitajad
+  // Hetke võimsused (kW):
+  // Päikesepark toodab nowSolarKw; Enefitist ostetakse nowImportKw;
+  // Maja reaalne koormus (Inverter) on nowRealHouseKw = nowImportKw + nowSelfKw.
   const currentMetrics = getSolarMetrics(now, panelKw);
   const curPeriod = dayPeriods.find(p => p.start <= now && now < p.end);
-  const currentHouseKw = curPeriod && curPeriod.kwh != null ? (curPeriod.kwh * (60 / curPeriod.durationMinutes)) : 2.4;
+  const nowImportKw = curPeriod && curPeriod.kwh != null ? (curPeriod.kwh * (60 / curPeriod.durationMinutes)) : 0;
   const nowSolarKw = currentMetrics.powerKw;
-  const nowSelfKw = Math.min(nowSolarKw, currentHouseKw);
-  const nowExportKw = Math.max(0, nowSolarKw - currentHouseKw);
-  const nowImportKw = Math.max(0, currentHouseKw - nowSolarKw);
+  const nowSelfKw = nowSolarKw > 0 ? (nowSolarKw * defaultSelfShare) : 0;
+  const nowExportKw = Math.max(0, nowSolarKw - nowSelfKw);
+  const nowRealHouseKw = nowImportKw + nowSelfKw;
 
   return {
     panelKw,
     currentMetrics,
     nowSolarKw,
-    nowHouseKw: currentHouseKw,
+    nowImportKw,
     nowSelfKw,
     nowExportKw,
-    nowImportKw,
+    nowRealHouseKw,
     totalSolarKwh,
     totalSelfKwh,
     totalExportKwh,
+    totalGridImportKwh,
+    totalRealHouseKwh,
     totalSavingsEur,
     totalExportEur,
-    totalHouseKwh,
     peakKw,
-    coveragePct: totalHouseKwh > 0 ? Math.min(100, (totalSelfKwh / totalHouseKwh) * 100) : 0,
+    coveragePct: totalRealHouseKwh > 0 ? Math.min(100, (totalSelfKwh / totalRealHouseKwh) * 100) : 0,
     bestWindowStart,
     bestWindowEnd
   };
@@ -2847,13 +2860,13 @@ function renderChartLegend(hasConsumption = false) {
   if (hasConsumption) {
     nodes.push(el('span', { class: 'legend__item' }, [
       el('span', { class: 'legend__swatch legend__swatch--kwh', 'aria-hidden': 'true' }),
-      'tarbitud kWh (15 min / 1 h)'
+      'ost võrgust (Enefit, kWh)'
     ]));
   }
   if (CONFIG.paike && CONFIG.paike.aktiivne) {
     nodes.push(el('span', { class: 'legend__item' }, [
       el('span', { class: 'legend__swatch legend__swatch--solar', 'aria-hidden': 'true' }),
-      'päikesetoodang (kW)'
+      'päikesetoodang (Inverter, kW)'
     ]));
   }
   legend.replaceChildren(...nodes);
@@ -3147,9 +3160,11 @@ function showTooltip(index, avg, pointerType = 'mouse') {
 
   // Uuenda graafiku ülemist fikseeritud infopaneeli (eriti mugav mobiilis sõrmega vedades)
   if (inspector) {
-    inspector.textContent = hasKwh
-      ? `${timeRangeText} · ${priceText} · ${kwhText} (${costText})`
-      : `${timeRangeText} · ${priceText}`;
+    const parts = [timeRangeText, priceText];
+    if (hasKwh) parts.push(`Ost võrgust (Enefit): ${kwhText}`);
+    if (item.bar.solarKw != null && item.bar.solarKw > 0.05) parts.push(`Päike (Inverter): ${numberFormat.d1.format(item.bar.solarKw)} kW`);
+    if (item.bar.realHouseKwh != null && item.bar.realHouseKwh > 0.01) parts.push(`Reaalne tarbimine: ${numberFormat.d2.format(item.bar.realHouseKwh)} kWh`);
+    inspector.textContent = parts.join(' · ');
     inspector.hidden = false;
   }
 
@@ -3160,7 +3175,7 @@ function showTooltip(index, avg, pointerType = 'mouse') {
   if (hasKwh) {
     lines.push(el('span', {
       class: 'tooltip__consumption',
-      text: `Tarbitud: ${kwhText} · Maksumus: ${costText}`
+      text: `Ost võrgust (Enefit): ${kwhText} · Maksumus: ${costText}`
     }));
     if (spotCostEur != null) {
       lines.push(el('span', {
@@ -3168,11 +3183,31 @@ function showTooltip(index, avg, pointerType = 'mouse') {
       }));
     }
   }
-  if (CONFIG.paike && CONFIG.paike.aktiivne && item.bar.solarKw != null && item.bar.solarKw > 0.05) {
-    lines.push(el('span', {
-      style: 'color:var(--solar-gold);font-weight:700;',
-      text: `☀️ Päike: ${numberFormat.d1.format(item.bar.solarKw)} kW (${numberFormat.d2.format(item.bar.solarKwh)} kWh)`
-    }));
+  if (CONFIG.paike && CONFIG.paike.aktiivne) {
+    if (item.bar.solarKw != null && item.bar.solarKw > 0.05) {
+      lines.push(el('span', {
+        style: 'color:var(--solar-gold);font-weight:700;',
+        text: `☀️ Päikese toodang (Inverter): ${numberFormat.d1.format(item.bar.solarKw)} kW (${numberFormat.d2.format(item.bar.solarKwh)} kWh)`
+      }));
+    }
+    if (item.bar.realHouseKwh != null && item.bar.realHouseKwh > 0.01) {
+      lines.push(el('span', {
+        style: 'font-weight:600;',
+        text: `Maja reaalne tarbimine (Inverter): ${numberFormat.d2.format(item.bar.realHouseKwh)} kWh`
+      }));
+      if (item.bar.selfKwh != null && item.bar.selfKwh > 0.01) {
+        lines.push(el('span', {
+          style: 'color:var(--cat-roheline);font-size:12px;',
+          text: `• Päikese omatarve: ${numberFormat.d2.format(item.bar.selfKwh)} kWh (sääst ${formatEur(item.bar.solarSavingsEur || 0)})`
+        }));
+      }
+      if (item.bar.gridImportKwh != null && item.bar.gridImportKwh > 0.01) {
+        lines.push(el('span', {
+          style: 'color:var(--muted);font-size:12px;',
+          text: `• Ost võrgust (Enefit): ${numberFormat.d2.format(item.bar.gridImportKwh)} kWh`
+        }));
+      }
+    }
   }
   if (diffText) lines.push(el('span', { text: diffText }));
   tooltip.replaceChildren(...lines);
@@ -3283,26 +3318,48 @@ function renderDaySummary(d) {
     ));
   }
 
-  // Päeva tarbitud kWh ja maksumus (15-min andmete summast)
+  // Päeva elektri ost võrgust (Enefit) ja maja reaalne tarbimine (Inverter)
   const measured = dayPeriods.filter(p => p.kwh != null && Number.isFinite(p.kwh));
   if (measured.length > 0) {
-    const dayKwh = measured.reduce((s, p) => s + p.kwh, 0);
+    const dayImportKwh = measured.reduce((s, p) => s + p.kwh, 0);
     const dayCostEur = measured.reduce((s, p) => s + (p.costEur || 0), 0);
     const daySpotEur = measured.reduce((s, p) => s + (p.spotCostEur || 0), 0);
     const lastEnd = measured[measured.length - 1].end;
     const dayWordLabel = state.selectedDay === 'yesterday' ? 'eile' : 'täna';
+
+    const solar = calculateSolarDay(dayPeriods, d.now);
+    const daySelfKwh = solar ? solar.totalSelfKwh : 0;
+    const dayRealKwh = dayImportKwh + daySelfKwh;
+    const daySavingsEur = solar ? solar.totalSavingsEur : 0;
+
     tiles.push(
       tile(
-        `Tarbitud (${dayWordLabel})`,
-        `${numberFormat.d1.format(dayKwh)} kWh`,
-        state.selectedDay === 'today' ? `kuni ${formatTime(lastEnd)}` : `${measured.length} perioodi (15 min)`
+        `Ostetud võrgust (Enefit)`,
+        `${numberFormat.d1.format(dayImportKwh)} kWh`,
+        state.selectedDay === 'today' ? `kuni ${formatTime(lastEnd)} · arve alus` : `${measured.length} perioodi (15 min)`
       ),
       tile(
-        `Maksumus (${dayWordLabel})`,
+        `Ostukulu (Enefit)`,
         formatEur(dayCostEur),
         `koos tasudega · börs ${formatEur(daySpotEur)}`
       )
     );
+
+    if (solar && solar.totalSolarKwh > 0.1) {
+      tiles.push(
+        tile(
+          `Maja reaalne tarbimine (Inverter)`,
+          `${numberFormat.d1.format(dayRealKwh)} kWh`,
+          `omatarve ${numberFormat.d1.format(daySelfKwh)} kWh + ost ${numberFormat.d1.format(dayImportKwh)} kWh`
+        ),
+        tile(
+          `Päikese sääst (Inverter)`,
+          formatEur(daySavingsEur),
+          `asendas võrguostu · toodang ${numberFormat.d1.format(solar.totalSolarKwh)} kWh`,
+          'stat__value--good'
+        )
+      );
+    }
   }
 
   // Käesoleva kuu ja eelneva aasta vastava kuu kWh/maksumuse võrdlus (kui Estfeed andmed on laetud)
@@ -3547,9 +3604,9 @@ function renderSolarDashboard(d) {
 
   const solarNode = el('div', { class: 'flow-node flow-node--solar' }, [
     el('div', { class: 'flow-node__icon-wrap', 'aria-hidden': 'true' }, [isSolarProducing ? '☀️' : '🌙']),
-    el('p', { class: 'flow-node__title', text: 'Päikesepark' }),
+    el('p', { class: 'flow-node__title', text: 'Päikesepark (Inverter)' }),
     el('p', { class: 'flow-node__value', style: 'color:var(--solar-gold)', text: `${numberFormat.d1.format(solar.nowSolarKw)} kW` }),
-    el('p', { class: 'flow-node__sub', text: `tipp ${numberFormat.d1.format(solar.peakKw)} kW` })
+    el('p', { class: 'flow-node__sub', text: `tippvõimsus ${numberFormat.d1.format(solar.peakKw)} kW` })
   ]);
 
   const connector1 = el('div', { class: 'flow-connector' }, [
@@ -3567,9 +3624,9 @@ function renderSolarDashboard(d) {
 
   const houseNode = el('div', { class: 'flow-node flow-node--house' }, [
     el('div', { class: 'flow-node__icon-wrap', 'aria-hidden': 'true' }, ['🏢']),
-    el('p', { class: 'flow-node__title', text: 'Maja tarbimine' }),
-    el('p', { class: 'flow-node__value', text: `${numberFormat.d1.format(solar.nowHouseKw)} kW` }),
-    el('p', { class: 'flow-node__sub', text: `omatarve ${numberFormat.d1.format(solar.nowSelfKw)} kW` })
+    el('p', { class: 'flow-node__title', text: 'Maja reaalne tarbimine (Inverter)' }),
+    el('p', { class: 'flow-node__value', text: `${numberFormat.d1.format(solar.nowRealHouseKw)} kW` }),
+    el('p', { class: 'flow-node__sub', text: `omatarve ${numberFormat.d1.format(solar.nowSelfKw)} kW + ost ${numberFormat.d1.format(solar.nowImportKw)} kW` })
   ]);
 
   const connector2 = el('div', { class: 'flow-connector' }, [
@@ -3587,19 +3644,19 @@ function renderSolarDashboard(d) {
 
   const gridNode = el('div', { class: 'flow-node flow-node--grid' }, [
     el('div', { class: 'flow-node__icon-wrap', 'aria-hidden': 'true' }, ['⚡']),
-    el('p', { class: 'flow-node__title', text: 'Elektrivõrk' }),
+    el('p', { class: 'flow-node__title', text: 'Elektrivõrk (Enefit)' }),
     el('p', {
       class: 'flow-node__value',
       style: isExporting ? 'color:var(--solar-gold)' : 'color:var(--text)',
       text: isExporting ? `+${numberFormat.d1.format(solar.nowExportKw)} kW` : `-${numberFormat.d1.format(solar.nowImportKw)} kW`
     }),
-    el('p', { class: 'flow-node__sub', text: isExporting ? 'müük võrku' : 'ost võrgust' })
+    el('p', { class: 'flow-node__sub', text: isExporting ? 'müük võrku' : 'elektri ost (Enefit)' })
   ]);
 
   const flowCard = el('div', { class: 'energy-flow-card' }, [
     el('div', { class: 'energy-flow-header' }, [
       el('p', { class: 'energy-flow-title', text: 'Reaalajas energiavoog' }),
-      el('span', { class: 'badge-pill', text: isExporting ? 'Ületootmine (müük)' : (isSolarProducing ? 'Omatarbimisel' : 'Võrgutoitel') })
+      el('span', { class: 'badge-pill', text: isExporting ? 'Ületootmine (müük võrku)' : (solar.nowSelfKw > 0.05 ? 'Osa kaetud päikesega' : 'Võrgutoitel (Enefit)') })
     ]),
     el('div', { class: 'energy-flow-visual' }, [
       solarNode, connector1, houseNode, connector2, gridNode
@@ -3615,14 +3672,14 @@ function renderSolarDashboard(d) {
   ]);
 
   const statsGrid = el('div', { class: 'stats stats--solar' }, [
-    statCard('Hetketootmine', isSolarProducing ? `${numberFormat.d1.format(solar.nowSolarKw)} kW` : '0 kW', isSolarProducing ? `päikese kõrgus ${solar.currentMetrics.elevationDeg}°` : 'päike loojunud', isSolarProducing ? 'stat__value--good' : ''),
-    statCard(`${dayWordLabel} toodang`, `${numberFormat.d1.format(solar.totalSolarKwh)} kWh`, `tippvõimsus ${numberFormat.d1.format(solar.peakKw)} kW`, 'stat__value--good'),
-    statCard('Omatarbe sääst', formatEur(solar.totalSavingsEur), `asendatud ${numberFormat.d1.format(solar.totalSelfKwh)} kWh`, 'stat__value--good'),
-    statCard('Võrku müügi tulu', formatEur(solar.totalExportEur), `müüdud ${numberFormat.d1.format(solar.totalExportKwh)} kWh`)
+    statCard('Hetketootmine (Inverter)', isSolarProducing ? `${numberFormat.d1.format(solar.nowSolarKw)} kW` : '0 kW', isSolarProducing ? `päikese kõrgus ${solar.currentMetrics.elevationDeg}°` : 'päike loojunud', isSolarProducing ? 'stat__value--good' : ''),
+    statCard(`${dayWordLabel} toodang (Inverter)`, `${numberFormat.d1.format(solar.totalSolarKwh)} kWh`, `tippvõimsus ${numberFormat.d1.format(solar.peakKw)} kW`, 'stat__value--good'),
+    statCard('Reaalne tarbimine (Inverter)', `${numberFormat.d1.format(solar.totalRealHouseKwh)} kWh`, `omatarve ${numberFormat.d1.format(solar.totalSelfKwh)} + ost ${numberFormat.d1.format(solar.totalGridImportKwh)} kWh`),
+    statCard('Omatarbe sääst (Inverter)', formatEur(solar.totalSavingsEur), `asendas võrguostu ${numberFormat.d1.format(solar.totalSelfKwh)} kWh`, 'stat__value--good')
   ]);
 
   // 3. Soovitus ja katvus
-  let adviceText = `Päikesepark katab ${dayWordLabel.toLowerCase()} hinnanguliselt ${numberFormat.d0.format(solar.coveragePct)}% maja elektritarbimisest.`;
+  let adviceText = `Päikesepark (Inverter) katab ${dayWordLabel.toLowerCase()} hinnanguliselt ${numberFormat.d0.format(solar.coveragePct)}% maja reaalsest elektritarbimisest, vähendades otseselt Enefitist ostetava elektri kogust.`;
   if (solar.bestWindowStart && solar.bestWindowEnd) {
     adviceText += ` Parim aeg suuremateks tarbimisteks (pesumasinad, laadimine, soojaveeboiler) on ${formatTimeRange(solar.bestWindowStart, solar.bestWindowEnd)}, mil toodetakse tasuta päikeseenergiat ja võrgutasusid ei lisandu.`;
   } else if (!isSolarProducing) {
@@ -3655,7 +3712,7 @@ function renderBuildingElectricity() {
       const totalTxt = metric === 'eur'
         ? formatEur(data.totalEur12)
         : (data.totalKwh12 >= 10000 ? `${numberFormat.d1.format(data.totalKwh12 / 1000)} MWh` : `${numberFormat.d0.format(data.totalKwh12)} kWh`);
-      badgeEl.textContent = `12 k: ${totalTxt}`;
+      badgeEl.textContent = `12 k ost: ${totalTxt}`;
       badgeEl.hidden = false;
     } else {
       badgeEl.hidden = true;
@@ -3680,7 +3737,7 @@ function renderBuildingElectricity() {
     const isOngoing = selectedRow.complete === false;
     const curDesc = selectedRow.isPlaceholder
       ? `${monthName(selectedRow)} ${selectedRow.year}: andmed puuduvad`
-      : `${monthName(selectedRow)} ${selectedRow.year}${isOngoing ? ' (jooksev)' : ''}: ${numberFormat.d0.format(selectedRow.kwh)} kWh (${formatEur(selectedRow.eur)})`;
+      : `${monthName(selectedRow)} ${selectedRow.year}${isOngoing ? ' (jooksev)' : ''}: ostetud võrgust ${numberFormat.d0.format(selectedRow.kwh)} kWh (${formatEur(selectedRow.eur)})`;
     const prevDesc = prevRow && prevRow.kwh > 0
       ? ` · Aasta varem: ${numberFormat.d0.format(isOngoing && prevRow.kwhToDate ? prevRow.kwhToDate : prevRow.kwh)} kWh (${formatEur(isOngoing && prevRow.eurToDate ? prevRow.eurToDate : prevRow.eur)})`
       : '';
@@ -3751,7 +3808,7 @@ function renderBuildingElectricity() {
     el('div', { class: 'legend', style: 'margin-top:var(--s2);justify-content:space-between;' }, [
       el('span', { class: 'legend__item' }, [
         el('span', { class: 'legend__swatch', style: '--swatch:var(--bar-primary)', 'aria-hidden': 'true' }),
-        'viimased 12 kuud (puuduta tulpa)'
+        'viimased 12 kuud: ost võrgust (Enefiti arvesti)'
       ]),
       el('span', { class: 'legend__item' }, [
         el('span', { class: 'legend__swatch legend__swatch--outline', 'aria-hidden': 'true' }),

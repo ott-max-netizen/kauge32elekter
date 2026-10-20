@@ -60,6 +60,12 @@ Accept: application/vnd.github+json
 
 `timestamp` on perioodi algus (Unix sekundites, UTC), `price` on börsihind €/MWh ilma käibemaksuta ja `kwh` on 15-minutilise perioodi tarbimine kilovatt-tundides.
 
+## Mõõtmiste loogika: Enefit vs Inverter
+
+Rakendus eristab kahte erinevat ja teineteist täiendavat andmeallikat:
+1. **Enefit / Estfeed (Võrguarvesti)**: mõõdab **elektri ostu võrgust** (`Ostetud võrgust (Enefit)`). See näitab mahtu, mida maja vajas lisaks kohapeal toodetud päikeseenergiale ja mille eest tuleb maksta börsihinda, võrgutasu ning makse.
+2. **Inverter (Päikesepark & hoone koormus)**: mõõdab **päikesepargi toodangut** ja **maja reaalset tarbimist** (`Maja reaalne tarbimine (Inverter)` = Ost võrgust + Päikese omatarbimine). Omatarbimine asendab võrguostu ning annab otsese rahalise säästu.
+
 ## Päikeseenergia tootmine (Solar Dashboard)
 
 Rakendus sisaldab täielikku päikeseenergia moodulit (`CONFIG.paike`):
@@ -75,5 +81,5 @@ Rakendus sisaldab täielikku päikeseenergia moodulit (`CONFIG.paike`):
 
 ## Versioon ja muudatuste ajalugu
 
-- Praegune versioon: **v2.4.0** (määratud konstandis `APP_VERSION` failis `index.html`).
+- Praegune versioon: **v2.4.1** (määratud konstandis `APP_VERSION` failis `index.html`).
 - Üksikasjalik ülevaade UI/UX muudatustest, komponentide klassidest ja arhitektuurireeglitest (sh juhised Claude AI-le) asub failis [CHANGELOG.md](CHANGELOG.md).
