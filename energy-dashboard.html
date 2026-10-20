@@ -12,7 +12,7 @@
 <title>Kauge 32 energia</title>
 <style>
 /* ==========================================================================
-   Kauge 32 energia — kujundus (v1.0.0)
+   Kauge 32 energia — kujundus (v1.0.1)
    Sama disainikeel, mis index.html-is: kõik värvid, raadiused ja vahed on
    custom property'tena. Energia identiteedivärvid (--solar, --home, --battery,
    --grid) on kontrollitud värvipimeduse ja kontrasti suhtes mõlemas teemas.
@@ -755,11 +755,12 @@ body {
 }
 .upcoming li {
   display: grid;
-  grid-template-columns: 64px minmax(0, 1fr) 52px;
+  grid-template-columns: 96px minmax(0, 1fr) 52px;
   align-items: center;
   gap: var(--s2);
   font-size: 14px;
 }
+.upcoming li span:first-child { white-space: nowrap; }
 .upcoming li.is-now { font-weight: 700; }
 .upcoming__bar {
   height: 8px;
@@ -1443,9 +1444,11 @@ const CONFIG = {
     // proksi näeb App Secretit ja parooli räsi. Tühi ("") = otse (CORS võib blokeerida).
     proksi: "",
 
-    // Solarmani võimsuste märgikokkulepe. "auto" tuvastab selle energiabilansist
-    // (päike + ost + aku tühjenemine = maja + müük + aku laadimine). Kui suunad on
-    // ekraanil valepidi, määra käsitsi:
+    // Aku ja võrgu suund loetakse Solarmani suunaga väljadest (chargePower / dischargePower,
+    // purchasePower = ost, gridPower = müük). Kui jaam neid ei anna, tuvastab "auto" suuna
+    // energiabilansist (päike + ost + aku tühjenemine = maja + müük + aku laadimine).
+    // Kui suunad on ekraanil ikkagi valepidi, määra käsitsi; siis loetakse batteryPower /
+    // gridPower märgiga väärtusena:
     akuMark: "auto",    // "auto" | "positiivne-laeb" | "positiivne-tuhjeneb"
     vorguMark: "auto"   // "auto" | "positiivne-muuk" | "positiivne-ost"
   },
@@ -1473,7 +1476,7 @@ const CONFIG = {
 };
 
 /* Tehnilised konstandid — neid ei ole tavakasutuses vaja muuta. */
-const APP_VERSION = '1.0.0';
+const APP_VERSION = '1.0.1';
 const TIME_ZONE = 'Europe/Tallinn';
 const API_URL = 'https://dashboard.elering.ee/api/nps/price';
 const PRICE_TIMEOUT_MS = 20000;
@@ -2232,22 +2235,33 @@ async function fetchSolarFile(signal) {
   return { data: json.data, generatedAt: generatedAt && Number.isFinite(generatedAt.getTime()) ? generatedAt : null };
 }
 
-/** Solarmani väljad: võimsused W, märgid sõltuvad seadmest (vt detectSigns). */
+/**
+ * Solarmani jaama väljad (W). Suunaga väljad: chargePower / dischargePower (aku laeb / tühjeneb),
+ * purchasePower = ost võrgust, gridPower = müük võrku. wirePower (võrguvahetus) ja batteryPower on
+ * märgita suurused; neid kasutatakse ainult siis, kui suunaga välju pole (märk: vt detectSigns).
+ */
 function parseRawSample(raw) {
   const v = key => finiteOrNull(raw[key]);
+  const cfg = CONFIG.solarman;
+  const manualBattery = cfg.akuMark === 'positiivne-laeb' || cfg.akuMark === 'positiivne-tuhjeneb';
+  const manualGrid = cfg.vorguMark === 'positiivne-muuk' || cfg.vorguMark === 'positiivne-ost';
   const charge = v('chargePower');
   const discharge = v('dischargePower');
-  const split = (charge != null || discharge != null) && ((charge || 0) !== 0 || (discharge || 0) !== 0)
+  const split = !manualBattery && (charge != null || discharge != null) && ((charge || 0) !== 0 || (discharge || 0) !== 0)
     ? Math.abs(charge || 0) - Math.abs(discharge || 0) : null;
-  const gridRaw = v('gridPower') ?? v('wirePower');
+  const feedIn = v('gridPower');
   const purchase = v('purchasePower');
+  const wire = v('wirePower');
+  // Ost ja müük eraldi väljadena: märki pole vaja tuvastada (wirePower > 0 ilma ostu/müügita on vastuoluline)
+  const gridDirectional = !manualGrid && purchase != null && purchase >= 0 && (feedIn ?? 0) >= 0 &&
+    (purchase > 0 || (feedIn ?? 0) > 0 || !(Math.abs(wire ?? 0) >= 1));
   return {
     pv: v('generationPower'),
     load: v('usePower'),
-    batKnown: split,                // eraldi laadimise/tühjenemise väljad: märk teada (+ = laeb)
-    batRaw: v('batteryPower'),      // ühine väli: märk tuvastatakse
-    gridKnown: purchase != null && purchase > 0 && (gridRaw == null || Math.abs(gridRaw) < 1) ? purchase : null,
-    gridRaw,
+    batKnown: split,                // + = laeb
+    batRaw: v('batteryPower'),
+    gridKnown: gridDirectional ? purchase - (feedIn ?? 0) : null,  // + = ost, − = müük
+    gridRaw: feedIn ?? wire,
     soc: v('batterySoc')
   };
 }

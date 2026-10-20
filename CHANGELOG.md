@@ -4,6 +4,16 @@ See fail kirjeldab rakenduse `index.html` versioonimuudatusi, arhitektuurilisi k
 
 ---
 
+## energy-dashboard.html [1.0.1] — 2026-10-20
+
+### Parandus: võrgu ja aku suund päris Solarmani andmetega
+- Esimene päris `paike.json` näitas, et Solarmani jaam annab suuna eraldi väljadena: `purchasePower` = ost, `gridPower` = müük, `chargePower` / `dischargePower` = aku; `wirePower` ja `batteryPower` on märgita suurused.
+- `parseRawSample` kasutab nüüd neid suunaga välju otse. Energiabilansist tuvastatakse märk ainult siis, kui jaam neid välju ei anna, või käsitsi seadistusega (`CONFIG.solarman.akuMark` / `vorguMark`).
+- Enne parandust võis leht samas failis olevate müügi- ja ostuperioodide korral (nt päikeseline keskpäev + õhtune ost) näidata praegust ostu müügina, ja ostu-müügi segaperioodi neto ostu valesti (0,02 kW 2,44 kW asemel).
+- Hinnakaardi „Järgmised tunnid“ ajaveerg on laiem ega murdu („homme 00:00“ püsib ühel real).
+
+---
+
 ## energy-dashboard.html [1.0.0] — 2026-10-20
 
 ### Ülevaade

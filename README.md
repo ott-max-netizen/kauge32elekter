@@ -102,9 +102,11 @@ avalikul lehel jäävad võtmed GitHub Secretsisse.
 ## Piirangud
 
 - Lõpphind on hinnang; tegelik arve sõltub elektri- ja võrgulepingust.
-- Solarmani välja `batteryPower`/`gridPower` märgikokkulepe ja päevakoguste
-  (`gridValue` = müük, `buyValue` = ost) tähendus ei ole Solarmani dokumentatsioonis
-  üheselt kirjeldatud; kontrolli esimestel päevadel, et suunad vastavad inverteri rakendusele.
+- Solarmani väljade tähendus on kontrollitud selle jaama päris andmetega (energiabilanss
+  klapib): `purchasePower` = ost võrgust, `gridPower` = müük võrku, `chargePower` /
+  `dischargePower` = aku laadimine / tühjenemine; `wirePower` ja `batteryPower` on märgita
+  suurused. Päevakogused: `buyValue` = ost, `gridValue` = müük. Ametlikus dokumentatsioonis
+  neid üheselt kirjeldatud ei ole.
 
 ## Versioon ja muudatuste ajalugu
 
