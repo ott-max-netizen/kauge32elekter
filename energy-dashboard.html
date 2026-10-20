@@ -2,6 +2,9 @@
 <html lang="et">
 <head>
 <meta charset="utf-8">
+<!-- Turvapoliitika: skriptid ja stiilid ainult sellelt saidilt (+ lehesisesed), välised päringud ainult HTTPS-iga (erand: localhost-proksi). -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https: http://localhost:* http://127.0.0.1:*; object-src 'none'; base-uri 'none'; form-action 'self'">
+<meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#f1f4f7" media="(prefers-color-scheme: light)">
@@ -10,1197 +13,24 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="robots" content="noindex">
 <title>Kauge 32 energia</title>
-<style>
-/* ==========================================================================
-   Kauge 32 energia — kujundus (v1.0.1)
-   Sama disainikeel, mis index.html-is: kõik värvid, raadiused ja vahed on
-   custom property'tena. Energia identiteedivärvid (--solar, --home, --battery,
-   --grid) on kontrollitud värvipimeduse ja kontrasti suhtes mõlemas teemas.
-   ========================================================================== */
-:root {
-  color-scheme: light dark;
-
-  --bg: #f1f4f7;
-  --surface: #ffffff;
-  --surface-2: #f5f7fa;
-  --text: #1b2433;
-  --muted: #4a5566;
-  --border: #d3dae3;
-  --focus: #1f5fbf;
-
-  --radius: 16px;
-  --radius-sm: 10px;
-
-  --s1: 4px;
-  --s2: 8px;
-  --s3: 12px;
-  --s4: 16px;
-  --s5: 24px;
-  --s6: 32px;
-
-  --shadow: 0 2px 8px rgba(27, 36, 51, 0.05), 0 1px 2px rgba(27, 36, 51, 0.04);
-  --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-
-  /* Hinnakategooriad (samad, mis index.html-is): aktsent, sildi taust, sildi tekst */
-  --cat-roheline: #1f9d55;
-  --cat-roheline-bg: #dbf3e4;
-  --cat-roheline-fg: #0f5a31;
-  --cat-kollane: #c48f00;
-  --cat-kollane-bg: #fbf0c4;
-  --cat-kollane-fg: #614700;
-  --cat-oranz: #e8701a;
-  --cat-oranz-bg: #fde3cf;
-  --cat-oranz-fg: #7a3a08;
-  --cat-punane: #d22f2f;
-  --cat-punane-bg: #fadcdc;
-  --cat-punane-fg: #861c1c;
-
-  --avg-line: #1b2433;
-  --bar-primary: #2c5aa0;
-
-  /* Energiavoo osapooled */
-  --solar: #c27a12;
-  --home: #2c5aa0;
-  --battery: #3f8f5e;
-  --grid: #7b55b5;
-
-  --skeleton: #e6ebf1;
-  --skeleton-hi: #f5f7fa;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0f1620;
-    --surface: #1a2230;
-    --surface-2: #232d3c;
-    --text: #edf1f6;
-    --muted: #b7c1ce;
-    --border: #33404f;
-    --focus: #8ab4f8;
-    --shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
-
-    --cat-roheline: #3fcb79;
-    --cat-roheline-bg: #16402a;
-    --cat-roheline-fg: #bff2d2;
-    --cat-kollane: #f0c531;
-    --cat-kollane-bg: #4a3b08;
-    --cat-kollane-fg: #fbe7a3;
-    --cat-oranz: #f5924a;
-    --cat-oranz-bg: #4f2a0e;
-    --cat-oranz-fg: #ffd2b0;
-    --cat-punane: #f26565;
-    --cat-punane-bg: #4e1a1a;
-    --cat-punane-fg: #ffc7c7;
-
-    --avg-line: #edf1f6;
-    --bar-primary: #7faae8;
-
-    --solar: #c4862a;
-    --home: #5a8ad0;
-    --battery: #38a56a;
-    --grid: #9a76d8;
-
-    --skeleton: #232d3c;
-    --skeleton-hi: #2d394b;
-  }
-}
-
-*, *::before, *::after { box-sizing: border-box; }
-
-[hidden] { display: none !important; }
-
-html { -webkit-text-size-adjust: 100%; }
-
-body {
-  margin: 0;
-  font-family: var(--font);
-  font-size: 16px;
-  line-height: 1.45;
-  color: var(--text);
-  background: var(--bg);
-  overflow-x: hidden;
-  font-variant-numeric: tabular-nums;
-}
-
-.app {
-  max-width: 1120px;
-  margin: 0 auto;
-  padding: max(var(--s3), env(safe-area-inset-top)) max(var(--s3), env(safe-area-inset-right)) max(var(--s4), env(safe-area-inset-bottom)) max(var(--s3), env(safe-area-inset-left));
-}
-
-/* ---------- Päis, olek, teated ---------- */
-.app-header {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--s2) var(--s4);
-  margin: 0 0 var(--s3);
-}
-
-.app-title {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-}
-
-.header-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--s2) var(--s3);
-}
-
-.status {
-  margin: 0;
-  color: var(--muted);
-  font-size: 14px;
-  font-weight: 500;
-}
-.status:empty { display: none; }
-
-.banner {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--s2) var(--s3);
-  padding: var(--s3) var(--s4);
-  border-radius: var(--radius-sm);
-  margin: 0 0 var(--s3);
-  background: var(--cat-punane-bg);
-  color: var(--cat-punane-fg);
-  border: 1px solid var(--cat-punane);
-}
-.banner--warn {
-  background: var(--cat-kollane-bg);
-  color: var(--cat-kollane-fg);
-  border-color: var(--cat-kollane);
-}
-.banner__text {
-  margin: 0;
-  flex: 1 1 200px;
-  font-weight: 600;
-}
-.banner__text span { display: block; }
-
-.btn {
-  font: inherit;
-  font-weight: 600;
-  min-height: 44px;
-  padding: 0 20px;
-  border-radius: 999px;
-  border: 1px solid var(--text);
-  background: var(--text);
-  color: var(--surface);
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-}
-.btn--ghost {
-  background: var(--surface);
-  color: var(--text);
-  border-color: var(--border);
-  padding: 0 16px 0 14px;
-}
-.btn--danger {
-  background: var(--surface);
-  color: var(--cat-punane-fg);
-  border-color: var(--cat-punane);
-}
-.btn[disabled] { cursor: progress; opacity: 0.8; }
-.btn__icon {
-  width: 18px;
-  height: 18px;
-  flex: none;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-.btn.is-loading .btn__icon { animation: spin 0.9s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
-
-.link-btn {
-  appearance: none;
-  border: 0;
-  background: none;
-  padding: 0;
-  font: inherit;
-  color: var(--focus);
-  text-decoration: underline;
-  text-underline-offset: 2px;
-  cursor: pointer;
-  min-height: 44px;
-}
-
-/* ---------- Paigutus ---------- */
-.layout {
-  display: grid;
-  gap: var(--s3);
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.card {
-  min-width: 0;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: var(--s4);
-  box-shadow: var(--shadow);
-}
-
-.card__head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--s1) var(--s3);
-  margin: 0 0 var(--s3);
-}
-
-.card__title {
-  margin: 0;
-  font-size: 17px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-}
-
-.card__hint {
-  margin: 0;
-  color: var(--muted);
-  font-size: 14px;
-}
-
-.card__body { transition: opacity 0.2s ease; }
-.layout.is-refreshing .card__body { opacity: 0.62; }
-
-.placeholder {
-  margin: 0;
-  color: var(--muted);
-}
-
-.notice {
-  margin: var(--s2) 0 0;
-  padding: var(--s2) var(--s3);
-  border-radius: var(--radius-sm);
-  background: var(--surface-2);
-  font-size: 15px;
-}
-.notice--warn {
-  background: var(--cat-kollane-bg);
-  color: var(--cat-kollane-fg);
-}
-.notice--error {
-  background: var(--cat-punane-bg);
-  color: var(--cat-punane-fg);
-}
-
-.badge-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 9px;
-  font-size: 12px;
-  font-weight: 600;
-  border-radius: 999px;
-  background: var(--surface-2);
-  color: var(--muted);
-  border: 1px solid var(--border);
-  line-height: 1.2;
-}
-.badge-pill--warn {
-  background: var(--cat-kollane-bg);
-  color: var(--cat-kollane-fg);
-  border-color: var(--cat-kollane);
-}
-
-.state-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 4px 12px 4px 10px;
-  border-radius: 999px;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  font-size: 14px;
-  font-weight: 700;
-  line-height: 1.2;
-}
-.state-pill::before {
-  content: "";
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: var(--pill-dot, var(--muted));
-  flex: none;
-}
-
-/* ---------- Laadimise olekud ---------- */
-.skeleton {
-  display: block;
-  border-radius: var(--radius-sm);
-  background: linear-gradient(90deg, var(--skeleton) 0%, var(--skeleton-hi) 50%, var(--skeleton) 100%);
-  background-size: 200% 100%;
-  animation: shimmer 1.4s ease-in-out infinite;
-}
-.skeleton + .skeleton { margin-top: var(--s2); }
-.skeleton--line { height: 14px; }
-.skeleton--short { width: 45%; }
-.skeleton--mid { width: 70%; }
-.skeleton--big { height: 46px; width: 55%; }
-.skeleton--block { height: 150px; }
-.skeleton--flow { height: 280px; }
-@keyframes shimmer {
-  from { background-position: 200% 0; }
-  to { background-position: -200% 0; }
-}
-
-/* ---------- Soovitus ---------- */
-.card--advice {
-  border-left: 6px solid var(--tone, var(--border));
-  padding-top: var(--s3);
-  padding-bottom: var(--s3);
-}
-.card--advice[data-tone="good"] { --tone: var(--cat-roheline); --tone-bg: var(--cat-roheline-bg); --tone-fg: var(--cat-roheline-fg); }
-.card--advice[data-tone="warn"] { --tone: var(--cat-kollane); --tone-bg: var(--cat-kollane-bg); --tone-fg: var(--cat-kollane-fg); }
-.card--advice[data-tone="bad"]  { --tone: var(--cat-punane); --tone-bg: var(--cat-punane-bg); --tone-fg: var(--cat-punane-fg); }
-
-.advice-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--s2) var(--s4);
-}
-.chip {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s2);
-  margin: 0;
-  padding: 6px 14px 6px 11px;
-  border-radius: 999px;
-  background: var(--tone-bg, var(--surface-2));
-  color: var(--tone-fg, var(--text));
-  font-size: 15px;
-  font-weight: 800;
-  letter-spacing: 0.01em;
-  white-space: nowrap;
-}
-.chip::before {
-  content: "";
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--tone, var(--muted));
-  flex: none;
-}
-.advice-main { flex: 1 1 280px; min-width: 0; }
-.advice-title {
-  margin: 0;
-  font-size: 19px;
-  font-weight: 800;
-  line-height: 1.25;
-  letter-spacing: -0.01em;
-}
-.advice-text {
-  margin: 2px 0 0;
-  font-size: 15px;
-}
-.advice-reasons {
-  list-style: none;
-  margin: var(--s2) 0 0;
-  padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.advice-reasons li {
-  padding: 2px 10px;
-  border-radius: 999px;
-  background: var(--surface-2);
-  color: var(--muted);
-  font-size: 13px;
-  font-weight: 600;
-}
-
-/* ---------- Energiavoog ---------- */
-.flow-layout {
-  display: grid;
-  gap: var(--s4);
-  grid-template-columns: minmax(0, 1fr);
-  align-items: center;
-}
-.flow-svg {
-  display: block;
-  width: 100%;
-  max-width: 400px;
-  height: auto;
-  margin: 0 auto;
-}
-.flow-track {
-  fill: none;
-  stroke: var(--border);
-  stroke-width: 2;
-}
-.flow-line {
-  fill: none;
-  stroke-width: 2;
-  stroke-opacity: 0.4;
-}
-.flow-dots {
-  fill: none;
-  stroke-width: 5;
-  stroke-linecap: round;
-  stroke-dasharray: 0.1 13;
-  animation: flow-move var(--flow-dur, 1.6s) linear infinite;
-}
-.flow-dots--rev { animation-direction: reverse; }
-@keyframes flow-move { to { stroke-dashoffset: -13.1; } }
-.flow-node__bg {
-  fill: var(--surface);
-  stroke: var(--border);
-  stroke-width: 3;
-}
-.flow-node__ring {
-  fill: none;
-  stroke-width: 3;
-  stroke-linecap: round;
-}
-.flow-node--idle .flow-node__ring,
-.flow-node--idle .flow-node__icon { opacity: 0.45; }
-.flow-node__icon {
-  fill: none;
-  stroke-width: 1.8;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-.flow-value {
-  font-size: 14px;
-  font-weight: 800;
-  fill: var(--text);
-}
-.flow-name {
-  font-size: 13px;
-  font-weight: 700;
-  fill: var(--text);
-}
-.flow-sub {
-  font-size: 12px;
-  font-weight: 500;
-  fill: var(--muted);
-}
-.flow-hub {
-  fill: var(--surface-2);
-  stroke: var(--border);
-  stroke-width: 2;
-}
-
-.flow-side { min-width: 0; }
-.flow-side__label {
-  margin: 0 0 var(--s2);
-  color: var(--muted);
-  font-size: 14px;
-  font-weight: 600;
-}
-.flow-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 6px;
-}
-.flow-list li {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 12px;
-  border-radius: var(--radius-sm);
-  background: var(--surface-2);
-  font-size: 15px;
-}
-.flow-list li span:last-child {
-  margin-left: auto;
-  font-weight: 700;
-  white-space: nowrap;
-}
-.line-key {
-  flex: none;
-  width: 18px;
-  height: 0;
-  border-top: 3px solid var(--key, var(--muted));
-  border-radius: 2px;
-}
-
-/* ---------- Statistikakastid (nagu index.html-is) ---------- */
-.stats {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--s2);
-  margin: var(--s3) 0 0;
-}
-.stat {
-  min-width: 0;
-  padding: var(--s2) 12px;
-  border-radius: var(--radius-sm);
-  background: var(--surface-2);
-}
-.stat__label {
-  margin: 0;
-  font-size: 13px;
-  color: var(--muted);
-}
-.stat__value {
-  margin: 2px 0 0;
-  font-size: 20px;
-  font-weight: 700;
-  line-height: 1.15;
-  font-variant-numeric: proportional-nums;
-}
-.stat__value--good { color: var(--cat-roheline-fg); }
-.stat__value--bad { color: var(--cat-punane-fg); }
-.stat__time {
-  margin: 2px 0 0;
-  font-size: 13px;
-  color: var(--muted);
-}
-
-/* ---------- Päike ja aku ---------- */
-.kpi-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--s2) var(--s3);
-}
-.big-number {
-  margin: 0;
-  font-size: 44px;
-  font-weight: 800;
-  line-height: 1;
-  letter-spacing: -0.02em;
-  font-variant-numeric: proportional-nums;
-}
-.big-number small {
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--muted);
-  letter-spacing: 0;
-}
-.kpi-caption {
-  margin: var(--s1) 0 0;
-  color: var(--muted);
-  font-size: 14px;
-}
-.meter {
-  height: 10px;
-  margin: var(--s3) 0 0;
-  border-radius: 999px;
-  background: var(--surface-2);
-  background: color-mix(in srgb, var(--meter, var(--solar)) 16%, var(--surface));
-  overflow: hidden;
-}
-.meter__fill {
-  height: 100%;
-  border-radius: 999px;
-  background: var(--meter, var(--solar));
-  transition: width 0.4s ease;
-}
-.meter-label {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--s2);
-  margin: 4px 0 0;
-  font-size: 13px;
-  color: var(--muted);
-}
-
-.battery-visual {
-  display: flex;
-  align-items: center;
-  gap: var(--s4);
-}
-.battery-visual svg {
-  flex: 0 1 200px;
-  min-width: 120px;
-  height: auto;
-}
-.battery-power {
-  margin: var(--s2) 0 0;
-  font-size: 17px;
-  font-weight: 700;
-}
-.battery-eta {
-  margin: 2px 0 0;
-  color: var(--muted);
-  font-size: 14px;
-}
-
-/* ---------- Hinnakaart (nagu index.html-i „Elekter praegu“) ---------- */
-.card--hero {
-  border-top: 6px solid var(--hero-accent, var(--border));
-}
-.card--hero[data-category="roheline"] { --hero-accent: var(--cat-roheline); --hero-bg: var(--cat-roheline-bg); --hero-fg: var(--cat-roheline-fg); }
-.card--hero[data-category="kollane"]  { --hero-accent: var(--cat-kollane);  --hero-bg: var(--cat-kollane-bg);  --hero-fg: var(--cat-kollane-fg); }
-.card--hero[data-category="oranz"]    { --hero-accent: var(--cat-oranz);    --hero-bg: var(--cat-oranz-bg);    --hero-fg: var(--cat-oranz-fg); }
-.card--hero[data-category="punane"]   { --hero-accent: var(--cat-punane);   --hero-bg: var(--cat-punane-bg);   --hero-fg: var(--cat-punane-fg); }
-
-.hero-top {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--s2);
-  margin: 0 0 var(--s3);
-}
-.verdict {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s2);
-  margin: 0;
-  padding: 5px 14px 5px 11px;
-  border-radius: 999px;
-  background: var(--hero-bg, var(--surface-2));
-  color: var(--hero-fg, var(--text));
-  font-size: 17px;
-  font-weight: 700;
-}
-.verdict::before {
-  content: "";
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--hero-accent, var(--muted));
-  flex: none;
-}
-.hero-period {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--muted);
-  background: var(--surface-2);
-  padding: 4px 10px;
-  border-radius: 999px;
-}
-.hero-price-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--s2) var(--s4);
-}
-.hero-price {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--s2);
-  margin: 0;
-}
-.hero-price__value {
-  font-size: 52px;
-  font-weight: 800;
-  line-height: 1;
-  letter-spacing: -0.03em;
-  font-variant-numeric: proportional-nums;
-}
-.hero-price__unit {
-  font-size: 19px;
-  font-weight: 600;
-  color: var(--muted);
-}
-.hero-final-pill {
-  display: inline-flex;
-  flex-direction: column;
-  padding: 6px 12px;
-  border-radius: var(--radius-sm);
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-}
-.hero-final-pill__label {
-  font-size: 12px;
-  color: var(--muted);
-  line-height: 1.2;
-}
-.hero-final-pill__value {
-  font-size: 18px;
-  font-weight: 700;
-  line-height: 1.25;
-}
-.hero-meta {
-  margin: var(--s2) 0 0;
-  color: var(--muted);
-  font-size: 14px;
-}
-.compare {
-  margin: var(--s2) 0 0;
-  font-size: 16px;
-  font-weight: 600;
-}
-.stats--price { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.stats--price .stat__value { font-size: 18px; }
-.upcoming-label {
-  margin: var(--s4) 0 var(--s2);
-  color: var(--muted);
-  font-size: 14px;
-  font-weight: 600;
-}
-.upcoming {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 5px;
-}
-.upcoming li {
-  display: grid;
-  grid-template-columns: 96px minmax(0, 1fr) 52px;
-  align-items: center;
-  gap: var(--s2);
-  font-size: 14px;
-}
-.upcoming li span:first-child { white-space: nowrap; }
-.upcoming li.is-now { font-weight: 700; }
-.upcoming__bar {
-  height: 8px;
-  border-radius: 999px;
-  background: var(--surface-2);
-  overflow: hidden;
-}
-.upcoming__fill {
-  height: 100%;
-  border-radius: 999px;
-  background: var(--fill, var(--muted));
-}
-.upcoming li span:last-child {
-  text-align: right;
-  font-weight: 700;
-}
-.facts {
-  list-style: none;
-  margin: var(--s3) 0 0;
-  padding: 0;
-  display: grid;
-  gap: var(--s2);
-}
-.facts li {
-  position: relative;
-  padding: 8px 10px 8px 24px;
-  background: var(--surface-2);
-  border-radius: var(--radius-sm);
-  font-size: 14px;
-  line-height: 1.35;
-}
-.facts li::before {
-  content: "";
-  position: absolute;
-  left: 10px;
-  top: 13px;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--hero-accent, var(--muted));
-}
-
-/* ---------- Tabid ---------- */
-.tabs {
-  display: inline-flex;
-  padding: 3px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--surface-2);
-}
-.tab {
-  appearance: none;
-  border: 0;
-  background: transparent;
-  color: var(--text);
-  font: inherit;
-  font-weight: 600;
-  min-height: 40px;
-  padding: 0 16px;
-  border-radius: 999px;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  transition: background-color 0.12s ease, color 0.12s ease;
-}
-.tab[aria-selected="true"] {
-  background: var(--text);
-  color: var(--surface);
-}
-.tab__badge {
-  font-size: 12px;
-  font-weight: 600;
-  opacity: 0.8;
-}
-.tab__dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--cat-roheline);
-  display: inline-block;
-}
-
-/* ---------- Päeva graafik ---------- */
-.chart-status-bar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--s1) var(--s3);
-  min-height: 26px;
-  margin: 0 0 var(--s2);
-}
-.chart-day {
-  margin: 0;
-  color: var(--muted);
-  font-size: 15px;
-}
-.chart-inspector {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text);
-  background: var(--surface-2);
-  padding: 2px 10px;
-  border-radius: 999px;
-}
-.chart-wrapper {
-  position: relative;
-  min-width: 0;
-}
-.chart-host { width: 100%; min-width: 0; }
-.chart-stack {
-  display: grid;
-  gap: 2px;
-  border-radius: var(--radius-sm);
-  touch-action: pan-y;
-  user-select: none;
-  -webkit-user-select: none;
-  cursor: crosshair;
-}
-.chart-stack svg {
-  display: block;
-  width: 100%;
-  height: auto;
-}
-.bar { transition: opacity 0.1s ease; }
-.bar--past { opacity: 0.38; }
-.bar--active { stroke: var(--text); stroke-width: 2; opacity: 1 !important; }
-.bar-current { animation: pulse 2.4s ease-in-out infinite; }
-@keyframes pulse {
-  0%, 100% { stroke-opacity: 1; }
-  50% { stroke-opacity: 0.3; }
-}
-.crosshair {
-  stroke: var(--text);
-  stroke-width: 1;
-  stroke-opacity: 0.55;
-  pointer-events: none;
-}
-.pv-area { fill: var(--solar); fill-opacity: 0.16; pointer-events: none; }
-.pv-line, .load-line {
-  fill: none;
-  stroke-width: 2;
-  stroke-linejoin: round;
-  stroke-linecap: round;
-  pointer-events: none;
-}
-.pv-line { stroke: var(--solar); }
-.load-line { stroke: var(--home); }
-.now-line { stroke: var(--muted); stroke-width: 1; pointer-events: none; }
-.axis-unit { font-size: 11px; font-weight: 600; fill: var(--muted); }
-
-.tooltip {
-  position: absolute;
-  z-index: 2;
-  max-width: 260px;
-  padding: 8px 10px;
-  border-radius: var(--radius-sm);
-  background: var(--text);
-  color: var(--surface);
-  font-size: 14px;
-  line-height: 1.35;
-  pointer-events: none;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
-}
-.tooltip strong,
-.tooltip > span {
-  display: block;
-}
-.tooltip strong { font-size: 15px; }
-.tooltip__price {
-  font-size: 17px;
-  font-weight: 700;
-}
-.tooltip__row {
-  display: flex !important;
-  align-items: center;
-  gap: 8px;
-}
-.tooltip__row b { font-weight: 700; }
-.tooltip__sep {
-  margin-top: 3px;
-  padding-top: 3px;
-  border-top: 1px solid rgba(128, 128, 128, 0.35);
-}
-
-.legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s1) var(--s3);
-  margin: var(--s2) 0 0;
-  font-size: 13px;
-  color: var(--muted);
-}
-.legend__item {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-.legend__swatch {
-  flex: none;
-  width: 12px;
-  height: 12px;
-  border-radius: 3px;
-  background: var(--swatch, var(--muted));
-}
-.legend__swatch--line {
-  width: 18px;
-  height: 0;
-  border-radius: 0;
-  background: none;
-  border-top: 2px dashed var(--avg-line);
-}
-.legend__swatch--current {
-  background: none;
-  border: 2px solid var(--text);
-}
-.legend__swatch--area {
-  background: color-mix(in srgb, var(--solar) 22%, var(--surface));
-  border-top: 2px solid var(--solar);
-  border-radius: 2px;
-}
-
-.table-view {
-  margin: var(--s3) 0 0;
-  border-top: 1px solid var(--border);
-  padding-top: var(--s1);
-}
-.table-view summary {
-  list-style: none;
-  cursor: pointer;
-  padding: 10px 0;
-  font-weight: 600;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s2);
-  min-height: 44px;
-}
-.table-view summary::-webkit-details-marker { display: none; }
-.table-view summary::after {
-  content: "";
-  width: 7px;
-  height: 7px;
-  border-right: 2px solid var(--muted);
-  border-bottom: 2px solid var(--muted);
-  transform: rotate(45deg);
-  transition: transform 0.15s ease;
-  margin-top: -2px;
-}
-.table-view[open] summary::after { transform: rotate(-135deg); margin-top: 3px; }
-.table-scroll {
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-}
-.data-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 14px;
-  white-space: nowrap;
-}
-.data-table th,
-.data-table td {
-  padding: 6px 10px 6px 0;
-  border-bottom: 1px solid var(--border);
-  text-align: right;
-  font-weight: 400;
-}
-.data-table th { color: var(--muted); font-size: 13px; font-weight: 600; }
-.data-table th:first-child,
-.data-table td:first-child { text-align: left; }
-.data-table tr.is-now td { font-weight: 700; }
-
-/* ---------- Otseühenduse dialoog ---------- */
-.dialog {
-  width: min(560px, calc(100vw - 24px));
-  max-height: calc(100vh - 24px);
-  padding: 0;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-  color: var(--text);
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.28);
-}
-.dialog::backdrop { background: rgba(15, 22, 32, 0.55); }
-.dialog__body { padding: var(--s5) var(--s4); }
-.dialog__title { margin: 0 0 var(--s2); font-size: 19px; font-weight: 800; }
-.dialog__text { margin: 0 0 var(--s2); font-size: 14px; color: var(--muted); }
-.form-grid {
-  display: grid;
-  gap: var(--s3);
-  grid-template-columns: minmax(0, 1fr);
-  margin: var(--s3) 0 0;
-}
-.field { min-width: 0; }
-.field label {
-  display: block;
-  margin: 0 0 4px;
-  font-size: 14px;
-  font-weight: 600;
-}
-.field input {
-  width: 100%;
-  min-height: 44px;
-  padding: 0 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface-2);
-  color: var(--text);
-  font: inherit;
-}
-.field__hint {
-  margin: 4px 0 0;
-  font-size: 12px;
-  color: var(--muted);
-}
-.dialog__actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: var(--s2);
-  margin: var(--s4) 0 0;
-}
-.dialog__actions .btn--danger { margin-right: auto; }
-
-/* ---------- Jalus ---------- */
-.app-footer {
-  margin: var(--s5) 0 var(--s3);
-  color: var(--muted);
-  font-size: 14px;
-}
-.app-footer p { margin: 0 0 var(--s2); }
-.app-footer__meta {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  align-items: center;
-  gap: 0 var(--s4);
-}
-
-/* ---------- Üldised abiklassid ---------- */
-.nowrap { white-space: nowrap; }
-.visually-hidden {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  margin: -1px;
-  padding: 0;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
-  border: 0;
-}
-:focus-visible {
-  outline: 3px solid var(--focus);
-  outline-offset: 2px;
-}
-
-@media (hover: hover) {
-  .tab:not([aria-selected="true"]):hover { background: var(--surface); }
-  .btn--ghost:not([disabled]):hover { border-color: var(--muted); }
-  .table-view summary:hover { color: var(--focus); }
-}
-
-/* ---------- Laiem ekraan (tahvel) ---------- */
-@media (min-width: 768px) {
-  .app { padding: var(--s5); }
-  .layout {
-    gap: var(--s4);
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-template-areas:
-      "advice advice"
-      "flow price"
-      "solar battery"
-      "chart chart";
-  }
-  #section-advice { grid-area: advice; }
-  #section-flow { grid-area: flow; }
-  #section-price { grid-area: price; }
-  #section-solar { grid-area: solar; }
-  #section-battery { grid-area: battery; }
-  #section-chart { grid-area: chart; }
-  .card {
-    padding: var(--s5);
-    display: flex;
-    flex-direction: column;
-  }
-  .card--advice { padding-top: var(--s4); padding-bottom: var(--s4); }
-  .card__body {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-  }
-  #section-solar .stats,
-  #section-battery .stats,
-  #price-body .facts { margin-top: auto; padding-top: var(--s3); }
-  .hero-price__value { font-size: 60px; }
-  .big-number { font-size: 48px; }
-  .stat__value { font-size: 22px; }
-  .dialog__body { padding: var(--s5); }
-  .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .field--wide { grid-column: 1 / -1; }
-}
-
-/* ---------- Laiem ekraan (desktop) ---------- */
-@media (min-width: 1024px) {
-  .app {
-    max-width: 1180px;
-    padding: var(--s5) var(--s6);
-  }
-  .app-title { font-size: 22px; }
-  .layout {
-    gap: 20px;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    grid-template-areas:
-      "advice advice advice"
-      "flow flow price"
-      "solar battery price"
-      "chart chart chart";
-  }
-  .card__title { font-size: 18px; }
-  .flow-layout { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); }
-  .advice-title { font-size: 21px; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .bar-current, .skeleton, .btn.is-loading .btn__icon { animation: none; }
-  .flow-dots { animation: none; stroke-dasharray: none; stroke-width: 2; stroke-opacity: 0.9; }
-}
-</style>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="css/common.css?v=20261020">
+<link rel="stylesheet" href="css/energy-dashboard.css?v=20261020">
 </head>
 <body>
 <div class="app">
   <header class="app-header">
     <h1 id="app-title" class="app-title">Kauge 32 energia</h1>
-    <div class="header-actions">
+    <nav class="site-nav" aria-label="Lehed">
+      <a class="site-nav__link" href="index.html">Elektriinfo</a>
+      <a class="site-nav__link" href="energy-dashboard.html" aria-current="page">Energia</a>
+    </nav>
+    <div class="header-actions app-header__end">
       <p id="status" class="status" role="status" aria-live="polite"></p>
       <button type="button" class="btn btn--ghost" id="refresh-button">
         <svg class="btn__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11.5A8 8 0 1 0 17.7 17"/><path d="M20 5v6.5h-6.5"/></svg>
         <span id="refresh-label">Värskenda</span>
+        <span id="refresh-count" class="btn__count" aria-hidden="true" hidden></span>
       </button>
     </div>
   </header>
@@ -1209,7 +39,7 @@ body {
 
   <div id="banner" class="banner" role="alert" hidden>
     <p id="banner-message" class="banner__text"></p>
-    <button type="button" class="btn" id="retry-button">Proovi uuesti</button>
+    <button type="button" class="btn" id="retry-button">Proovi uuesti<span id="retry-count" class="btn__count" aria-hidden="true" hidden></span></button>
   </div>
 
   <main class="layout" id="layout">
@@ -1295,8 +125,8 @@ body {
           <div id="chart-tooltip" class="tooltip" role="tooltip" hidden></div>
         </div>
         <p id="chart-notice" class="notice" hidden></p>
-        <div id="chart-legend" class="legend" aria-label="Graafiku selgitus"></div>
-        <div id="chart-stats" class="stats stats--price" role="group" aria-label="Valitud päeva madalaim, keskmine ja kõrgeim hind"></div>
+        <div id="chart-legend" class="legend" role="group" aria-label="Graafiku selgitus"></div>
+        <div id="chart-stats" class="stats stats--price" role="group" aria-label="Valitud päeva madalaim, keskmine ja kõrgeim börsihind, s/kWh"></div>
         <details class="table-view" id="chart-table">
           <summary>Tabelivaade (tunni kaupa)</summary>
           <div class="table-scroll" id="chart-table-body"></div>
@@ -1310,7 +140,7 @@ body {
     <p><strong>Andmeallikad:</strong> päikesepark ja akupank — Solarman OpenAPI; börsihind — Elering Live (Nord Pooli Eesti hinnapiirkond), sama andmefail, mida kasutab elektriinfo leht. Lõpphind ja soovitused on hinnangulised; tegelik arve sõltub elektri- ja võrgulepingust.</p>
     <div class="app-footer__meta">
       <p id="footer-sources">Andmeid pole veel laaditud</p>
-      <p><button type="button" class="link-btn" id="direct-open">Solarmani otseühendus</button> · <a href="index.html">Elektriinfo</a> · <span id="footer-version"></span></p>
+      <p><button type="button" class="link-btn" id="direct-open">Solarmani otseühendus</button> · <span id="footer-version"></span></p>
     </div>
   </footer>
 </div>
@@ -1319,7 +149,8 @@ body {
   <form class="dialog__body" id="direct-form" method="dialog" novalidate>
     <h2 id="direct-title" class="dialog__title">Solarmani otseühendus</h2>
     <p class="dialog__text">Vaikimisi loeb leht päikeseandmeid failist <strong>paike.json</strong>, mille GitHub Actions täidab GitHub Secretsis hoitud võtmetega — see on soovitatud ja turvaline viis.</p>
-    <p class="dialog__text">Otseühendus pärib andmed brauserist otse Solarmani API-st (värskem, ~5 min). Võtmed salvestatakse ainult selle seadme brauserisse (localStorage), parool ainult SHA-256 räsina. Kasuta seda ainult isiklikus seadmes. Solarmani API ei luba enamasti brauserist otse pärida (CORS), seega on tavaliselt vaja oma CORS-proksit.</p>
+    <p class="dialog__text">Otseühendus pärib andmed brauserist otse Solarmani API-st (värskem, ~5 min). Solarmani API ei luba enamasti brauserist otse pärida (CORS), seega on tavaliselt vaja oma CORS-proksit — proksi näeb App Secretit ja parooli räsi, kasuta ainult enda hallatavat.</p>
+    <p class="dialog__text dialog__text--warn">Võtmed jäävad ainult sellesse brauserisse. Parool salvestatakse SHA-256 räsina, kuid Solarmani jaoks on räsi parooliga samaväärne. Kõik sama GitHub Pagesi konto lehed (*.github.io) jagavad brauseri salvestusruumi, seega kasuta otseühendust ainult isiklikus seadmes.</p>
     <div class="form-grid">
       <div class="field">
         <label for="f-app-id">App ID</label>
@@ -1346,6 +177,10 @@ body {
         <label for="f-proxy">CORS-proksi (valikuline)</label>
         <input id="f-proxy" name="proxy" type="url" autocomplete="off" spellcheck="false" placeholder="https://minu-proksi.example/?url=">
         <p class="field__hint">API aadress lisatakse lõppu URL-kodeeritult.</p>
+      </div>
+      <div class="field field--wide field--check">
+        <label for="f-remember"><input id="f-remember" name="remember" type="checkbox"> Jäta meelde selles seadmes</label>
+        <p class="field__hint">Märkimata kustuvad võtmed vahelehe sulgemisel (sessionStorage); märgituna jäävad alles (localStorage), kuni vajutad „Eemalda otseühendus“.</p>
       </div>
     </div>
     <p id="direct-error" class="notice notice--error" role="alert" hidden></p>
@@ -1476,12 +311,13 @@ const CONFIG = {
 };
 
 /* Tehnilised konstandid — neid ei ole tavakasutuses vaja muuta. */
-const APP_VERSION = '1.0.1';
+const APP_VERSION = '1.1.1';
 const TIME_ZONE = 'Europe/Tallinn';
 const API_URL = 'https://dashboard.elering.ee/api/nps/price';
 const PRICE_TIMEOUT_MS = 20000;
 const SOLAR_TIMEOUT_MS = 30000;
 const TARIFF_TIMEOUT_MS = 5000;
+const REFRESH_COOLDOWN_MS = 30 * 1000; // käsitsi värskendamise vähim vahe (kaitseb ka Solarmani API päringupiirangut)
 const MAX_PERIOD_MINUTES = 60;
 const FRAME_SECONDS = 900;        // päikeseandmed koondatakse 15-min perioodideks (nagu hinnad)
 const FLOW_MIN_KW = 0.05;         // väiksem võimsus loetakse nulliks
@@ -1530,8 +366,11 @@ const state = {
   },
   loading: false,
   lastRefresh: null,
+  lastRefreshStartedAt: 0, // viimase värskenduse algus (ms), ooteaja arvutamiseks
+  pendingRefresh: false,   // seadete muutmise ajal käis värskendus: tee pärast seda kohe uus
   nextRefreshAt: null,
   refreshTimer: null,
+  cooldownTimer: null,
   selectedDay: 'today',   // 'today' | 'tomorrow'
   derived: null,
   chartKey: '',
@@ -2002,22 +841,53 @@ function compareToDayAverage(price, avg) {
 /* ==========================================================================
    7. Solarman — andmefail (GitHub Actions) või otseühendus (Solarman OpenAPI)
    ========================================================================== */
+/**
+ * Otseühenduse andmed (võtmed, token, jaam) on kõik samas kohas: localStorage-is, kui kasutaja
+ * valis „Jäta meelde selles seadmes“, muidu sessionStorage-is (kustub vahelehe sulgemisel).
+ */
+function storageArea(persist) {
+  try {
+    return persist ? window.localStorage : window.sessionStorage;
+  } catch (error) {
+    return null; // nt keelatud saidiandmete korral viskab juba omaduse lugemine vea
+  }
+}
+/** Ala, kus on salvestatud otseühenduse võtmed; null, kui otseühendust pole seadistatud. */
+function directStorage() {
+  for (const persist of [false, true]) {
+    const area = storageArea(persist);
+    try {
+      if (area && area.getItem(STORAGE.credentials)) return area;
+    } catch (error) { /* salvestusruum pole kasutatav */ }
+  }
+  return null;
+}
 function readStore(key) {
   try {
-    const raw = localStorage.getItem(key);
+    const raw = directStorage()?.getItem(key);
     return raw ? JSON.parse(raw) : null;
   } catch (error) {
     return null;
   }
 }
-function writeStore(key, value) {
+function writeStore(key, value, area = directStorage()) {
+  if (!area) return false;
   try {
-    if (value == null) localStorage.removeItem(key);
-    else localStorage.setItem(key, JSON.stringify(value));
+    if (value == null) area.removeItem(key);
+    else area.setItem(key, JSON.stringify(value));
     return true;
   } catch (error) {
-    console.error('localStorage pole kasutatav:', error);
+    console.error('Brauseri salvestusruum pole kasutatav:', error);
     return false;
+  }
+}
+/** Kustutab otseühenduse andmed (vaikimisi mõlemast salvestusalast). */
+function clearDirectStorage(areas = [false, true]) {
+  for (const persist of areas) {
+    const area = storageArea(persist);
+    for (const key of Object.values(STORAGE)) {
+      try { area?.removeItem(key); } catch (error) { /* salvestusruum pole kasutatav */ }
+    }
   }
 }
 
@@ -2084,7 +954,7 @@ async function solarmanPost(path, body, { token = null, query = { language: 'en'
   return json;
 }
 
-/** Bearer token: localStorage-ist (koos aegumisajaga) või uus päring. */
+/** Bearer token: brauseri salvestusruumist (koos aegumisajaga) või uus päring. */
 async function getSolarmanToken(cred, signal, force = false) {
   const fp = credentialFingerprint(cred);
   const cached = readStore(STORAGE.token);
@@ -2698,20 +1568,44 @@ function solarUnavailable(host, text, short = false) {
 /* ==========================================================================
    10. Renderdamine
    ========================================================================== */
-function renderStatus() {
-  const status = byId('status');
+function refreshCooldownLeftMs() {
+  return Math.max(0, state.lastRefreshStartedAt + REFRESH_COOLDOWN_MS - Date.now());
+}
+
+/**
+ * „Värskenda“ ja „Proovi uuesti“ on laadimise ajal ning REFRESH_COOLDOWN_MS jooksul pärast iga
+ * värskendust keelatud (liiga tihe vajutamine ei koorma Solarmani API-t ega GitHub Pagesi).
+ * Loendur on aria-hidden, et ekraanilugeja ei loeks nuppu iga sekund uuesti ette.
+ */
+function renderRefreshControls() {
+  const left = state.loading ? 0 : refreshCooldownLeftMs();
+  const seconds = Math.ceil(left / 1000);
   const button = byId('refresh-button');
-  const anyLoaded = state.prices.loaded || state.solar.loaded;
-  button.disabled = state.loading;
+  const retry = byId('retry-button');
+  button.disabled = retry.disabled = state.loading || left > 0;
   button.classList.toggle('is-loading', state.loading);
   button.setAttribute('aria-busy', state.loading ? 'true' : 'false');
   byId('refresh-label').textContent = state.loading ? 'Uuendan…' : 'Värskenda';
+  for (const id of ['refresh-count', 'retry-count']) {
+    const count = byId(id);
+    count.hidden = left === 0;
+    count.textContent = left > 0 ? `(${seconds} s)` : '';
+  }
+  clearTimeout(state.cooldownTimer);
+  if (left > 0) state.cooldownTimer = setTimeout(renderRefreshControls, left - (seconds - 1) * 1000);
+}
+
+function renderStatus() {
+  const status = byId('status');
+  const anyLoaded = state.prices.loaded || state.solar.loaded;
+  renderRefreshControls();
   byId('layout').classList.toggle('is-refreshing', state.loading && anyLoaded);
 
   if (state.loading) status.textContent = anyLoaded ? 'Uuendan andmeid…' : 'Andmete laadimine…';
   else if (state.lastRefresh) {
-    const next = state.nextRefreshAt ? ` · järgmine ${formatTime(new Date(state.nextRefreshAt))}` : '';
-    status.textContent = `Uuendatud ${formatTime(state.lastRefresh)}${next}`;
+    // „järgmine HH:MM“ peidetakse kitsal ekraanil, et olek ja nupp mahuksid ühele reale
+    const next = state.nextRefreshAt ? el('span', { class: 'status__next', text: ` · järgmine ${formatTime(new Date(state.nextRefreshAt))}` }) : null;
+    setChildren(status, `Uuendatud ${formatTime(state.lastRefresh)}`, next);
   } else status.textContent = '';
 
   // Teated: punane, kui ühtegi andmeallikat pole; kollane, kui midagi on aegunud või ebaõnnestus.
@@ -3117,7 +2011,7 @@ function buildUpcomingHours(d, count = 8) {
       el('span', { text: r.isNow ? 'praegu' : describeTime(r.start, d.now) }),
       el('span', { class: 'upcoming__bar', 'aria-hidden': 'true' }, el('span', {
         class: 'upcoming__fill',
-        style: `display:block;width:${(clamp(r.avg / max, 0, 1) * 100).toFixed(1)}%;--fill:var(--cat-${getPriceCategory(r.avg)})`
+        style: `width:${(clamp(r.avg / max, 0, 1) * 100).toFixed(1)}%;--fill:var(--cat-${getPriceCategory(r.avg)})`
       })),
       el('span', { text: numberFormat.d2.format(r.avg) })
     ])))
@@ -3163,10 +2057,10 @@ function renderPrice(d) {
     ]),
     el('p', { class: 'hero-meta', text: `Börsihind koos ${numberFormat.pct.format(TARIFFS.hinnad.kaibemaks)}% käibemaksuga` }),
     d.todayAvg != null ? el('p', { class: 'compare', text: compareToDayAverage(price, d.todayAvg) }) : null,
-    min ? el('div', { class: 'stats stats--price' }, [
-      statTile('Madalaim', numberFormat.d2.format(min.spotIncVatCentsKwh), `${formatTime(min.start)} · s/kWh`, 'stat__value--good'),
-      statTile('Keskmine', numberFormat.d2.format(d.todayAvg), 'täna · s/kWh'),
-      statTile('Kõrgeim', numberFormat.d2.format(max.spotIncVatCentsKwh), `${formatTime(max.start)} · s/kWh`)
+    min ? el('div', { class: 'stats stats--price', role: 'group', 'aria-label': 'Tänased hinnad, s/kWh' }, [
+      statTile('Madalaim', numberFormat.d2.format(min.spotIncVatCentsKwh), `kell ${formatTime(min.start)}`, 'stat__value--good'),
+      statTile('Keskmine', numberFormat.d2.format(d.todayAvg), 'täna'),
+      statTile('Kõrgeim', numberFormat.d2.format(max.spotIncVatCentsKwh), `kell ${formatTime(max.start)}`)
     ]) : null,
     ...(buildUpcomingHours(d) || []),
     el('ul', { class: 'facts' }, facts.filter(Boolean).map(text => el('li', { text })))
@@ -3294,6 +2188,7 @@ function buildDayChart({ slots, dayStart, dayEnd, width, nowMs, isToday, current
       const isCurrent = currentTs != null && p.timestamp === currentTs;
       const isPast = isToday && !isCurrent && p.end.getTime() <= nowMs;
       item.top = top;
+      item.bottom = Math.max(y(p.spotIncVatCentsKwh), zeroY);
       item.isCurrent = isCurrent;
       item.rect = svgEl('rect', {
         class: isPast ? 'bar bar--past' : 'bar',
@@ -3303,19 +2198,23 @@ function buildDayChart({ slots, dayStart, dayEnd, width, nowMs, isToday, current
       svg.append(item.rect);
     }
     if (prices.some(v => v < 0)) svg.append(svgEl('line', { x1: padL, x2: width - padR, y1: zeroY, y2: zeroY, stroke: 'var(--text)', 'stroke-width': 1.5 }));
+    // Keskmise silt praegusest perioodist eemal, et see ei kataks kontuuri
+    const currentItem = items.find(i => i.isCurrent);
     if (avg != null) {
       const ay = y(avg);
+      const labelLeft = currentItem != null && currentItem.slotX > padL + plotW * 0.55;
       svg.append(svgEl('line', { x1: padL, x2: width - padR, y1: ay, y2: ay, stroke: 'var(--avg-line)', 'stroke-width': 1.5, 'stroke-dasharray': '5 4' }));
       svg.append(svgEl('text', {
-        x: width - padR - 4, y: ay > padT + 18 ? ay - 6 : ay + 14, 'text-anchor': 'end', 'font-size': 11, 'font-weight': 700,
+        x: labelLeft ? padL + 4 : width - padR - 4, y: ay > padT + 18 ? ay - 6 : ay + 14, 'text-anchor': labelLeft ? 'start' : 'end',
+        'font-size': 11, 'font-weight': 700,
         fill: 'var(--text)', stroke: 'var(--surface)', 'stroke-width': 4, 'paint-order': 'stroke', text: `keskmine ${numberFormat.d2.format(avg)}`
       }));
     }
-    const currentItem = items.find(i => i.isCurrent);
+    // Praeguse perioodi kontuur ümbritseb ka negatiivse hinna tulpa (nulljoonest allapoole)
     if (currentItem) {
       svg.append(svgEl('rect', {
         class: 'bar-current', x: currentItem.slotX, y: currentItem.top - 2, width: Math.max(2, currentItem.slotW),
-        height: Math.max(3, zeroY - currentItem.top + 4), fill: 'none', stroke: 'var(--text)', 'stroke-width': 2, rx: 2
+        height: Math.max(3, currentItem.bottom - currentItem.top + 4), fill: 'none', stroke: 'var(--text)', 'stroke-width': 2, rx: 2
       }));
     }
     svg.append(svgEl('line', { x1: padL, x2: width - padR, y1: height - padB, y2: height - padB, stroke: 'var(--border)', 'stroke-width': 1 }));
@@ -3448,9 +2347,9 @@ function renderChartStats(d, isToday) {
   const { min, max } = getMinMax(periods);
   const avg = calculateWeightedAverage(periods);
   host.replaceChildren(
-    statTile('Madalaim', numberFormat.d2.format(min.spotIncVatCentsKwh), `${formatTime(min.start)} · s/kWh`, 'stat__value--good'),
-    statTile('Keskmine', numberFormat.d2.format(avg), 's/kWh'),
-    statTile('Kõrgeim', numberFormat.d2.format(max.spotIncVatCentsKwh), `${formatTime(max.start)} · s/kWh`)
+    statTile('Madalaim', numberFormat.d2.format(min.spotIncVatCentsKwh), `kell ${formatTime(min.start)}`, 'stat__value--good'),
+    statTile('Keskmine', numberFormat.d2.format(avg), isToday ? 'täna' : 'homme'),
+    statTile('Kõrgeim', numberFormat.d2.format(max.spotIncVatCentsKwh), `kell ${formatTime(max.start)}`)
   );
 }
 
@@ -3645,6 +2544,7 @@ function refreshIntervalMs() {
 async function refreshAll() {
   if (state.loading) return;
   state.loading = true;
+  state.lastRefreshStartedAt = Date.now();
   renderStatus();
   const priceController = new AbortController();
   const solarController = new AbortController();
@@ -3665,15 +2565,28 @@ function scheduleNextRefresh() {
   clearTimeout(state.refreshTimer);
   const delay = refreshIntervalMs();
   state.nextRefreshAt = Date.now() + delay;
-  state.refreshTimer = setTimeout(async () => {
-    if (document.visibilityState === 'visible') await refreshAll();
-    scheduleNextRefresh();
+  state.refreshTimer = setTimeout(() => {
+    if (document.visibilityState === 'visible') refreshNow({ force: true });
+    else scheduleNextRefresh();
   }, delay);
   renderStatus();
 }
 
-async function refreshNow() {
-  await refreshAll();
+/**
+ * Värskendab kohe ja ajastab järgmise automaatse värskenduse. Ilma force'ita (nupud) ei tehta midagi,
+ * kui eelmisest värskendusest on möödas vähem kui REFRESH_COOLDOWN_MS. force (ajastus, seadete
+ * muutmine) jätab ooteaja vahele; kui värskendus juba käib, tehakse pärast seda kohe uus.
+ */
+async function refreshNow({ force = false } = {}) {
+  if (state.loading) {
+    if (force) state.pendingRefresh = true;
+    return;
+  }
+  if (!force && refreshCooldownLeftMs() > 0) return;
+  do {
+    state.pendingRefresh = false;
+    await refreshAll();
+  } while (state.pendingRefresh);
   scheduleNextRefresh();
 }
 
@@ -3703,6 +2616,7 @@ function setupDirectDialog() {
     byId('f-password').placeholder = cred ? 'salvestatud räsina (tühi = jääb samaks)' : '';
     byId('f-station').value = cred ? cred.stationId : '';
     byId('f-proxy').value = cred ? cred.proxy : String(CONFIG.solarman.proksi || '');
+    byId('f-remember').checked = Boolean(cred) && directStorage() === storageArea(true);
     byId('direct-remove').hidden = !cred;
     showError('');
   };
@@ -3713,11 +2627,9 @@ function setupDirectDialog() {
   });
   byId('direct-cancel').addEventListener('click', () => dialog.close());
   byId('direct-remove').addEventListener('click', () => {
-    writeStore(STORAGE.credentials, null);
-    writeStore(STORAGE.token, null);
-    writeStore(STORAGE.station, null);
+    clearDirectStorage();
     dialog.close();
-    refreshNow();
+    refreshNow({ force: true });
   });
   byId('direct-form').addEventListener('submit', async event => {
     event.preventDefault();
@@ -3730,7 +2642,11 @@ function setupDirectDialog() {
     const proxy = byId('f-proxy').value.trim();
     if (!appId || !appSecret || !email) { showError('Täida App ID, App Secret ja e-post.'); return; }
     if (stationId && !/^[\w-]+$/.test(stationId)) { showError('Jaama ID võib sisaldada ainult numbreid ja tähti.'); return; }
-    if (proxy && !/^https:\/\//i.test(proxy) && !/^http:\/\/localhost/i.test(proxy)) { showError('CORS-proksi aadress peab algama https://-ga.'); return; }
+    // Krüpteerimata ühendus on lubatud ainult samas arvutis töötavale proksile (mitte nt http://localhost.evil.example)
+    if (proxy && !/^https:\/\//i.test(proxy) && !/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?([/?#]|$)/i.test(proxy)) {
+      showError('CORS-proksi aadress peab algama https://-ga (erand: http://localhost).');
+      return;
+    }
     let passwordHash = existing && existing.email === email && existing.appId === appId ? existing.passwordHash : '';
     try {
       if (passwordInput) passwordHash = await toPasswordHash(passwordInput);
@@ -3739,14 +2655,17 @@ function setupDirectDialog() {
       return;
     }
     if (!passwordHash) { showError('Sisesta parool või selle SHA-256 räsi.'); return; }
-    const saved = writeStore(STORAGE.credentials, { appId, appSecret, email, passwordHash, stationId, proxy });
-    if (!saved) { showError('Brauser ei luba seadeid salvestada (localStorage on keelatud).'); return; }
-    writeStore(STORAGE.token, null);
-    writeStore(STORAGE.station, null);
+    const persist = byId('f-remember').checked;
+    const area = storageArea(persist);
+    const saved = writeStore(STORAGE.credentials, { appId, appSecret, email, passwordHash, stationId, proxy }, area);
+    if (!saved) { showError('Brauser ei luba seadeid salvestada (saidiandmete salvestamine on keelatud).'); return; }
+    clearDirectStorage([!persist]);       // võtmed ainult ühes kohas
+    writeStore(STORAGE.token, null, area); // uued võtmed => uus token ja jaam
+    writeStore(STORAGE.station, null, area);
     byId('f-password').value = '';
     byId('f-app-secret').value = '';
     dialog.close();
-    refreshNow();
+    refreshNow({ force: true });
   });
 }
 
@@ -3815,7 +2734,7 @@ async function init() {
   renderStatus();
   await loadTariffs();
   state.loading = false;
-  await refreshNow();
+  await refreshNow({ force: true });
   startMinuteTick();
 }
 

@@ -4,13 +4,68 @@ See fail kirjeldab rakenduse `index.html` versioonimuudatusi, arhitektuurilisi k
 
 ---
 
-## energy-dashboard.html [1.0.1] — 2026-10-20
+## energy-dashboard.html [1.1.1] — 2026-10-20
 
 ### Parandus: võrgu ja aku suund päris Solarmani andmetega
 - Esimene päris `paike.json` näitas, et Solarmani jaam annab suuna eraldi väljadena: `purchasePower` = ost, `gridPower` = müük, `chargePower` / `dischargePower` = aku; `wirePower` ja `batteryPower` on märgita suurused.
 - `parseRawSample` kasutab nüüd neid suunaga välju otse. Energiabilansist tuvastatakse märk ainult siis, kui jaam neid välju ei anna, või käsitsi seadistusega (`CONFIG.solarman.akuMark` / `vorguMark`).
 - Enne parandust võis leht samas failis olevate müügi- ja ostuperioodide korral (nt päikeseline keskpäev + õhtune ost) näidata praegust ostu müügina, ja ostu-müügi segaperioodi neto ostu valesti (0,02 kW 2,44 kW asemel).
-- Hinnakaardi „Järgmised tunnid“ ajaveerg on laiem ega murdu („homme 00:00“ püsib ühel real).
+
+---
+
+## [2.4.0] ja energy-dashboard.html [1.1.0] — 2026-10-20
+
+### Ülevaade
+Koodi-, kujunduse- ja turvaülevaate tulemused: ühine CSS, lehtedevaheline navigatsioon, värskendusnuppude sagedusepiirang, graafikute ja tekstide parandused ning turvatäiendused. `APP_VERSION` on `index.html`-is `2.4.0` ja `energy-dashboard.html`-is `1.1.0`.
+
+### 1. Kujundus eraldi CSS-failides
+- `css/common.css` — ühised tokenid (hele/tume teema), päis, navigatsioon, kaardid, teated, nupud, hinnakaart, tabid, graafiku üldosad, tooltip, legend, statistikakastid, jalus.
+- `css/index.css` ja `css/energy-dashboard.css` — lehepõhised reeglid (paigutus, planeerija, lõpphind, maja üldelekter / energiavoog, aku, dialoog jne).
+- Varem mõlemas failis dubleeritud kujundus (~700 rida) on ühes kohas; erinevused ühtlustati (`.card__head`, `.stats`, `.btn`, `.badge-pill`, `.tooltip > span`, jalus). Eemaldati kasutamata klassid `.building-bar` ja `.kpi-row` ning inline-stiilid asendati klassidega (`.shares-label`, `.building-legend`).
+- Lingid on kujul `css/common.css?v=20261020`: GitHub Pages hoiab faile vahemälus 10 min, seega **CSS-i muutmisel suurenda `?v=` väärtust mõlemas HTML-failis**.
+
+### 2. Navigatsioon lehtede vahel
+- Mõlema lehe päises on `nav.site-nav` lingid **Elektriinfo** (`index.html`) ja **Energia** (`energy-dashboard.html`); aktiivne leht on märgitud `aria-current="page"`. Energialehe jaluse eraldi link eemaldati.
+
+### 3. Värskendamise sagedusepiirang
+- **Energia „Värskenda“ ja „Proovi uuesti“:** pärast iga värskendust (ka automaatset) on nupud `REFRESH_COOLDOWN_MS` (30 s) keelatud; nupul on loendur `(28 s)` (`aria-hidden`, et ekraanilugeja seda iga sekund ette ei loeks). Kiire mitmekordne klõpsamine teeb ühe päringu. Kaitseb Solarmani API päringupiirangut otseühenduse korral.
+- `refreshNow({ force })`: automaatne ajastus ja otseühenduse seadete muutmine jätavad ooteaja vahele; kui värskendus juba käib, tehakse pärast seda kohe uus (`state.pendingRefresh`) — varem jäid käimasoleva värskenduse ajal salvestatud seaded kuni 5 min rakendamata.
+- **Elektriinfo „Proovi uuesti“:** `RETRY_COOLDOWN_MS` (15 s) sama loenduriga.
+
+### 4. Graafikud
+- **Hinnagraafik (`index.html`):** tarbimisjoonel on nüüd oma parempoolne **kWh-telg** (varem polnud skaalat ja joon paistis hinnaskaalal); telgede ühikud `s/kWh` / `kWh`; tarbimisjoone all on hele „halo“, mis eraldab selle värvilistest tulpadest.
+- **Praeguse perioodi kontuur** ümbritseb ka negatiivse hinna tulpa (varem 4 px kõrgune kast nulljoonel) — mõlemal lehel.
+- **„keskmine X“ silt** paigutatakse praegusest perioodist eemale (varem kattis õhtuti kontuuri) — mõlemal lehel.
+- **Legend** näitab ainult graafikul olevaid elemente: „praegune periood“ ainult täna, „valitud odavaim aken“ ainult siis, kui aken jääb valitud päeva.
+- **Maja üldelekter:** valitud tulba number ei lõigu enam paremas servas ära (joondatakse sissepoole, halo taustaga); kitsal ekraanil olid juuni ja juuli mõlemad „Juu“ → „Jun“ / „Jul“; telje- ja aastasildid 10 → 11 px.
+
+### 5. Tekstid, paigutus ja värvid
+- Parandatud: „Oktoober 2026 2026“ (aasta kahekordselt), päeva kokkuvõtte puuduv **„Aasta varem“** kast (viitas olematule väljale `previousOfLatest`); pooliku kuu korral võrreldakse sama kuupäevani aasta varem.
+- „12 k: …“ → „12 kuud: …“, „12 k keskmine“ → „12 kuu keskmine“, „puuduta tulpa“ → „vali tulp“, „Taastuvenergia+Varustuskindluse tasu“ → „Taastuvenergia- ja varustuskindluse tasu“; jaluses on andmeallikana ka Elering Estfeed.
+- Päeva kokkuvõte on desktopil 4 veerus (8. kast jäi varem üksi teisele reale); maja üldelektri kaardil on näitajad otse graafiku all (varem suur tühimik keskel).
+- Energialehe „Järgmised tunnid“: „homme 00:00“ murdus kahele reale → laiem esimene veerg; hinnakastides `kell 03:30` (varem murdus „03:30 · s/kWh“).
+- Väikseim tekst 11 → 12 px (maja üldelektri kastid), energiavoo sildid 12–13 → 13–14 px (SVG skaleerub mobiilis ~0,85-ni).
+- `--cat-kollane` `#c48f00` → `#b58500`: tulpade kontrast valgel taustal 2,9:1 → 3,3:1 (WCAG 1.4.11 nõuab 3:1). `.stat__value--good/--bad` kasutavad mõlemal lehel `-fg` toone (parem tekstikontrast).
+- Mobiilis peidetakse energialehe olekust „· järgmine HH:MM“, et olek ja nupp mahuksid ühele reale.
+
+### 6. Turvalisus
+- **Content-Security-Policy** (`<meta http-equiv>`, sest GitHub Pages ei luba päiseid seada): skriptid/stiilid ainult samalt saidilt (+ lehesisesed), `connect-src 'self' https:` (+ localhost-proksi), `object-src 'none'`, `base-uri 'none'`, `form-action 'self'`. `<meta name="referrer" content="no-referrer">` — välistele API-dele ja proksidele ei saadeta lehe aadressi.
+- **CORS-proksi kontroll:** `^http://localhost` lubas ka `http://localhost.evil.example` → nüüd ainult `http://localhost[:port]` või `http://127.0.0.1[:port]`, muidu `https://`.
+- **Otseühenduse võtmed:** vaikimisi `sessionStorage` (kustuvad vahelehe sulgemisel); „Jäta meelde selles seadmes“ → `localStorage`. Token ja jaama vahemälu on samas kohas; „Eemalda otseühendus“ kustutab mõlemast. Dialoogi hoiatus selgitab, et SHA-256 räsi on Solarmani jaoks parooliga samaväärne ja et kõik sama konto `*.github.io` lehed jagavad brauseri salvestusruumi.
+- Tühi favicon (`data:,`) — brauser ei päri enam olematut `favicon.ico`-t (404 konsoolis).
+
+---
+
+## Koodiülevaade 2026-10-20: edasised ettepanekud (rakendamata)
+
+1. **Ühine JavaScript (`js/common.js`).** Mõlemas lehes on ~450 rida identset koodi: Tallinna aja funktsioonid, vormindajad, `normalizePrices`/`requestPrices`, akende otsing, `getNetworkTariff`/`calculateFinalPrice`, `el`/`svgEl`/`niceTicks`. Ühise mooduli korral parandus jõuab mõlemale lehele korraga.
+2. **Tariifid ühes andmefailis.** Energialeht laadib igal avamisel kogu `index.html`-i (~105 kB) ainult selleks, et regulaaravaldisega `CONFIG` välja lugeda; sama teeb töövoog `uuenda-hinnad.yml`. Väike `config.json` (või `config.js`), mida loevad mõlemad lehed ja töövoog, oleks kiirem ja töökindlam (regex ei murdu, kui `CONFIG`-i vormingut muudetakse).
+3. **Repositooriumi kasv.** `paike.json` commit iga 10 min järel (~144 commit'i ööpäevas) + `hinnad.json` iga tunni järel paisutavad git-ajalugu (sadu MB aastas). Alternatiiv: andmefailid eraldi orphan-harus (force-push ilma ajaloota) või GitHub Pagesi avaldamine `actions/deploy-pages` artefaktina.
+4. **GitHub Actions'i kinnitamine commit-SHA-ga** (`actions/checkout@<sha> # v5`) ja Dependabot `github-actions` uuendusteks — tarneahela kaitse; praegu viitab silt `@v5`, mida saab ümber suunata.
+5. **Avalikud andmed.** `hinnad.json` sisaldab maja 15-min tarbimist ja `paike.json` jaama võimsusi; mõlemad on avalikud nii GitHub Pagesis kui ka repo ajaloos (`noindex` ei takista ligipääsu). Kui see pole KÜ jaoks sobiv, on vaja privaatset hostingut.
+6. **Otseühendus.** Kui seda ei kasutata, võiks funktsiooni eemaldada — brauseris hoitavad Solarmani võtmed on lehe suurim turvarisk. CSP `frame-ancestors` (clickjacking) vajaks HTTP-päist, mida GitHub Pages ei toeta.
+7. **Jõudlus.** `renderAll` ehitab iga minut kõik kaardid uuesti; `prepareBuildingData` arvutatakse renderduse kohta kaks korda. Vahemälu `dataVersion` järgi vähendaks tööd (praegu pole see märgatav).
+8. **Ligipääsetavus.** Maja üldelektri kuutulpi saab valida ainult hiire/puutega; `tabindex` + nooleklahvid (nagu hinnagraafikul) teeks need klaviatuuriga kasutatavaks.
 
 ---
 
@@ -142,7 +197,9 @@ Versioon `2.0.0` (defineeritud konstandina `APP_VERSION = '2.0.0'` failis `index
 
 ## Arhitektuurireeglid edasiseks arenduseks (Claude AI juhis)
 
-1. **Ühe faili põhimõte:** Kogu HTML, CSS ja JS asub failis `index.html`. Väliseid raamistikke ega bundlereid ei kasutata.
-2. **`CONFIG` puutumatus:** Kõik kasutaja poolt muudetavad parameetrid asuvad skripti alguses objektis `CONFIG`. Selle võtmeid ei tohi ümber nimetada.
-3. **Turvaline DOM:** Kasuta elementide loomiseks ainult abifunktsioone `el()` ja `svgEl()` ning `textContent` omistamist. Ära kasuta `innerHTML`-i.
+1. **Failide jaotus:** Iga leht (`index.html`, `energy-dashboard.html`) on üks HTML-fail koos oma JavaScriptiga. Kujundus on failides `css/common.css` (mõlemale lehele ühine) ja `css/<leht>.css` (lehepõhine) — ühist komponenti muuda ainult `common.css`-is. CSS-i muutmisel suurenda HTML-i linkides `?v=` väärtust. Väliseid raamistikke ega bundlereid ei kasutata.
+2. **`CONFIG` puutumatus:** Kõik kasutaja poolt muudetavad parameetrid asuvad skripti alguses objektis `CONFIG`. Selle võtmeid ei tohi ümber nimetada (`index.html`-i `CONFIG`-i loevad regulaaravaldisega ka `energy-dashboard.html` ja töövoog `uuenda-hinnad.yml`).
+3. **Turvaline DOM:** Kasuta elementide loomiseks ainult abifunktsioone `el()` ja `svgEl()` ning `textContent` omistamist. Ära kasuta `innerHTML`-i. `style`-atribuuti pane ainult koodis olevaid konstante ja arve, mitte välisandmete teksti. Uue välise skripti/stiili/hosti lisamisel uuenda `Content-Security-Policy` meta-silti.
 4. **Ajavöönd:** Kõik kuupäevade ja päeva alguste (`00:00`) arvutused peavad käima läbi `getTallinnDateParts` ja `getTallinnDayStart` (`Europe/Tallinn`), mitte brauseri kohaliku ajavööndi.
+5. **Päringute sagedus:** Kasutaja algatatud värskendus peab arvestama ooteaega (`REFRESH_COOLDOWN_MS` / `RETRY_COOLDOWN_MS`) ja nupp peab laadimise ajal olema keelatud. Automaatne ajastus ja seadete muutmine kasutavad `refreshNow({ force: true })`.
+6. **Navigatsioon:** Uue lehe lisamisel lisa link kõigi lehtede päise `nav.site-nav`-i (aktiivsel lehel `aria-current="page"`).
