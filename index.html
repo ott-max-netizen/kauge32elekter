@@ -2,6 +2,9 @@
 <html lang="et">
 <head>
 <meta charset="utf-8">
+<!-- Turvapoliitika: skriptid ja stiilid ainult sellelt saidilt (+ lehesisesed), välised päringud ainult HTTPS-iga (erand: localhost-proksi). -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https: http://localhost:* http://127.0.0.1:*; object-src 'none'; base-uri 'none'; form-action 'self'">
+<meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#f1f4f7" media="(prefers-color-scheme: light)">
@@ -10,1050 +13,19 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="robots" content="noindex">
 <title>Kauge 32 elektriinfo</title>
-<style>
-/* ==========================================================================
-   Kauge 32 elektriinfo — kujundus (v2.3.0)
-   Kõik värvid, raadiused ja vahed on defineeritud custom property'tena.
-   ========================================================================== */
-:root {
-  color-scheme: light dark;
-
-  --bg: #f1f4f7;
-  --surface: #ffffff;
-  --surface-2: #f5f7fa;
-  --text: #1b2433;
-  --muted: #4a5566;
-  --border: #d3dae3;
-  --focus: #1f5fbf;
-
-  --radius: 16px;
-  --radius-sm: 10px;
-
-  --s1: 4px;
-  --s2: 8px;
-  --s3: 12px;
-  --s4: 16px;
-  --s5: 24px;
-  --s6: 32px;
-
-  --shadow: 0 2px 8px rgba(27, 36, 51, 0.05), 0 1px 2px rgba(27, 36, 51, 0.04);
-  --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-
-  /* Hinnakategooriad: tulba/aktsendi värv, sildi taust, sildi tekst */
-  --cat-roheline: #1f9d55;
-  --cat-roheline-bg: #dbf3e4;
-  --cat-roheline-fg: #0f5a31;
-  --cat-kollane: #c48f00;
-  --cat-kollane-bg: #fbf0c4;
-  --cat-kollane-fg: #614700;
-  --cat-oranz: #e8701a;
-  --cat-oranz-bg: #fde3cf;
-  --cat-oranz-fg: #7a3a08;
-  --cat-punane: #d22f2f;
-  --cat-punane-bg: #fadcdc;
-  --cat-punane-fg: #861c1c;
-
-  --avg-line: #1b2433;
-  --bar-primary: #2c5aa0;
-  --share-1: #2c5aa0;
-  --share-2: #3f8f5e;
-  --share-3: #a0692a;
-  --share-4: #7a5e9a;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0f1620;
-    --surface: #1a2230;
-    --surface-2: #232d3c;
-    --text: #edf1f6;
-    --muted: #b7c1ce;
-    --border: #33404f;
-    --focus: #8ab4f8;
-    --shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
-
-    --cat-roheline: #3fcb79;
-    --cat-roheline-bg: #16402a;
-    --cat-roheline-fg: #bff2d2;
-    --cat-kollane: #f0c531;
-    --cat-kollane-bg: #4a3b08;
-    --cat-kollane-fg: #fbe7a3;
-    --cat-oranz: #f5924a;
-    --cat-oranz-bg: #4f2a0e;
-    --cat-oranz-fg: #ffd2b0;
-    --cat-punane: #f26565;
-    --cat-punane-bg: #4e1a1a;
-    --cat-punane-fg: #ffc7c7;
-
-    --avg-line: #edf1f6;
-    --bar-primary: #7faae8;
-    --share-1: #7faae8;
-    --share-2: #6fcf97;
-    --share-3: #e0a860;
-    --share-4: #b79ddb;
-  }
-}
-
-*, *::before, *::after { box-sizing: border-box; }
-
-[hidden] { display: none !important; }
-
-html { -webkit-text-size-adjust: 100%; }
-
-body {
-  margin: 0;
-  font-family: var(--font);
-  font-size: 16px;
-  line-height: 1.45;
-  color: var(--text);
-  background: var(--bg);
-  overflow-x: hidden;
-  font-variant-numeric: tabular-nums;
-}
-
-.app {
-  max-width: 1120px;
-  margin: 0 auto;
-  padding: max(var(--s3), env(safe-area-inset-top)) max(var(--s3), env(safe-area-inset-right)) max(var(--s4), env(safe-area-inset-bottom)) max(var(--s3), env(safe-area-inset-left));
-}
-
-/* ---------- Päis, olek, teated ---------- */
-.app-header {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--s1) var(--s4);
-  margin: 0 0 var(--s3);
-}
-
-.app-title {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-}
-
-.status {
-  margin: 0;
-  color: var(--muted);
-  font-size: 14px;
-  font-weight: 500;
-}
-.status:empty { display: none; }
-
-.banner {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--s2) var(--s3);
-  padding: var(--s3) var(--s4);
-  border-radius: var(--radius-sm);
-  margin: 0 0 var(--s3);
-  background: var(--cat-punane-bg);
-  color: var(--cat-punane-fg);
-  border: 1px solid var(--cat-punane);
-}
-.banner--warn {
-  background: var(--cat-kollane-bg);
-  color: var(--cat-kollane-fg);
-  border-color: var(--cat-kollane);
-}
-.banner__text {
-  margin: 0;
-  flex: 1 1 200px;
-  font-weight: 600;
-}
-
-.btn {
-  font: inherit;
-  font-weight: 600;
-  min-height: 44px;
-  padding: 0 20px;
-  border-radius: 999px;
-  border: 1px solid var(--text);
-  background: var(--text);
-  color: var(--surface);
-  cursor: pointer;
-}
-
-/* ---------- Paigutus ---------- */
-.layout {
-  display: grid;
-  gap: var(--s3);
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.card {
-  min-width: 0;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: var(--s4);
-  box-shadow: var(--shadow);
-}
-
-.card__head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--s1) var(--s3);
-}
-
-.card__title {
-  margin: 0 0 var(--s3);
-  font-size: 17px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-}
-
-.card__hint {
-  margin: 0 0 var(--s3);
-  color: var(--muted);
-  font-size: 14px;
-}
-
-.placeholder {
-  margin: 0;
-  color: var(--muted);
-}
-
-.notice {
-  margin: var(--s2) 0 0;
-  padding: var(--s2) var(--s3);
-  border-radius: var(--radius-sm);
-  background: var(--surface-2);
-  font-size: 15px;
-}
-.notice--warn {
-  background: var(--cat-kollane-bg);
-  color: var(--cat-kollane-fg);
-}
-
-/* ---------- Plokk 1: praegune hind ---------- */
-.card--hero {
-  border-top: 6px solid var(--hero-accent, var(--border));
-}
-.card--hero[data-category="roheline"] { --hero-accent: var(--cat-roheline); --hero-bg: var(--cat-roheline-bg); --hero-fg: var(--cat-roheline-fg); }
-.card--hero[data-category="kollane"]  { --hero-accent: var(--cat-kollane);  --hero-bg: var(--cat-kollane-bg);  --hero-fg: var(--cat-kollane-fg); }
-.card--hero[data-category="oranz"]    { --hero-accent: var(--cat-oranz);    --hero-bg: var(--cat-oranz-bg);    --hero-fg: var(--cat-oranz-fg); }
-.card--hero[data-category="punane"]   { --hero-accent: var(--cat-punane);   --hero-bg: var(--cat-punane-bg);   --hero-fg: var(--cat-punane-fg); }
-
-.hero-top {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--s2);
-  margin: 0 0 var(--s3);
-}
-
-.verdict {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s2);
-  margin: 0;
-  padding: 5px 14px 5px 11px;
-  border-radius: 999px;
-  background: var(--hero-bg, var(--surface-2));
-  color: var(--hero-fg, var(--text));
-  font-size: 18px;
-  font-weight: 700;
-}
-.verdict::before {
-  content: "";
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--hero-accent, var(--muted));
-  flex: none;
-}
-
-.hero-period {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--muted);
-  background: var(--surface-2);
-  padding: 4px 10px;
-  border-radius: 999px;
-}
-
-.hero-price-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--s2) var(--s4);
-}
-
-.hero-price {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--s2);
-  margin: 0;
-}
-.hero-price__value {
-  font-size: 52px;
-  font-weight: 800;
-  line-height: 1;
-  letter-spacing: -0.03em;
-}
-.hero-price__unit {
-  font-size: 19px;
-  font-weight: 600;
-  color: var(--muted);
-}
-
-.hero-final-pill {
-  display: inline-flex;
-  flex-direction: column;
-  padding: 6px 12px;
-  border-radius: var(--radius-sm);
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-}
-.hero-final-pill__label {
-  font-size: 12px;
-  color: var(--muted);
-  line-height: 1.2;
-}
-.hero-final-pill__value {
-  font-size: 18px;
-  font-weight: 700;
-  line-height: 1.25;
-}
-
-.hero-meta {
-  margin: var(--s2) 0 0;
-  color: var(--muted);
-  font-size: 14px;
-}
-
-.compare {
-  margin: var(--s2) 0 0;
-  font-size: 16px;
-  font-weight: 600;
-}
-
-.advice {
-  margin: var(--s3) 0 0;
-  padding: var(--s3) var(--s4);
-  border-radius: var(--radius-sm);
-  background: var(--hero-bg, var(--surface-2));
-  color: var(--hero-fg, var(--text));
-  border-left: 4px solid var(--hero-accent, var(--border));
-}
-.advice__title {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 700;
-}
-.advice__text {
-  margin: 2px 0 0;
-  font-size: 15px;
-}
-
-.facts {
-  list-style: none;
-  margin: var(--s3) 0 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-  gap: var(--s2);
-}
-.facts li {
-  position: relative;
-  padding: 8px 10px 8px 24px;
-  background: var(--surface-2);
-  border-radius: var(--radius-sm);
-  font-size: 14px;
-  line-height: 1.35;
-}
-.facts li::before {
-  content: "";
-  position: absolute;
-  left: 10px;
-  top: 13px;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--hero-accent, var(--muted));
-}
-
-/* ---------- Tabid ja segmentnupud ---------- */
-.chart-controls {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--s2) var(--s3);
-  margin: 0 0 var(--s2);
-}
-
-.tabs {
-  display: inline-flex;
-  padding: 3px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--surface-2);
-}
-.tab {
-  appearance: none;
-  border: 0;
-  background: transparent;
-  color: var(--text);
-  font: inherit;
-  font-weight: 600;
-  min-height: 40px;
-  padding: 0 16px;
-  border-radius: 999px;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  transition: background-color 0.12s ease, color 0.12s ease;
-}
-.tab[aria-selected="true"] {
-  background: var(--text);
-  color: var(--surface);
-}
-.tab__badge {
-  font-size: 12px;
-  font-weight: 600;
-  opacity: 0.8;
-}
-.tab__dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--cat-roheline);
-  display: inline-block;
-}
-
-.segmented {
-  border: 0;
-  margin: 0;
-  padding: 0;
-  min-width: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s2);
-}
-.segmented--grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--s2);
-}
-@media (min-width: 420px) {
-  .segmented--grid {
-    grid-template-columns: repeat(6, minmax(0, 1fr));
-  }
-}
-.segmented input {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
-  pointer-events: none;
-}
-.segmented label {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 44px;
-  min-width: 48px;
-  padding: 0 12px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--surface-2);
-  font-weight: 600;
-  cursor: pointer;
-  user-select: none;
-  -webkit-user-select: none;
-  transition: background-color 0.12s ease, color 0.12s ease, border-color 0.12s ease;
-}
-.segmented input:checked + label {
-  background: var(--text);
-  color: var(--surface);
-  border-color: var(--text);
-}
-.segmented input:focus-visible + label {
-  outline: 3px solid var(--focus);
-  outline-offset: 2px;
-}
-.segmented--small label {
-  min-height: 40px;
-  min-width: 48px;
-  padding: 0 12px;
-  font-size: 15px;
-}
-.field-label {
-  display: block;
-  margin: 0 0 var(--s2);
-  padding: 0;
-  font-weight: 600;
-  font-size: 15px;
-}
-
-@media (hover: hover) {
-  .tab:not([aria-selected="true"]):hover {
-    background: var(--surface);
-  }
-  .segmented input:not(:checked) + label:hover {
-    border-color: var(--muted);
-    background: var(--surface);
-  }
-  .ev__summary:hover .ev__summary-title {
-    color: var(--focus);
-  }
-}
-
-/* ---------- Graafik ---------- */
-.chart-status-bar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--s1) var(--s3);
-  min-height: 26px;
-  margin: 0 0 var(--s2);
-}
-.chart-day {
-  margin: 0;
-  color: var(--muted);
-  font-size: 15px;
-}
-.chart-inspector {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text);
-  background: var(--surface-2);
-  padding: 2px 10px;
-  border-radius: 999px;
-}
-.chart-wrapper {
-  position: relative;
-  min-width: 0;
-}
-.chart-host {
-  width: 100%;
-  min-width: 0;
-}
-.chart-host svg {
-  display: block;
-  width: 100%;
-  height: auto;
-}
-.chart-svg {
-  border-radius: var(--radius-sm);
-  touch-action: pan-y;
-  user-select: none;
-  -webkit-user-select: none;
-  cursor: crosshair;
-}
-
-.bar { transition: opacity 0.1s ease; }
-.bar--past { opacity: 0.38; }
-.bar--active { stroke: var(--text); stroke-width: 2; opacity: 1 !important; }
-.bar-current { animation: pulse 2.4s ease-in-out infinite; }
-@keyframes pulse {
-  0%, 100% { stroke-opacity: 1; }
-  50% { stroke-opacity: 0.3; }
-}
-
-.tooltip {
-  position: absolute;
-  z-index: 2;
-  max-width: 248px;
-  padding: 8px 10px;
-  border-radius: var(--radius-sm);
-  background: var(--text);
-  color: var(--surface);
-  font-size: 14px;
-  line-height: 1.35;
-  pointer-events: none;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
-}
-.tooltip strong,
-.tooltip span {
-  display: block;
-}
-.tooltip strong { font-size: 15px; }
-.tooltip__price {
-  font-size: 17px;
-  font-weight: 700;
-}
-.tooltip__consumption {
-  margin-top: 2px;
-  padding-top: 3px;
-  border-top: 1px solid rgba(128, 128, 128, 0.35);
-  font-weight: 600;
-}
-.consumption-area {
-  fill: var(--bar-primary);
-  opacity: 0.14;
-  pointer-events: none;
-}
-.consumption-line {
-  fill: none;
-  stroke: var(--bar-primary);
-  stroke-width: 2;
-  stroke-linejoin: round;
-  stroke-linecap: round;
-  pointer-events: none;
-}
-.consumption-dot {
-  fill: var(--bar-primary);
-  stroke: var(--surface);
-  stroke-width: 1.5;
-  pointer-events: none;
-}
-
-.legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s1) var(--s3);
-  margin: var(--s2) 0 0;
-  font-size: 13px;
-  color: var(--muted);
-}
-.legend__item {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-.legend__swatch {
-  flex: none;
-  width: 12px;
-  height: 12px;
-  border-radius: 3px;
-  background: var(--swatch, var(--muted));
-}
-.legend__swatch--line {
-  width: 18px;
-  height: 0;
-  border-radius: 0;
-  background: none;
-  border-top: 2px dashed var(--avg-line);
-}
-.legend__swatch--kwh {
-  width: 18px;
-  height: 0;
-  border-radius: 0;
-  background: none;
-  border-top: 2.5px solid var(--bar-primary);
-}
-.legend__swatch--current {
-  background: none;
-  border: 2px solid var(--text);
-}
-.legend__swatch--best {
-  background: var(--cat-roheline-bg);
-  border: 1.5px solid var(--cat-roheline);
-}
-.legend__swatch--outline {
-  background: var(--surface-2);
-  border: 1px dashed var(--bar-primary);
-}
-
-.stats {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
-  gap: var(--s2);
-  margin: var(--s3) 0 0;
-}
-.stats--day {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-@media (min-width: 640px) {
-  .stats--day {
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  }
-}
-.stat {
-  min-width: 0;
-  padding: var(--s2) 12px;
-  border-radius: var(--radius-sm);
-  background: var(--surface-2);
-}
-.stat__label {
-  margin: 0;
-  font-size: 13px;
-  color: var(--muted);
-}
-.stat__value {
-  margin: 2px 0 0;
-  font-size: 21px;
-  font-weight: 700;
-  line-height: 1.15;
-}
-.stat__value--good { color: var(--cat-roheline); }
-.stat__value--bad { color: var(--cat-punane); }
-.stat__time {
-  margin: 2px 0 0;
-  font-size: 13px;
-  color: var(--muted);
-}
-
-.card__title-wrap {
-  display: flex;
-  align-items: center;
-  gap: var(--s2);
-  flex-wrap: wrap;
-}
-.badge-pill {
-  display: inline-flex;
-  align-items: center;
-  padding: 3px 8px;
-  font-size: 12px;
-  font-weight: 600;
-  border-radius: 999px;
-  background: var(--surface-2);
-  color: var(--muted);
-  border: 1px solid var(--border);
-  line-height: 1.2;
-}
-
-.stats--building {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  margin-top: var(--s2);
-}
-@media (min-width: 640px) {
-  .stats--building {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-}
-.stats--building .stat {
-  padding: 8px 10px;
-}
-.stats--building .stat__value {
-  font-size: 16px;
-  letter-spacing: -0.01em;
-}
-.stats--building .stat__label,
-.stats--building .stat__time {
-  font-size: 11px;
-}
-.chart-host--building {
-  min-height: 162px;
-}
-.building-bar-hit {
-  cursor: pointer;
-  transition: fill 0.1s ease;
-}
-.building-bar-hit:hover {
-  fill: rgba(128, 128, 128, 0.08);
-}
-
-/* ---------- Plokk 3: planeerija ---------- */
-.plan {
-  margin: var(--s3) 0 0;
-  padding: var(--s3) var(--s4);
-  border-radius: var(--radius-sm);
-  background: var(--surface-2);
-  border-left: 4px solid var(--cat-roheline);
-}
-.plan__head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--s2);
-}
-.plan__label {
-  margin: 0;
-  color: var(--muted);
-  font-size: 14px;
-  font-weight: 600;
-}
-.plan__badge {
-  display: inline-block;
-  padding: 2px 10px;
-  border-radius: 999px;
-  background: var(--cat-roheline-bg);
-  color: var(--cat-roheline-fg);
-  font-size: 13px;
-  font-weight: 700;
-}
-.plan__window {
-  margin: 4px 0 0;
-  font-size: 25px;
-  font-weight: 800;
-  line-height: 1.15;
-  letter-spacing: -0.01em;
-}
-.plan__avg {
-  margin: var(--s1) 0 0;
-  font-size: 16px;
-  font-weight: 600;
-}
-.plan__saving {
-  margin: 2px 0 0;
-  font-size: 15px;
-  color: var(--cat-roheline-fg);
-  font-weight: 600;
-}
-.plan__tip {
-  margin: var(--s2) 0 0;
-  color: var(--muted);
-  font-size: 14px;
-}
-.plan__avoid {
-  margin: var(--s2) 0 0;
-  padding: var(--s2) var(--s3);
-  border-radius: var(--radius-sm);
-  background: var(--cat-punane-bg);
-  color: var(--cat-punane-fg);
-  border-left: 3px solid var(--cat-punane);
-  font-size: 14px;
-}
-.plan__avoid strong { font-size: 15px; }
-
-.ev {
-  margin: var(--s3) 0 0;
-  border-top: 1px solid var(--border);
-  padding-top: var(--s2);
-}
-.ev__summary {
-  list-style: none;
-  cursor: pointer;
-  padding: 8px 0;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--s2);
-  user-select: none;
-}
-.ev__summary::-webkit-details-marker { display: none; }
-.ev__summary-title {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s2);
-}
-.ev__summary-title::after {
-  content: "";
-  width: 7px;
-  height: 7px;
-  border-right: 2px solid var(--muted);
-  border-bottom: 2px solid var(--muted);
-  transform: rotate(45deg);
-  transition: transform 0.15s ease;
-  margin-top: -2px;
-}
-.ev[open] .ev__summary-title::after {
-  transform: rotate(-135deg);
-  margin-top: 3px;
-}
-.ev__summary-meta {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--muted);
-  background: var(--surface-2);
-  padding: 2px 10px;
-  border-radius: 999px;
-}
-.ev__body { padding: var(--s2) 0 0; }
-.ev__body p { margin: var(--s2) 0 0; font-size: 15px; }
-.ev__window {
-  font-size: 21px;
-  font-weight: 700;
-}
-
-/* ---------- Plokk 4: lõpphind ---------- */
-.final-head-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--s2);
-}
-.big-number {
-  margin: 0;
-  font-size: 40px;
-  font-weight: 800;
-  line-height: 1;
-  letter-spacing: -0.02em;
-}
-.big-number small {
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--muted);
-}
-.tariff-badge {
-  display: inline-block;
-  padding: 4px 10px;
-  border-radius: 999px;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text);
-}
-.final-split {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--s2);
-  margin: var(--s3) 0 0;
-}
-.breakdown {
-  width: 100%;
-  margin: var(--s3) 0 0;
-  border-collapse: collapse;
-  font-size: 15px;
-}
-.breakdown th,
-.breakdown td {
-  padding: 7px 0;
-  border-bottom: 1px solid var(--border);
-  text-align: left;
-  font-weight: 400;
-  vertical-align: top;
-}
-.breakdown th:last-child,
-.breakdown td:last-child {
-  text-align: right;
-  white-space: nowrap;
-  padding-left: var(--s3);
-}
-.breakdown .breakdown__total td {
-  font-weight: 700;
-  font-size: 17px;
-  border-bottom: 0;
-}
-.shares-bar {
-  display: flex;
-  height: 14px;
-  margin: var(--s3) 0 0;
-  border-radius: 999px;
-  overflow: hidden;
-}
-.shares-bar span { display: block; height: 100%; }
-.shares {
-  list-style: none;
-  margin: var(--s2) 0 0;
-  padding: 0;
-  display: grid;
-  gap: 4px;
-  font-size: 14px;
-}
-.shares li {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.shares li span:last-child {
-  margin-left: auto;
-  font-weight: 600;
-}
-
-/* ---------- Plokk 5: maja üldelekter ---------- */
-.building-bar { cursor: pointer; transition: opacity 0.12s ease; }
-.building-bar:hover { opacity: 0.85; }
-
-/* ---------- Jalus ---------- */
-.app-footer {
-  margin: var(--s5) 0 var(--s3);
-  color: var(--muted);
-  font-size: 14px;
-}
-.app-footer p { margin: 0 0 var(--s2); }
-.app-footer__meta {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: var(--s2);
-}
-
-/* ---------- Üldised abiklassid ---------- */
-.nowrap { white-space: nowrap; }
-
-.visually-hidden {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  margin: -1px;
-  padding: 0;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
-  border: 0;
-}
-
-:focus-visible {
-  outline: 3px solid var(--focus);
-  outline-offset: 2px;
-}
-
-/* ---------- Laiem ekraan (Desktop & tahvel) ---------- */
-@media (min-width: 768px) {
-  .app { padding: var(--s5); }
-  .layout {
-    gap: var(--s4);
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    grid-template-areas:
-      "now planner"
-      "chart chart"
-      "final building";
-    align-items: stretch;
-  }
-  #section-now { grid-area: now; }
-  #section-planner { grid-area: planner; }
-  #section-chart { grid-area: chart; }
-  #section-final { grid-area: final; }
-  #section-building { grid-area: building; }
-  .layout.no-building #section-final { grid-column: 1 / -1; }
-  .card {
-    padding: var(--s5);
-    display: flex;
-    flex-direction: column;
-  }
-  #now-body,
-  #final-body {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-  }
-  #now-body .facts {
-    margin-top: auto;
-    padding-top: var(--s3);
-  }
-  #section-planner .ev {
-    margin-top: auto;
-  }
-  #section-building #building-body {
-    margin-top: auto;
-    padding-top: var(--s2);
-  }
-  .hero-price__value { font-size: 60px; }
-  .stat__value { font-size: 24px; }
-}
-
-@media (min-width: 1024px) {
-  .app {
-    max-width: 1180px;
-    padding: var(--s5) var(--s6);
-  }
-  .app-title { font-size: 22px; }
-  .layout { gap: 20px; }
-  .card__title { font-size: 18px; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .bar-current { animation: none; }
-}
-</style>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="css/common.css?v=20261020">
+<link rel="stylesheet" href="css/index.css?v=20261020">
 </head>
 <body>
 <div class="app">
   <header class="app-header">
     <h1 id="app-title" class="app-title">Kauge 32 elektriinfo</h1>
-    <p id="status" class="status" role="status" aria-live="polite"></p>
+    <nav class="site-nav" aria-label="Lehed">
+      <a class="site-nav__link" href="index.html" aria-current="page">Elektriinfo</a>
+      <a class="site-nav__link" href="energy-dashboard.html">Energia</a>
+    </nav>
+    <p id="status" class="status app-header__end" role="status" aria-live="polite"></p>
   </header>
 
   <noscript><p class="notice">Elektriinfo kuvamiseks peab brauseris olema JavaScript lubatud.</p></noscript>
@@ -1096,11 +68,11 @@ body {
         </div>
         <div class="chart-wrapper" id="chart-wrapper">
           <div id="chart-svg-host" class="chart-host"></div>
-          <div id="chart-tooltip" class="tooltip" role="tooltip" aria-live="polite" hidden></div>
+          <div id="chart-tooltip" class="tooltip" role="tooltip" hidden></div>
         </div>
         <p id="chart-notice" class="notice" hidden></p>
-        <div id="chart-legend" class="legend" aria-label="Graafiku selgitus"></div>
-        <div id="day-summary" class="stats stats--day" role="group" aria-label="Valitud päeva madalaim, keskmine ja kõrgeim hind"></div>
+        <div id="chart-legend" class="legend" role="group" aria-label="Graafiku selgitus"></div>
+        <div id="day-summary" class="stats stats--day" role="group" aria-label="Valitud päeva kokkuvõte"></div>
       </div>
     </section>
 
@@ -1155,7 +127,7 @@ body {
 
   <!-- 6. Jalus -->
   <footer class="app-footer">
-    <p><strong>Andmeallikas: Elering Live.</strong> Börsihind on Nord Pooli Eesti hinnapiirkonna elektrienergia hind. Tegelik elektriarve sisaldab lisaks müüja marginaali, võrgutasusid, riiklikke tasusid, makse ja võimalikke fikseeritud kuutasusid.</p>
+    <p><strong>Andmeallikad:</strong> börsihind — Elering Live (Nord Pooli Eesti hinnapiirkonna elektrienergia hind); maja tarbimine — Elering Estfeed. Tegelik elektriarve sisaldab lisaks müüja marginaali, võrgutasusid, riiklikke tasusid, makse ja võimalikke fikseeritud kuutasusid.</p>
     <div class="app-footer__meta">
       <p id="footer-updated">Andmeid pole veel uuendatud</p>
       <p id="footer-version"></p>
@@ -1270,7 +242,7 @@ const CONFIG = {
 };
 
 /* Tehnilised konstandid — neid ei ole tavakasutuses vaja muuta. */
-const APP_VERSION = '2.3.0';
+const APP_VERSION = '2.4.0';
 const TIME_ZONE = 'Europe/Tallinn';
 const API_URL = 'https://dashboard.elering.ee/api/nps/price';
 const API_TIMEOUT_MS = 20000;
@@ -1285,6 +257,7 @@ const DAY_MS = 86400000;
 const PUBLISH_PIPELINE_MS = 3 * MINUTE_MS;     // töövoog + GitHub Pagesi avaldamine pärast avaldamiskellaaega
 const FAST_REFRESH_MS = 2 * MINUTE_MS;         // kontrolli samm, kuni homsed hinnad on käes
 const FAST_REFRESH_WINDOW_MS = 90 * MINUTE_MS; // kui kaua pärast avaldamist tihedalt kontrollitakse
+const RETRY_COOLDOWN_MS = 15 * 1000;           // „Proovi uuesti“ nupu vähim vahe kahe laadimise vahel
 
 /* ==========================================================================
    2. Olek — hoitakse ainult JavaScripti mälus
@@ -1301,6 +274,8 @@ const state = {
   buildingView: 'kwh',    // 'kwh' | 'eur'
   selectedBuildingIndex: null, // valitud kuu indeks maja üldelektri graafikul
   lastUpdated: null,      // viimase eduka laadimise aeg (Date)
+  lastFetchStartedAt: 0,  // viimase laadimise algus (ms), „Proovi uuesti“ ooteaja jaoks
+  retryTimer: null,       // „Proovi uuesti“ loenduri taimer
   loading: false,
   error: null,            // eestikeelne veateade, kui andmeid pole üldse õnnestunud laadida
   refreshFailed: false,   // uuendamine ebaõnnestus, kuvatakse varasemaid andmeid
@@ -1380,8 +355,7 @@ function buildApiRange(now) {
    ========================================================================== */
 const timeFormatter = new Intl.DateTimeFormat('et-EE', { timeZone: TIME_ZONE, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
 const dateLongFormatter = new Intl.DateTimeFormat('et-EE', { timeZone: TIME_ZONE, weekday: 'long', day: 'numeric', month: 'long' });
-const monthShortFormatter = new Intl.DateTimeFormat('et-EE', { timeZone: 'UTC', month: 'short' });
-const monthLongFormatter = new Intl.DateTimeFormat('et-EE', { timeZone: 'UTC', month: 'long', year: 'numeric' });
+const monthNameFormatter = new Intl.DateTimeFormat('et-EE', { timeZone: 'UTC', month: 'long' });
 const numberFormat = {
   d2: new Intl.NumberFormat('et-EE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
   d1: new Intl.NumberFormat('et-EE', { minimumFractionDigits: 1, maximumFractionDigits: 1 }),
@@ -1559,6 +533,7 @@ function buildSources() {
 async function fetchPrices() {
   if (state.loading) return;
   state.loading = true;
+  state.lastFetchStartedAt = Date.now();
   renderStatus();
 
   const controller = new AbortController();
@@ -1893,13 +868,11 @@ function prepareBuildingData() {
     });
   }
 
-  const latest = groups[groups.length - 1].current;
   const avgKwh = countWithData > 0 ? totalKwh12 / countWithData : 0;
   const avgEur = countWithData > 0 ? totalEur12 / countWithData : 0;
 
   return {
     groups,
-    latest,
     totalKwh12,
     totalEur12,
     avgKwh,
@@ -2131,6 +1104,22 @@ function niceTicks(min, max, count = 4) {
 /* ==========================================================================
    8. Renderdamine
    ========================================================================== */
+function retryCooldownLeftMs() {
+  return Math.max(0, state.lastFetchStartedAt + RETRY_COOLDOWN_MS - Date.now());
+}
+
+/** „Proovi uuesti“ on laadimise ajal ja RETRY_COOLDOWN_MS jooksul pärast iga laadimist keelatud; nupul on loendur. */
+function renderRetryButton() {
+  const button = byId('retry-button');
+  const left = state.loading ? 0 : retryCooldownLeftMs();
+  const seconds = Math.ceil(left / 1000);
+  button.disabled = state.loading || left > 0;
+  const count = left > 0 ? [el('span', { class: 'btn__count', 'aria-hidden': 'true', text: `(${seconds} s)` })] : [];
+  button.replaceChildren('Proovi uuesti', ...count);
+  clearTimeout(state.retryTimer);
+  if (left > 0) state.retryTimer = setTimeout(renderRetryButton, left - (seconds - 1) * 1000);
+}
+
 function renderStatus() {
   const status = byId('status');
   const banner = byId('error-banner');
@@ -2159,6 +1148,7 @@ function renderStatus() {
   } else {
     banner.hidden = true;
   }
+  renderRetryButton();
 }
 
 function renderCurrentPrice(d, a, rec) {
@@ -2232,7 +1222,8 @@ function updateTomorrowTab(d) {
   }
 }
 
-function renderChartLegend(hasConsumption = false) {
+/** Legend näitab ainult seda, mis graafikul tegelikult on (praegune periood ainult tänasel päeval jne). */
+function renderChartLegend({ hasConsumption = false, showCurrent = false, showBest = false } = {}) {
   const legend = byId('chart-legend');
   const limits = CONFIG.hinnapiirid;
   const labels = CONFIG.hinnasildid;
@@ -2247,14 +1238,18 @@ function renderChartLegend(hasConsumption = false) {
     ...items.map(([color, text]) => el('span', { class: 'legend__item' }, [
       el('span', { class: 'legend__swatch', style: `--swatch:${color}`, 'aria-hidden': 'true' }), text
     ])),
-    el('span', { class: 'legend__item' }, [el('span', { class: 'legend__swatch legend__swatch--line', 'aria-hidden': 'true' }), 'päeva keskmine']),
-    el('span', { class: 'legend__item' }, [el('span', { class: 'legend__swatch legend__swatch--current', 'aria-hidden': 'true' }), 'praegune periood']),
-    el('span', { class: 'legend__item' }, [el('span', { class: 'legend__swatch legend__swatch--best', 'aria-hidden': 'true' }), 'valitud odavaim aken'])
+    el('span', { class: 'legend__item' }, [el('span', { class: 'legend__swatch legend__swatch--line', 'aria-hidden': 'true' }), 'päeva keskmine'])
   ];
+  if (showCurrent) {
+    nodes.push(el('span', { class: 'legend__item' }, [el('span', { class: 'legend__swatch legend__swatch--current', 'aria-hidden': 'true' }), 'praegune periood']));
+  }
+  if (showBest) {
+    nodes.push(el('span', { class: 'legend__item' }, [el('span', { class: 'legend__swatch legend__swatch--best', 'aria-hidden': 'true' }), 'valitud odavaim aken']));
+  }
   if (hasConsumption) {
     nodes.push(el('span', { class: 'legend__item' }, [
       el('span', { class: 'legend__swatch legend__swatch--kwh', 'aria-hidden': 'true' }),
-      'tarbitud kWh (15 min / 1 h)'
+      'maja tarbimine, kWh (parem telg)'
     ]));
   }
   legend.replaceChildren(...nodes);
@@ -2276,7 +1271,13 @@ function renderPriceChart(d) {
   byId('chart-day-label').textContent = `${dayConfig.label}, ${dateLongFormatter.format(dayStart)}`;
   updateResolutionToggle();
   updateTomorrowTab(d);
-  renderChartLegend(dayPeriods.some(p => p.kwh != null));
+  const bestWindow = findBestWindow(d.future, d.now, state.selectedDuration, d.horizonEnd);
+  renderChartLegend({
+    hasConsumption: dayPeriods.some(p => p.kwh != null),
+    showCurrent: isToday && d.current != null && dayPeriods.includes(d.current),
+    showBest: dayPeriods.length > 0 && bestWindow != null &&
+      bestWindow.start.getTime() < dayEnd.getTime() && bestWindow.end.getTime() > dayStart.getTime()
+  });
 
   if (!dayPeriods.length) {
     hideTooltip();
@@ -2299,7 +1300,6 @@ function renderPriceChart(d) {
   const avg = calculateWeightedAverage(dayPeriods);
   const width = Math.max(240, Math.floor(host.clientWidth || 320));
   const currentTs = d.current ? d.current.timestamp : null;
-  const bestWindow = findBestWindow(d.future, d.now, state.selectedDuration, d.horizonEnd);
   const bestKey = bestWindow ? `${bestWindow.start.getTime()}-${bestWindow.end.getTime()}` : '';
   const kwhCount = bars.filter(b => b.kwh != null).length;
   const key = [state.selectedDay, resolution, currentTs, state.dataVersion, width, bestKey, kwhCount].join('|');
@@ -2317,8 +1317,9 @@ function renderPriceChart(d) {
 
 function buildPriceChartSvg({ bars, avg, dayStart, dayEnd, width, currentTs, isToday, dayAriaLabel, dayPeriods, bestWindow, nowMs }) {
   const height = width >= 640 ? CHART_HEIGHT_DESKTOP : CHART_HEIGHT;
+  const hasKwh = bars.some(b => b.kwh != null && Number.isFinite(b.kwh));
   const padL = 38;
-  const padR = 8;
+  const padR = hasKwh ? 34 : 8;   // tarbimise korral jääb paremale kWh-telje jaoks ruumi
   const padT = 18;
   const padB = 26;
   const plotW = width - padL - padR;
@@ -2380,6 +1381,7 @@ function buildPriceChartSvg({ bars, avg, dayStart, dayEnd, width, currentTs, isT
       x: padL - 6, y: ty + 4, 'text-anchor': 'end', 'font-size': 12, fill: 'var(--muted)', text: axis.format.format(tick)
     }));
   }
+  svg.append(svgEl('text', { class: 'axis-unit', x: 2, y: 11, text: 's/kWh' }));
 
   // Tulbad
   const items = [];
@@ -2401,16 +1403,25 @@ function buildPriceChartSvg({ bars, avg, dayStart, dayEnd, width, currentTs, isT
       fill: `var(--cat-${category})`, 'data-index': index
     });
     svg.append(rect);
-    items.push({ bar, rect, slotX, slotW, top, isCurrent, isPast, isAggregate: Boolean(bar.members) });
+    items.push({ bar, rect, slotX, slotW, top, bottom: top + barH, isCurrent, isPast, isAggregate: Boolean(bar.members) });
   });
 
-  // 15-min / 1-h tarbimise (kWh) joon ja pindala, kui mõõteandmed on olemas
+  // 15-min / 1-h tarbimise (kWh) joon ja pindala oma parempoolse teljega, kui mõõteandmed on olemas
   const kwhItems = items.filter(it => it.bar.kwh != null && Number.isFinite(it.bar.kwh));
   if (kwhItems.length > 0) {
     const maxKwh = Math.max(0.01, ...kwhItems.map(it => it.bar.kwh));
     const baseLineY = height - padB;
     const kwhPlotH = plotH * 0.78;
     const yKwh = val => baseLineY - (val / maxKwh) * kwhPlotH;
+    const kwhAxis = niceTicks(0, maxKwh, 2);
+    for (const tick of kwhAxis.ticks) {
+      const ty = yKwh(tick);
+      svg.append(svgEl('line', { x1: width - padR, x2: width - padR + 3, y1: ty, y2: ty, stroke: 'var(--bar-primary)', 'stroke-width': 1 }));
+      svg.append(svgEl('text', {
+        x: width - padR + 5, y: ty + 4, 'font-size': 11, fill: 'var(--bar-primary)', text: kwhAxis.format.format(tick)
+      }));
+    }
+    svg.append(svgEl('text', { class: 'axis-unit axis-unit--kwh', x: width - 2, y: 11, 'text-anchor': 'end', text: 'kWh' }));
     const pts = kwhItems.map(it => ({
       cx: it.slotX + it.slotW / 2,
       cy: yKwh(it.bar.kwh)
@@ -2419,6 +1430,7 @@ function buildPriceChartSvg({ bars, avg, dayStart, dayEnd, width, currentTs, isT
       const lineD = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.cx.toFixed(1)} ${p.cy.toFixed(1)}`).join(' ');
       const areaD = `${lineD} L ${pts[pts.length - 1].cx.toFixed(1)} ${baseLineY} L ${pts[0].cx.toFixed(1)} ${baseLineY} Z`;
       svg.append(svgEl('path', { class: 'consumption-area', d: areaD }));
+      svg.append(svgEl('path', { class: 'consumption-halo', d: lineD }));
       svg.append(svgEl('path', { class: 'consumption-line', d: lineD }));
     } else if (pts.length === 1) {
       svg.append(svgEl('circle', { class: 'consumption-dot', cx: pts[0].cx, cy: pts[0].cy, r: 3.5 }));
@@ -2430,7 +1442,8 @@ function buildPriceChartSvg({ bars, avg, dayStart, dayEnd, width, currentTs, isT
     svg.append(svgEl('line', { x1: padL, x2: width - padR, y1: zeroY, y2: zeroY, stroke: 'var(--text)', 'stroke-width': 1.5 }));
   }
 
-  // Päeva keskmise punktiirjoon koos sildiga
+  // Päeva keskmise punktiirjoon koos sildiga (silt praegusest perioodist eemal, et see ei kataks kontuuri)
+  const currentItem = items.find(i => i.isCurrent);
   if (avg != null) {
     const ay = y(avg);
     svg.append(svgEl('line', {
@@ -2439,20 +1452,20 @@ function buildPriceChartSvg({ bars, avg, dayStart, dayEnd, width, currentTs, isT
     }));
     const labelText = `keskmine ${numberFormat.d2.format(avg)}`;
     const labelY = ay > padT + 18 ? ay - 6 : ay + 14;
+    const labelLeft = currentItem != null && currentItem.slotX > padL + plotW * 0.55;
     svg.append(svgEl('text', {
-      x: width - padR - 4, y: labelY, 'text-anchor': 'end', 'font-size': 11, 'font-weight': 700,
+      x: labelLeft ? padL + 4 : width - padR - 4, y: labelY, 'text-anchor': labelLeft ? 'start' : 'end', 'font-size': 11, 'font-weight': 700,
       fill: 'var(--text)', stroke: 'var(--surface)', 'stroke-width': 4, 'paint-order': 'stroke',
       text: labelText
     }));
   }
 
-  // Praeguse perioodi kontuur ja marker
-  const currentItem = items.find(i => i.isCurrent);
+  // Praeguse perioodi kontuur (ümbritseb ka negatiivse hinna tulpa) ja marker
   if (currentItem) {
     const cx = currentItem.slotX + currentItem.slotW / 2;
     svg.append(svgEl('rect', {
       class: 'bar-current',
-      x: currentItem.slotX, y: currentItem.top - 2, width: Math.max(2, currentItem.slotW), height: Math.max(3, zeroY - currentItem.top + 4),
+      x: currentItem.slotX, y: currentItem.top - 2, width: Math.max(2, currentItem.slotW), height: Math.max(3, currentItem.bottom - currentItem.top + 4),
       fill: 'none', stroke: 'var(--text)', 'stroke-width': 2, rx: 2
     }));
     svg.append(svgEl('path', {
@@ -2680,23 +1693,25 @@ function renderDaySummary(d) {
 
   // Käesoleva kuu ja eelneva aasta vastava kuu kWh/maksumuse võrdlus (kui Estfeed andmed on laetud)
   const bData = prepareBuildingData();
-  if (bData && bData.latest && Array.isArray(state.majaElekter) && state.majaElekter.length > 0) {
-    const curM = bData.latest;
-    const prevM = bData.previousOfLatest;
-    const mShort = r => capitalize(monthShortFormatter.format(new Date(Date.UTC(r.year, r.month - 1, 15))));
-    tiles.push(tile(
-      `Kuu kWh (${mShort(curM)} ${curM.year})`,
-      `${numberFormat.d0.format(curM.kwh)} kWh`,
-      `maksumus ${formatEur(curM.eur)}`
-    ));
-    if (prevM) {
-      const sub = prevM.kwhToDate != null && !curM.complete
-        ? `sama ajani ${numberFormat.d0.format(prevM.kwhToDate)} kWh · terve kuu ${formatEur(prevM.eur)}`
-        : `maksumus ${formatEur(prevM.eur)}`;
+  if (bData && Array.isArray(state.majaElekter) && state.majaElekter.length > 0) {
+    const { current: curM, previous: prevM } = bData.groups[bData.groups.length - 1];
+    const monthOf = r => monthNameFormatter.format(new Date(Date.UTC(r.year, r.month - 1, 15)));
+    if (!curM.isPlaceholder) {
       tiles.push(tile(
-        `Aasta varem (${mShort(prevM)} ${prevM.year})`,
-        `${numberFormat.d0.format(prevM.kwh)} kWh`,
-        sub
+        curM.complete ? `Tarbimine (${monthOf(curM)})` : `Sel kuul (${monthOf(curM)})`,
+        `${numberFormat.d0.format(curM.kwh)} kWh`,
+        `maksumus ${formatEur(curM.eur)}`
+      ));
+    }
+    if (prevM && prevM.kwh > 0) {
+      // Pooliku kuu korral võrreldakse sama kuupäevani aasta varem (kwhToDate), muidu terve kuuga
+      const toDate = !curM.complete && prevM.kwhToDate != null;
+      tiles.push(tile(
+        toDate ? `Aasta varem sama ajani` : `Aasta varem (${prevM.year})`,
+        `${numberFormat.d0.format(toDate ? prevM.kwhToDate : prevM.kwh)} kWh`,
+        toDate
+          ? `${formatEur(prevM.eurToDate ?? prevM.eur)} · terve kuu ${numberFormat.d0.format(prevM.kwh)} kWh`
+          : `maksumus ${formatEur(prevM.eur)}`
       ));
     }
   }
@@ -2828,7 +1843,7 @@ function renderFinalPrice(d) {
       row('Börsihind ilma KM-ta', calc.spot),
       row('Müüja marginaal', calc.marginaal),
       row(`Võrgutasu (${tariffLabel})`, calc.vorgutasu),
-      row('Taastuvenergia+Varustuskindluse tasu', calc.taastuvenergia),
+      row('Taastuvenergia- ja varustuskindluse tasu', calc.taastuvenergia),
       row('Elektriaktsiis', calc.aktsiis),
       row(`Käibemaks ${vatPercent}%`, calc.vat),
       row('Lõpphind koos KM-ga', calc.total, { class: 'breakdown__total' })
@@ -2867,7 +1882,7 @@ function renderFinalPrice(d) {
   const sharesValid = calc.total > 0 && shares.every(s => s[1] >= 0);
   if (sharesValid) {
     nodes.push(
-      el('p', { class: 'plan__label', style: 'margin-top:var(--s3)', text: 'Hinnakomponentide osakaal praegu' }),
+      el('p', { class: 'plan__label shares-label', text: 'Hinnakomponentide osakaal praegu' }),
       el('div', { class: 'shares-bar', 'aria-hidden': 'true' },
         shares.map(([, value, color]) => el('span', { style: `width:${(value / calc.total * 100).toFixed(2)}%;background:${color}` }))),
       el('ul', { class: 'shares' }, shares.map(([label, value, color]) => el('li', {}, [
@@ -2904,7 +1919,7 @@ function renderBuildingElectricity() {
       const totalTxt = metric === 'eur'
         ? formatEur(data.totalEur12)
         : (data.totalKwh12 >= 10000 ? `${numberFormat.d1.format(data.totalKwh12 / 1000)} MWh` : `${numberFormat.d0.format(data.totalKwh12)} kWh`);
-      badgeEl.textContent = `12 k: ${totalTxt}`;
+      badgeEl.textContent = `12 kuud: ${totalTxt}`;
       badgeEl.hidden = false;
     } else {
       badgeEl.hidden = true;
@@ -2920,7 +1935,7 @@ function renderBuildingElectricity() {
 
   host.replaceChildren(buildBuildingChartSvg(data, metric, width, activeIdx));
 
-  const monthName = row => capitalize(monthLongFormatter.format(new Date(Date.UTC(row.year, row.month - 1, 15))));
+  const monthName = row => capitalize(monthNameFormatter.format(new Date(Date.UTC(row.year, row.month - 1, 15))));
   const selectedRow = activeGroup.current;
   const prevRow = activeGroup.previous;
 
@@ -2931,7 +1946,7 @@ function renderBuildingElectricity() {
       ? `${monthName(selectedRow)} ${selectedRow.year}: andmed puuduvad`
       : `${monthName(selectedRow)} ${selectedRow.year}${isOngoing ? ' (jooksev)' : ''}: ${numberFormat.d0.format(selectedRow.kwh)} kWh (${formatEur(selectedRow.eur)})`;
     const prevDesc = prevRow && prevRow.kwh > 0
-      ? ` · Aasta varem: ${numberFormat.d0.format(isOngoing && prevRow.kwhToDate ? prevRow.kwhToDate : prevRow.kwh)} kWh (${formatEur(isOngoing && prevRow.eurToDate ? prevRow.eurToDate : prevRow.eur)})`
+      ? ` · Aasta varem${isOngoing && prevRow.kwhToDate ? ' sama ajani' : ''}: ${numberFormat.d0.format(isOngoing && prevRow.kwhToDate ? prevRow.kwhToDate : prevRow.kwh)} kWh (${formatEur(isOngoing && prevRow.eurToDate ? prevRow.eurToDate : prevRow.eur)})`
       : '';
     infoEl.textContent = curDesc + prevDesc;
   }
@@ -2989,7 +2004,7 @@ function renderBuildingElectricity() {
   // 4. 12 kuu keskmine
   if (data.countWithData > 0) {
     statTiles.push(el('div', { class: 'stat' }, [
-      el('p', { class: 'stat__label', text: '12 k keskmine' }),
+      el('p', { class: 'stat__label', text: '12 kuu keskmine' }),
       el('p', { class: 'stat__value', text: metric === 'eur' ? formatEur(data.avgEur) : `${numberFormat.d0.format(data.avgKwh)} kWh` }),
       el('p', { class: 'stat__time', text: `kokku: ${metric === 'eur' ? `${numberFormat.d0.format(data.totalKwh12)} kWh` : formatEur(data.totalEur12)}` })
     ]));
@@ -2997,17 +2012,17 @@ function renderBuildingElectricity() {
 
   byId('building-body').replaceChildren(
     el('div', { class: 'stats stats--building' }, statTiles),
-    el('div', { class: 'legend', style: 'margin-top:var(--s2);justify-content:space-between;' }, [
+    el('div', { class: 'legend building-legend', role: 'group', 'aria-label': 'Graafiku selgitus' }, [
       el('span', { class: 'legend__item' }, [
         el('span', { class: 'legend__swatch', style: '--swatch:var(--bar-primary)', 'aria-hidden': 'true' }),
-        'viimased 12 kuud (puuduta tulpa)'
+        'viimased 12 kuud (vali tulp)'
       ]),
       el('span', { class: 'legend__item' }, [
         el('span', { class: 'legend__swatch legend__swatch--outline', 'aria-hidden': 'true' }),
         'aasta varem'
       ]),
       data.groups.some(g => g.current.complete === false) ? el('span', { class: 'legend__item' }, [
-        el('span', { text: '* jooksev kuu (pooleli)', style: 'font-size:12px;color:var(--muted);' })
+        el('span', { text: '* jooksev kuu (pooleli)' })
       ]) : null
     ])
   );
@@ -3038,14 +2053,14 @@ function buildBuildingChartSvg(data, metric, width, activeIdx) {
     const ty = y(tick);
     svg.append(svgEl('line', { x1: padL, x2: width - padR, y1: ty, y2: ty, stroke: 'var(--border)', 'stroke-width': 1 }));
     const tickText = tick >= 1000 && metric !== 'eur' ? `${Math.round(tick / 1000)}k` : axis.format.format(tick);
-    svg.append(svgEl('text', { x: padL - 5, y: ty + 4, 'text-anchor': 'end', 'font-size': 10, fill: 'var(--muted)', text: tickText }));
+    svg.append(svgEl('text', { x: padL - 5, y: ty + 4, 'text-anchor': 'end', 'font-size': 11, fill: 'var(--muted)', text: tickText }));
   }
 
   const slot = plotW / groups.length;
   const barW = Math.max(5, Math.min(11, Math.floor(slot * 0.36)));
 
   const MONTH_NAMES_SHORT = ['', 'Jaan', 'Veebr', 'Märts', 'Apr', 'Mai', 'Juun', 'Juul', 'Aug', 'Sept', 'Okt', 'Nov', 'Dets'];
-  const MONTH_NAMES_3 = ['', 'Jaa', 'Vee', 'Mär', 'Apr', 'Mai', 'Juu', 'Juu', 'Aug', 'Sep', 'Okt', 'Nov', 'Det'];
+  const MONTH_NAMES_3 = ['', 'Jaa', 'Vee', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Det']; // juuni ≠ juuli
 
   // Aasta vahetuse eraldusjoon
   let janIndex = -1;
@@ -3111,11 +2126,13 @@ function buildBuildingChartSvg(data, metric, width, activeIdx) {
         'pointer-events': 'none'
       }));
 
-      // Valitud tulba kohal kuvatakse number
+      // Valitud tulba kohal kuvatakse number (servas joondatakse sissepoole, et see ei lõikuks ära)
       if (isSelected) {
+        const labelX = currX + barW / 2;
+        const anchor = labelX > width - padR - 18 ? 'end' : labelX < padL + 18 ? 'start' : 'middle';
         svg.append(svgEl('text', {
-          x: currX + barW / 2, y: y(curVal) - 4, 'text-anchor': 'middle',
-          'font-size': 11, 'font-weight': 700, fill: 'var(--text)',
+          x: anchor === 'end' ? currX + barW : anchor === 'start' ? currX : labelX, y: y(curVal) - 4, 'text-anchor': anchor,
+          'font-size': 11, 'font-weight': 700, fill: 'var(--text)', stroke: 'var(--surface)', 'stroke-width': 3, 'paint-order': 'stroke',
           text: numberFormat.d0.format(curVal), 'pointer-events': 'none'
         }));
       }
@@ -3138,12 +2155,12 @@ function buildBuildingChartSvg(data, metric, width, activeIdx) {
     const y2Center = padL + slot * (janIndex + (12 - janIndex) / 2);
     svg.append(svgEl('text', {
       x: y1Center, y: height - 2, 'text-anchor': 'middle',
-      'font-size': 10, 'font-weight': 600, fill: 'var(--muted)',
+      'font-size': 11, 'font-weight': 600, fill: 'var(--muted)',
       text: `'${String(groups[0].current.year).slice(-2)}`, 'pointer-events': 'none'
     }));
     svg.append(svgEl('text', {
       x: y2Center, y: height - 2, 'text-anchor': 'middle',
-      'font-size': 10, 'font-weight': 600, fill: 'var(--muted)',
+      'font-size': 11, 'font-weight': 600, fill: 'var(--muted)',
       text: `'${String(groups[groups.length - 1].current.year).slice(-2)}`, 'pointer-events': 'none'
     }));
   }
@@ -3245,7 +2262,9 @@ function setupControls() {
     input.addEventListener('change', () => { state.buildingView = input.value; renderBuildingElectricity(); });
   }
 
-  byId('retry-button').addEventListener('click', () => fetchPrices());
+  byId('retry-button').addEventListener('click', () => {
+    if (retryCooldownLeftMs() === 0) fetchPrices();
+  });
 
   document.addEventListener('pointerdown', event => {
     if (state.tooltipIndex != null && !byId('chart-wrapper').contains(event.target)) hideTooltip();
