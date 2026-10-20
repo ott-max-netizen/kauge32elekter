@@ -18,6 +18,19 @@ Elering API → GitHub Actions → hinnad.json → GitHub Pages → index.html b
   homsed hinnad on käes.
 - Kõik ajad arvutatakse Europe/Tallinn ajas; hinnad on 15-minutilised.
 
+## Lehed ja failid
+
+| Fail | Sisu |
+|---|---|
+| `index.html` | **Elektriinfo**: börsihind, odavaim aeg, maja lõpphind ja üldelekter |
+| `energy-dashboard.html` | **Energia**: päikesepark, akupank, energiavoog ja soovitus |
+| `css/common.css` | mõlema lehe ühine kujundus (värvid, kaardid, päis, graafikud) |
+| `css/index.css`, `css/energy-dashboard.css` | lehepõhine kujundus |
+| `hinnad.json`, `paike.json` | GitHub Actionsi kirjutatud andmefailid |
+
+Lehtede vahel liigub päises olevate linkidega **Elektriinfo** / **Energia**. CSS-i muutmisel
+suurenda mõlemas HTML-failis linkide lõpus olevat `?v=` väärtust, et brauserid laadiksid uue faili.
+
 ## Seadete muutmine
 
 Tasud, tariifid ja maja andmed on `index.html` alguses objektis `CONFIG` (iga rea
@@ -93,11 +106,28 @@ Elering API      → GitHub Actions (uuenda-hinnad.yml) → hinnad.json ┴→ G
   tühjenemisaja hinnanguks.
 
 **Otseühendus (valikuline):** jaluse lingi „Solarmani otseühendus“ kaudu saab ühes
-seadmes pärida andmed brauserist otse Solarmani API-st (token salvestatakse koos
-aegumisajaga `localStorage`-isse, parool ainult SHA-256 räsina). Solarmani API ei luba
-enamasti brauserist otse pärida (CORS), seega on vaja enda hallatavat CORS-proksit, mille
-lõppu lisatakse API aadress URL-kodeeritult. Kasuta seda ainult isiklikus seadmes;
-avalikul lehel jäävad võtmed GitHub Secretsisse.
+seadmes pärida andmed brauserist otse Solarmani API-st. Võtmed ja token salvestatakse
+vaikimisi `sessionStorage`-isse (kustuvad vahelehe sulgemisel); valikuga „Jäta meelde selles
+seadmes“ `localStorage`-isse. Parool salvestatakse SHA-256 räsina, kuid Solarmani jaoks on räsi
+parooliga samaväärne. Solarmani API ei luba enamasti brauserist otse pärida (CORS), seega on
+vaja enda hallatavat CORS-proksit (`https://` või `http://localhost`), mille lõppu lisatakse API
+aadress URL-kodeeritult. Kasuta seda ainult isiklikus seadmes; avalikul lehel jäävad võtmed
+GitHub Secretsisse.
+
+„Värskenda“ nupp on pärast iga värskendust 30 s keelatud (nupul on loendur), et liiga tihe
+vajutamine ei koormaks Solarmani API-t ega GitHub Pagesi; elektriinfo lehe „Proovi uuesti“
+ootab 15 s.
+
+## Turvalisus
+
+- API võtmed (Elering, Solarman) on ainult GitHub Actions Secretsis; töövood annavad secret'id
+  edasi keskkonnamuutujatena ja kirjutavad andmefailidesse ainult mõõteväärtused.
+- Lehed lisavad sisu ainult `textContent`/`createElement` kaudu (mitte `innerHTML`) ning
+  `Content-Security-Policy` meta-silt lubab skripte ja stiile ainult samalt saidilt ning väliseid
+  päringuid ainult HTTPS-iga. Uue välise teenuse lisamisel uuenda CSP-d.
+- GitHub Pagesi leht ja avalik repo on kõigile nähtavad: ka `hinnad.json`-i 15-min tarbimine ja
+  `paike.json`-i võimsused. Kõik sama konto `*.github.io` lehed jagavad brauseri salvestusruumi,
+  seega ära salvesta otseühenduse võtmeid jagatud seadmes.
 
 ## Piirangud
 
@@ -110,5 +140,6 @@ avalikul lehel jäävad võtmed GitHub Secretsisse.
 
 ## Versioon ja muudatuste ajalugu
 
-- Praegune versioon: **v2.3.0** (määratud konstandis `APP_VERSION` failis `index.html`).
+- Praegune versioon: **v2.4.0** (`APP_VERSION` failis `index.html`), energialehel **v1.1.1**
+  (`APP_VERSION` failis `energy-dashboard.html`).
 - Üksikasjalik ülevaade UI/UX muudatustest, komponentide klassidest ja arhitektuurireeglitest (sh juhised Claude AI-le) asub failis [CHANGELOG.md](CHANGELOG.md).
