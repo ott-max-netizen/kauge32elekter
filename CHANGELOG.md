@@ -4,6 +4,12 @@ See fail kirjeldab rakenduse `index.html` versioonimuudatusi, arhitektuurilisi k
 
 ---
 
+## Töövood — 2026-10-21
+
+- **„Uuenda elektrihinnad“ käivitab käsitsi käivitamisel ka „Uuenda päikeseandmed“.** `uuenda-hinnad.yml`-is on uus töö `paike`: kui töövoog käivitatakse käsitsi (Run workflow või väline ajastaja, `workflow_dispatch`), käivitab see `gh workflow run uuenda-paike.yml` (õigus `actions: write`). Päikeseandmed uuenevad paralleelselt hindadega ega oota 15:00 akna hindu. Ajastatud käivitustel seda ei tehta: päikeseandmed uuenevad niigi iga 10 min järel ja lisakäivitused ületaksid GitHub Pagesi avaldamise piirangu.
+
+---
+
 ## [2.4.2] ja energy-dashboard.html [1.1.1] — 2026-10-21
 
 ### Ülevaade
