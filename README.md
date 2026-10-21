@@ -18,6 +18,18 @@ Elering API → GitHub Actions → hinnad.json → GitHub Pages → index.html b
   homsed hinnad on käes.
 - Kõik ajad arvutatakse Europe/Tallinn ajas; hinnad on 15-minutilised.
 
+## Lehed ja failid
+
+| Fail | Sisu |
+|---|---|
+| `index.html` | **Elektriinfo**: börsihind, odavaim aeg, päikesekaart, maja lõpphind ja üldelekter (HTML, CSS ja JS ühes failis) |
+| `energy-dashboard.html` | **Energia**: päikesepark, akupank, energiavoog ja soovitus |
+| `css/common.css`, `css/energy-dashboard.css` | energialehe kujundus (CSS-i muutmisel suurenda HTML-i linkides `?v=` väärtust) |
+| `hinnad.json`, `paike.json` | GitHub Actionsi kirjutatud andmefailid |
+
+Lehtede vahel liigub elektriinfo lehe vaadete ribal oleva lingiga **🔋 Energia** ja energialehe päises
+oleva lingiga **Elektriinfo**.
+
 ## Seadete muutmine
 
 Tasud, tariifid ja maja andmed on `index.html` alguses objektis `CONFIG` (iga rea
@@ -62,24 +74,102 @@ Accept: application/vnd.github+json
 
 ## Mõõtmiste loogika: Enefit vs Inverter
 
-Rakendus eristab kahte erinevat ja teineteist täiendavat andmeallikat:
-1. **Enefit / Estfeed (Võrguarvesti)**: mõõdab **elektri ostu võrgust** (`Ostetud võrgust (Enefit)`). See näitab mahtu, mida maja vajas lisaks kohapeal toodetud päikeseenergiale ja mille eest tuleb maksta börsihinda, võrgutasu ning makse.
-2. **Inverter (Päikesepark & hoone koormus)**: mõõdab **päikesepargi toodangut** ja **maja reaalset tarbimist** (`Maja reaalne tarbimine (Inverter)` = Ost võrgust + Päikese omatarbimine). Omatarbimine asendab võrguostu ning annab otsese rahalise säästu.
+Rakendus kasutab kahte teineteist täiendavat mõõtmist:
+1. **Enefit / Estfeed (võrguarvesti, `hinnad.json` → `kwh`)**: **elektri ost võrgust** 15 minuti kaupa (`Ostetud võrgust (Enefit)`). See on arve alus.
+2. **Inverter (Solarman, `paike.json`)**: **päikesetoodang**, **maja tegelik tarbimine** (`usePower`), aku laadimine/tühjenemine ja ost võrgust. Inverteri ost klapib Estfeedi arvestiga 15-min täpsusega.
 
-## Päikeseenergia tootmine (Solar Dashboard)
+Maja tarbimine ≠ ost võrgust + päikese omatarve, sest maja akut laetakse odava hinnaga ka võrgust
+(öösel kuni ~19 kW). Seepärast võetakse maja tarbimine otse inverterist: ost + päike + aku tühjenemine −
+aku laadimine − müük. Solarmani päevakogused (`data.day`) on selle jaama puhul ~10× liiga väikesed,
+seetõttu arvutatakse kõik päeva kogused 15-min mõõtmistest.
 
-Rakendus sisaldab täielikku päikeseenergia moodulit (`CONFIG.paike`):
-- **Reaalajas energiavoog (Energy Flow)**: kuvab visuaalselt energia liikumist päikesepargi (15 kWp), maja tarbimise ja elektrivõrgu vahel (omatarbimine vs võrku müük).
-- **Päikese tootmiskõver graafikul**: astronoomiline mudel Tallinna koordinaatidel koos tipptundide soovitusega (nt 11:00–14:30), mil elekter on tasuta ja võrgutasusid ei lisandu.
-- **Säästu ja tulukuse KPI-d**: reaalajas hetkevõimsus (kW), päeva kogutoodang (kWh), omatarbe rahaline sääst (€) ja võrku müügi tulu (€).
-- **Vaadete lüliti (View Switcher)**: kiire hüppamine või filtreerimine mobiilis (*Kõik*, *⚡ Elekter*, *☀️ Päike*, *⏱️ Planeerija*, *🏢 Maja 12 k*).
-- **Teemamootor**: hele ja tume režiim koos päise kiirlülitiga.
+## Päikeseenergia (elektriinfo lehe päikesekaart)
+
+- Kõik päikese, maja tarbimise ja aku numbrid on **mõõtmised** failist `paike.json` (vt allpool
+  „Energia töölaud“). Mudelit ega prognoosi ei kuvata: kogused on summad kuni viimase mõõtmiseni ja
+  graafikul on päike ainult tänase päeva möödunud perioodides (kWh 15 min kohta, parem telg).
+- Kui viimane mõõtmine on vanem kui `CONFIG.paike.aegunudMinutites` (45 min), hetkeseisu ei kuvata
+  ja päise olekumärk on kollane („OSA ANDMEID VANANENUD“).
+- `CONFIG.paike.paneelideKw` ja `paneelideArv` on ainult sildil. NB: Solarmani andmetes on jaama
+  võimsus 27,5 kWp; kontrolli, kumb on õige.
+- **Vaadete lüliti** (*Kõik*, *⚡ Elekter*, *☀️ Päike*, *⏱️ Planeerija*, *🏢 Maja 12 k*) ja link
+  energialehele, **teemamootor** (hele/tume) päises.
+
+## Hinnad ja tariifid
+
+- Lõpphind = (börsihind + marginaal + võrgutasu + taastuvenergia- ja varustuskindluse tasu + aktsiis)
+  × (1 + KM). Öötariif kehtib tööpäeviti 22–07 ning laupäeval, pühapäeval ja **riigipühadel** kogu
+  ööpäeva (`CONFIG.ootariif.riigipuhadOnOo`, Elektrilevi hinnakiri).
+- „Leia odavaim aeg“, elektriauto laadimine ja soovitused valivad akna **hinna koos tasudega**
+  järgi (öine võrgutasu on odavam), näidatakse ka börsihinda.
+- Kuu € (`majaElekter`) on hinnang: 15-min ost × börsihind + praegused tasud (enne 01.07.2025 KM 22%).
+  Fikseeritud kuutasud lisanduvad ainult siis, kui need on `CONFIG.hinnad.kuutasu`-s. Kui arve on
+  järjepidevalt suurem, lisa kuutasu.
+
+## Energia töölaud (`energy-dashboard.html`)
+
+Eraldi leht, mis koondab ühte vaatesse päikesepargi tootmise, akupanga oleku, võrgu
+ostu/müügi, maja tarbimise ja börsihinna koos soovitusega (lae akut võrgust, kasuta
+akut, müü või tarbi). Elektriinfo lehe päikesekaart näitab samu mõõtmisi lühidalt ja viitab sellele lehele.
+
+```
+Solarman OpenAPI → GitHub Actions (uuenda-paike.yml) → paike.json ┐
+Elering API      → GitHub Actions (uuenda-hinnad.yml) → hinnad.json ┴→ GitHub Pages → energy-dashboard.html
+```
+
+- Solarmani võtmed on GitHub Actions Secretsis, mitte lehe koodis. Lisa
+  **Settings → Secrets and variables → Actions** alla:
+  - `SOLARMAN_APP_ID` – Solarman OpenAPI App ID
+  - `SOLARMAN_APP_SECRET` – Solarman OpenAPI App Secret
+  - `SOLARMAN_EMAIL` – Solarmani konto e-post
+  - `SOLARMAN_PASSWORD` – parool tavatekstina või selle SHA-256 räsi (64 hex-märki);
+    tavatekst räsitakse enne päringut väiketähtedega hex-kujule
+  - `SOLARMAN_STATION_ID` (valikuline) – jaama ID; puudumisel kasutatakse konto esimest jaama
+- Seejärel käivita **Actions → Uuenda päikeseandmed → Run workflow**. Töövoog
+  käivitub edaspidi iga 10 minuti järel ja teeb commit'i ainult siis, kui andmed muutusid.
+  10 minutit tuleneb GitHub Pagesi pehmest piirangust (10 avaldamist tunnis koos
+  `hinnad.json`-iga); leht ise kontrollib faili iga 5 minuti järel.
+- `paike.json` sisaldab ainult võimsusi ja energiakoguseid (ilma jaama asukoha ja
+  võtmeteta). GitHub Pagesi leht on avalik, seega on avalikud ka need andmed.
+- Tariifid, hinnapiirid ja hinnasildid loeb töölaud `index.html`-i `CONFIG`-ist, nii et
+  neid tuleb muuta ainult ühes kohas.
+- Kui aku või võrgu suund kuvatakse valepidi, määra `energy-dashboard.html` `CONFIG`-is
+  `solarman.akuMark` / `solarman.vorguMark` käsitsi (vaikimisi tuvastatakse
+  energiabilansist automaatselt). Aku mahtu (`aku.mahtKwh`) on vaja laadimis- ja
+  tühjenemisaja hinnanguks.
+
+**Otseühendus (valikuline):** jaluse lingi „Solarmani otseühendus“ kaudu saab ühes
+seadmes pärida andmed brauserist otse Solarmani API-st. Võtmed ja token salvestatakse
+vaikimisi `sessionStorage`-isse (kustuvad vahelehe sulgemisel); valikuga „Jäta meelde selles
+seadmes“ `localStorage`-isse. Parool salvestatakse SHA-256 räsina, kuid Solarmani jaoks on räsi
+parooliga samaväärne. Solarmani API ei luba enamasti brauserist otse pärida (CORS), seega on
+vaja enda hallatavat CORS-proksit (`https://` või `http://localhost`), mille lõppu lisatakse API
+aadress URL-kodeeritult. Kasuta seda ainult isiklikus seadmes; avalikul lehel jäävad võtmed
+GitHub Secretsisse.
+
+„Värskenda“ nupp on pärast iga värskendust 30 s keelatud (nupul on loendur), et liiga tihe
+vajutamine ei koormaks Solarmani API-t ega GitHub Pagesi; elektriinfo lehe „Proovi uuesti“
+ootab 15 s.
+
+## Turvalisus
+
+- API võtmed (Elering, Solarman) on ainult GitHub Actions Secretsis; töövood annavad secret'id
+  edasi keskkonnamuutujatena ja kirjutavad andmefailidesse ainult mõõteväärtused.
+- Lehed lisavad sisu ainult `textContent`/`createElement` kaudu (mitte `innerHTML`) ning
+  `Content-Security-Policy` meta-silt lubab skripte ja stiile ainult samalt saidilt ning väliseid
+  päringuid ainult HTTPS-iga. Uue välise teenuse lisamisel uuenda CSP-d.
+- GitHub Pagesi leht ja avalik repo on kõigile nähtavad: ka `hinnad.json`-i 15-min tarbimine ja
+  `paike.json`-i võimsused. Kõik sama konto `*.github.io` lehed jagavad brauseri salvestusruumi,
+  seega ära salvesta otseühenduse võtmeid jagatud seadmes.
 
 ## Piirangud
 
-- Lõpphind ja päikesetoodang on hinnangulised; tegelik arve ja tootlus sõltuvad lepingutest, arvestitest ja ilmaoludest.
+- Lõpphind ja kuu € on hinnangud; tegelik arve sõltub elektri- ja võrgulepingust.
+- Solarmani välja `gridPower` märgikokkulepe ja päevakoguste tähendus ei ole Solarmani dokumentatsioonis
+  üheselt kirjeldatud; müük võrku tuletatakse energiabilansist.
 
 ## Versioon ja muudatuste ajalugu
 
-- Praegune versioon: **v2.4.1** (määratud konstandis `APP_VERSION` failis `index.html`).
+- Praegune versioon: **v2.4.2** (`APP_VERSION` failis `index.html`), energialehel **v1.1.1**
+  (`APP_VERSION` failis `energy-dashboard.html`).
 - Üksikasjalik ülevaade UI/UX muudatustest, komponentide klassidest ja arhitektuurireeglitest (sh juhised Claude AI-le) asub failis [CHANGELOG.md](CHANGELOG.md).

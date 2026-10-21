@@ -4,7 +4,50 @@ See fail kirjeldab rakenduse `index.html` versioonimuudatusi, arhitektuurilisi k
 
 ---
 
+## [2.4.2] ja energy-dashboard.html [1.1.1] — 2026-10-21
+
+### Ülevaade
+Elektriinfo lehe (`index.html`) andmete ja arvutusvalemite kontroll. Põhiprobleem: päikesemoodul (2.4.0) ei kasutanud inverteri andmeid üldse, vaid **selge taeva mudelit**, ja näitas selle tulemusi siltidega „(Inverter)“. Mudeli järgi oli lõunaaeg kell 12:00 (tegelikult ~13:05 suveajal), päikesepargi võimsus 15 kWp (Solarmani järgi 27,5 kWp). „Täna toodang“ ja sääst sisaldasid kogu päeva, ka tulevikku. Seepärast näitas graafik juba hommikul keskpäeva päikesetoodangut. `APP_VERSION` on `index.html`-is `2.4.2` ja `energy-dashboard.html`-is `1.1.1`.
+
+### 1. Päike, maja tarbimine ja aku ainult mõõtmistest (`paike.json`)
+- Mudel (`getSolarMetrics`, `calculateSolarDay`, fikseeritud 65% omatarve) on eemaldatud. `index.html` loeb nüüd sama faili `paike.json` (Solarman, töövoog `uuenda-paike.yml`) mis energialeht: `loadSolarData` → `buildSolarView` (arvutatakse igal renderdamisel, et keskööl vahetuks päev).
+- **Energiavoog** näitab inverteri hetkeseisu: päike, maja ja võrk (ost või müük). Maja tarbimise allikad on jaotatud päikese, aku ja võrgu vahel; aku laetus ja suund on eraldi real. Müük võrku tuletatakse energiabilansist, mitte fikseeritud osakaalust. Kui viimane mõõtmine on vanem kui `CONFIG.paike.aegunudMinutites` (45 min), hetkeseisu ei kuvata ja märk on kollane.
+- **Kogused** (täna toodetud, maja tarbis, ost võrgust, päikeseenergia väärtus) on 15-min mõõtmiste summad kuni viimase mõõtmiseni, mitte terve päeva prognoos. Maja tarbimine = inverteri `usePower`. Varasem valem „Enefiti ost + päikese omatarve“ luges ka öise aku laadimise võrgust maja tarbimiseks (21.10 kella 8-ni: 114,7 kWh vs mõõdetud 60,8 kWh).
+- **Hinnagraafik**: päikesetoodang on mõõdetud 15-min energia (kWh) ainult tänase päeva möödunud perioodides. Sellel on ühine parempoolne kWh-telg ostuga võrgust, ja telgedel on ühikud. Eile/homme päikesekihti ei näidata, sest `paike.json` sisaldab ainult tänast päeva.
+- `CONFIG.paike`: lisatud `andmefail` ja `aegunudMinutites`. Eemaldatud ainult mudelis kasutatud võtmed `asimuut`, `kaldenurk`, `inverteriKasutegur`, `omatarbimiseOsa`, `aastaneToodangKwh`. `paneelideKw`/`paneelideArv` jäävad ainult sildile.
+- Päise märk „OTSEÜHENDUS“ (alati roheline) → tegelik andmete värskus: **ANDMED AJAKOHASED** / **OSA ANDMEID VANANENUD** / **ANDMED PUUDUVAD**. Andmed tulevad GitHub Actionsi failidest, mitte otseühendusest.
+
+### 2. Arvutusvalemite parandused
+- **Võrgutasu riigipühadel**: Elektrilevi hinnakirja järgi kehtib öötariif ka riigipühadel kogu ööpäeva. Uus `CONFIG.ootariif.riigipuhadOnOo` (fikseeritud pühad + suur reede, ülestõusmis- ja nelipühade 1. püha) kehtib mõlemal lehel ja töövoo kuuarvutuses (`calc_final_cents_kwh`).
+- **Soovitus „Võimalusel oota“**: varem kirjutati „Järgmine odavam 2-tunnine periood algab 23:00“, kuigi see oli järgmise 24 h *odavaim* aken (odavam algas juba 09:00). Nüüd: „Järgmise 24 h odavaim 2-tunnine aeg … (keskmiselt X s/kWh, Y% odavam kui praegu)“.
+- **Tunnivaade**: osaliselt mõõdetud tunni ostu ei näidata enam terve tunni summana.
+- **Lõpphinna kaart**: „Võrgu- ja riigitasud“ → „Marginaal, võrgu- ja riigitasud“ (sisaldab müüja marginaali). Osakaalud ümardatakse suurima jäägi meetodiga, nii et summa on 100% (varem 101%). „Ostukulu (Enefit)“ → „Ostukulu koos tasudega“.
+- **Kellakeeramine**: ajavahemikule lisatakse märkus „(kell keeratakse tagasi/edasi)“ (25.10 näidati 2 h akent „03:20–04:20“).
+- **Töövoog `uuenda-hinnad.yml`**: kui kuu börsihindade päring ebaõnnestus, arvestati puuduvaid perioode hinnaga 0 €/MWh, mistõttu kuu € oli sadu eurosid liiga väike. Nüüd ei uuendata kuu kirjet, kui hind puudub üle 1% perioodidest (jääb varasem). Üksikud augud kaetakse kuu keskmise hinnaga.
+- **Töövoo kuukirjete vahemälu**: lõpetatud kuid ei arvutatud kunagi uuesti, seega ei jõudnud valemiparandused vanadesse kuudesse. Pooliku kuu „aasta varem sama ajani“ (`kwhToDate`) väärtus jäi samuti vanaks. Kirjetel on nüüd arvutusversioon `v` (`CALC_VERSION = 2`): versiooni muutumisel arvutatakse kõik kuud uuesti, „sama ajani“ võrdluskuu aga iga käivitusega. **Esimene käivitus pärast uuendust teeb ~40 Estfeedi päringut (3–5 min).**
+- **Käibemaks ajaloos**: töövoog arvestas kõigile kuudele 24% KM-i, kuigi enne 01.07.2025 oli see 22% (`KM_AJALUGU`).
+- **„Leia odavaim aeg“, elektriauto ja soovitused** järjestasid aknaid ainult börsihinna järgi. Päeva- ja öötariifi vahe (1,86 s/kWh koos KM-ga) muudab aga sageli odavaimaks hoopis öise akna. Nüüd on aluseks lõpphind koos võrgutasu, maksude ja KM-ga (`avgFinal`); börsihind on näidatud kõrval. Elektriauto kulu on kogukulu (`cost`), börsiosa eraldi (`spotCost`).
+- **Maja üldelekter**: „12 kuu ost“ hõlmas poolikut jooksvat kuud. Nüüd on see viimase 12 täiskuu summa ja periood on näha (nt „okt 25 – sept 26“). Jooksva kuu „aasta varem“ tulp näitab sama päevani kogust, mitte terve kuu oma. Kuu € on märgitud hinnanguks („≈ … (hinnang)“): selles pole kuutasu ega muid arve ridu.
+- Soovitustes „Hind püsib alla päeva keskmise“ → „… alla **tänase** keskmise“, sama mis hinnakaardil (võrreldakse tänase päeva keskmisega, ka siis, kui graafikul on homme). Neljakohalised summad on tuhandeeraldajaga (1 291,70 €), nagu suuremad.
+- **Vaatefilter**: akna suuruse muutmisel või telefoni pööramisel ilmus „Elekter“, „Päike“ või „Planeerija“ vaates peidetud „Maja üldelekter“ uuesti nähtavale. Nüüd arvestavad kaardid aktiivset vaadet. Jaluses ja legendis „Enefiti arvesti“ → „liitumispunkti arvesti“ / „Estfeed“: arvesti on võrguettevõtja oma, andmed tulevad Elering Estfeedist.
+
+### 3. PR #5 parandused, mis 2.4.0 ümberkirjutusega kadusid, on taastatud
+- Puuduv „Aasta varem“ kast (`previousOfLatest`); pooliku kuu võrdlus „sama ajani“. „Oktoober 2026 2026“ (aasta kahekordselt); juuni/juuli lühendid; maja üldelektri valitud tulba number ei lõigu ära; väikseim graafikutekst 11 px.
+- Hinnagraafiku kWh-telg, ühikud ja halo. Praeguse perioodi kontuur ümbritseb ka negatiivse hinna tulpa ning keskmise silt ei kata kontuuri. Legendis on ainult graafikul olevad elemendid.
+- Link energialehele (vaadete ribal „🔋 Energia (aku, energiavoog) →“ ja päikesekaardil), CSP ja referrer meta-sildid, tühi favicon.
+- Värskendusnupu ja „Proovi uuesti“ ooteaeg 15 s (kiire mitmekordne vajutamine teeb ühe päringu). Teema salvestamine ei murra lehte, kui salvestusruum on keelatud.
+- Tekstid: „12 kuu ost“, „12 kuu keskmine“, „Taastuvenergia- ja varustuskindluse tasu“, jaluses kõik kolm andmeallikat.
+- CSS-i järjekorravead: `.legend__swatch--solar`, `.badge-pill--solar` ja `.stats--solar` kirjutati hiljem defineeritud baasreeglitega üle (hall ruut legendis, mobiilis 3+1 kasti).
+
+### 4. Energialeht (`energy-dashboard.html` 1.1.1)
+- **Päeva kogused ~10× liiga väikesed**: Solarmani päevakogused (`paike.json` → `data.day`) on selle jaama puhul ~10 korda väiksemad kui 15-min mõõtmiste summa, kuigi mõõtmised klapivad Estfeedi arvestiga. Näiteks 20.10: päike 5,5 vs 55,6 kWh; maja 24,5 vs 246 kWh; ost 19,3 vs 196 kWh. `computeDayTotals` eelistab nüüd mõõtmiste summat, päevakoguseid kasutatakse ainult siis, kui mõõtmisi pole.
+- Riigipühade öötariif (vt p 2).
+
+---
+
 ## [2.4.1] — 2026-10-20
+
+> NB: valem „maja reaalne tarbimine = ost + päikese omatarve“ ei arvesta akut (seda laetakse ka võrgust); alates 2.4.2 võetakse maja tarbimine inverterist (`usePower`).
 
 ### Ülevaade
 Versioon `2.4.1` (defineeritud konstandina `APP_VERSION = '2.4.1'` failis `index.html`) viib andmete kuvamise vastavusse reaalsete mõõtmisallikatega:
@@ -25,6 +68,8 @@ Versioon `2.4.1` (defineeritud konstandina `APP_VERSION = '2.4.1'` failis `index
 
 ## [2.4.0] — 2026-10-20
 
+> NB: allpool kirjeldatud selge taeva päikesemudel, fikseeritud 65% omatarve ja „OTSEÜHENDUS“ märk asendati versioonis 2.4.2 inverteri mõõtmistega (vt 2.4.2).
+
 ### Ülevaade
 Versioon `2.4.0` (defineeritud konstandina `APP_VERSION = '2.4.0'` failis `index.html`) toob kaasa põhjaliku visuaalse ja UX moderniseerimise ning integreerib **täieliku päikeseenergia (Solar) dashboardi**:
 - **Päikeseenergia dashboard ja reaalajas energiavoog (`#section-solar` / `renderSolarDashboard`)**:
@@ -42,6 +87,67 @@ Versioon `2.4.0` (defineeritud konstandina `APP_VERSION = '2.4.0'` failis `index
   - **Vaadete lüliti (View Switcher)**: Horisontaalselt keritav reageeriv segmendiriba (`.view-filter`: *Kõik vaated* | *⚡ Elekter* | *☀️ Päike* | *⏱️ Planeerija & EV* | *🏢 Maja 12 k*).
   - **Päise indikaatorid**: Pulseeriv roheline märgis `OTSEÜHENDUS`, käsitsi värskenduse pöörlev nupp (`#refresh-button`), kaasaegne tüpograafia ja peened gradient-aktsendid.
   - **Bento Grid paigutus**: Desktopil (`>= 768px`) on kõrvuti *Elekter praegu* ja *Päikeseenergia tootmine*, millele järgneb täislaiuses interaktiivne graafik, seejärel *Planeerija* ja *Lõpphind* ning täislaiuses *Maja üldelekter*.
+
+---
+
+## PR #5: energy-dashboard.html [1.1.0], ühine CSS ja ülevaade — 2026-10-20
+
+> NB: commit 733e5c5 (2.4.0) ehitas `index.html`-i PR #5-eelsest koopiast, mistõttu selle kirje
+> `index.html`-i osad (CSS-failid, nav, CSP, ooteaeg, graafiku- ja tekstiparandused) kadusid. Enamik neist
+> on taastatud versioonis 2.4.2; `index.html` hoiab CSS-i jälle faili sees ja `css/index.css` on eemaldatud.
+> Energialehe (`energy-dashboard.html` 1.1.0) muudatused kehtivad.
+
+### Ülevaade
+Koodi-, kujunduse- ja turvaülevaate tulemused: ühine CSS, lehtedevaheline navigatsioon, värskendusnuppude sagedusepiirang, graafikute ja tekstide parandused ning turvatäiendused. `APP_VERSION` on `index.html`-is `2.4.0` ja `energy-dashboard.html`-is `1.1.0`.
+
+### 1. Kujundus eraldi CSS-failides
+- `css/common.css` — ühised tokenid (hele/tume teema), päis, navigatsioon, kaardid, teated, nupud, hinnakaart, tabid, graafiku üldosad, tooltip, legend, statistikakastid, jalus.
+- `css/index.css` ja `css/energy-dashboard.css` — lehepõhised reeglid (paigutus, planeerija, lõpphind, maja üldelekter / energiavoog, aku, dialoog jne).
+- Varem mõlemas failis dubleeritud kujundus (~700 rida) on ühes kohas; erinevused ühtlustati (`.card__head`, `.stats`, `.btn`, `.badge-pill`, `.tooltip > span`, jalus). Eemaldati kasutamata klassid `.building-bar` ja `.kpi-row` ning inline-stiilid asendati klassidega (`.shares-label`, `.building-legend`).
+- Lingid on kujul `css/common.css?v=20261020`: GitHub Pages hoiab faile vahemälus 10 min, seega **CSS-i muutmisel suurenda `?v=` väärtust mõlemas HTML-failis**.
+
+### 2. Navigatsioon lehtede vahel
+- Mõlema lehe päises on `nav.site-nav` lingid **Elektriinfo** (`index.html`) ja **Energia** (`energy-dashboard.html`); aktiivne leht on märgitud `aria-current="page"`. Energialehe jaluse eraldi link eemaldati.
+
+### 3. Värskendamise sagedusepiirang
+- **Energia „Värskenda“ ja „Proovi uuesti“:** pärast iga värskendust (ka automaatset) on nupud `REFRESH_COOLDOWN_MS` (30 s) keelatud; nupul on loendur `(28 s)` (`aria-hidden`, et ekraanilugeja seda iga sekund ette ei loeks). Kiire mitmekordne klõpsamine teeb ühe päringu. Kaitseb Solarmani API päringupiirangut otseühenduse korral.
+- `refreshNow({ force })`: automaatne ajastus ja otseühenduse seadete muutmine jätavad ooteaja vahele; kui värskendus juba käib, tehakse pärast seda kohe uus (`state.pendingRefresh`) — varem jäid käimasoleva värskenduse ajal salvestatud seaded kuni 5 min rakendamata.
+- **Elektriinfo „Proovi uuesti“:** `RETRY_COOLDOWN_MS` (15 s) sama loenduriga.
+
+### 4. Graafikud
+- **Hinnagraafik (`index.html`):** tarbimisjoonel on nüüd oma parempoolne **kWh-telg** (varem polnud skaalat ja joon paistis hinnaskaalal); telgede ühikud `s/kWh` / `kWh`; tarbimisjoone all on hele „halo“, mis eraldab selle värvilistest tulpadest.
+- **Praeguse perioodi kontuur** ümbritseb ka negatiivse hinna tulpa (varem 4 px kõrgune kast nulljoonel) — mõlemal lehel.
+- **„keskmine X“ silt** paigutatakse praegusest perioodist eemale (varem kattis õhtuti kontuuri) — mõlemal lehel.
+- **Legend** näitab ainult graafikul olevaid elemente: „praegune periood“ ainult täna, „valitud odavaim aken“ ainult siis, kui aken jääb valitud päeva.
+- **Maja üldelekter:** valitud tulba number ei lõigu enam paremas servas ära (joondatakse sissepoole, halo taustaga); kitsal ekraanil olid juuni ja juuli mõlemad „Juu“ → „Jun“ / „Jul“; telje- ja aastasildid 10 → 11 px.
+
+### 5. Tekstid, paigutus ja värvid
+- Parandatud: „Oktoober 2026 2026“ (aasta kahekordselt), päeva kokkuvõtte puuduv **„Aasta varem“** kast (viitas olematule väljale `previousOfLatest`); pooliku kuu korral võrreldakse sama kuupäevani aasta varem.
+- „12 k: …“ → „12 kuud: …“, „12 k keskmine“ → „12 kuu keskmine“, „puuduta tulpa“ → „vali tulp“, „Taastuvenergia+Varustuskindluse tasu“ → „Taastuvenergia- ja varustuskindluse tasu“; jaluses on andmeallikana ka Elering Estfeed.
+- Päeva kokkuvõte on desktopil 4 veerus (8. kast jäi varem üksi teisele reale); maja üldelektri kaardil on näitajad otse graafiku all (varem suur tühimik keskel).
+- Energialehe „Järgmised tunnid“: „homme 00:00“ murdus kahele reale → laiem esimene veerg; hinnakastides `kell 03:30` (varem murdus „03:30 · s/kWh“).
+- Väikseim tekst 11 → 12 px (maja üldelektri kastid), energiavoo sildid 12–13 → 13–14 px (SVG skaleerub mobiilis ~0,85-ni).
+- `--cat-kollane` `#c48f00` → `#b58500`: tulpade kontrast valgel taustal 2,9:1 → 3,3:1 (WCAG 1.4.11 nõuab 3:1). `.stat__value--good/--bad` kasutavad mõlemal lehel `-fg` toone (parem tekstikontrast).
+- Mobiilis peidetakse energialehe olekust „· järgmine HH:MM“, et olek ja nupp mahuksid ühele reale.
+
+### 6. Turvalisus
+- **Content-Security-Policy** (`<meta http-equiv>`, sest GitHub Pages ei luba päiseid seada): skriptid/stiilid ainult samalt saidilt (+ lehesisesed), `connect-src 'self' https:` (+ localhost-proksi), `object-src 'none'`, `base-uri 'none'`, `form-action 'self'`. `<meta name="referrer" content="no-referrer">` — välistele API-dele ja proksidele ei saadeta lehe aadressi.
+- **CORS-proksi kontroll:** `^http://localhost` lubas ka `http://localhost.evil.example` → nüüd ainult `http://localhost[:port]` või `http://127.0.0.1[:port]`, muidu `https://`.
+- **Otseühenduse võtmed:** vaikimisi `sessionStorage` (kustuvad vahelehe sulgemisel); „Jäta meelde selles seadmes“ → `localStorage`. Token ja jaama vahemälu on samas kohas; „Eemalda otseühendus“ kustutab mõlemast. Dialoogi hoiatus selgitab, et SHA-256 räsi on Solarmani jaoks parooliga samaväärne ja et kõik sama konto `*.github.io` lehed jagavad brauseri salvestusruumi.
+- Tühi favicon (`data:,`) — brauser ei päri enam olematut `favicon.ico`-t (404 konsoolis).
+
+---
+
+## Koodiülevaade 2026-10-20: edasised ettepanekud (rakendamata)
+
+1. **Ühine JavaScript (`js/common.js`).** Mõlemas lehes on ~450 rida identset koodi: Tallinna aja funktsioonid, vormindajad, `normalizePrices`/`requestPrices`, akende otsing, `getNetworkTariff`/`calculateFinalPrice`, `el`/`svgEl`/`niceTicks`. Ühise mooduli korral parandus jõuab mõlemale lehele korraga.
+2. **Tariifid ühes andmefailis.** Energialeht laadib igal avamisel kogu `index.html`-i (~105 kB) ainult selleks, et regulaaravaldisega `CONFIG` välja lugeda; sama teeb töövoog `uuenda-hinnad.yml`. Väike `config.json` (või `config.js`), mida loevad mõlemad lehed ja töövoog, oleks kiirem ja töökindlam (regex ei murdu, kui `CONFIG`-i vormingut muudetakse).
+3. **Repositooriumi kasv.** `paike.json` commit iga 10 min järel (~144 commit'i ööpäevas) + `hinnad.json` iga tunni järel paisutavad git-ajalugu (sadu MB aastas). Alternatiiv: andmefailid eraldi orphan-harus (force-push ilma ajaloota) või GitHub Pagesi avaldamine `actions/deploy-pages` artefaktina.
+4. **GitHub Actions'i kinnitamine commit-SHA-ga** (`actions/checkout@<sha> # v5`) ja Dependabot `github-actions` uuendusteks — tarneahela kaitse; praegu viitab silt `@v5`, mida saab ümber suunata.
+5. **Avalikud andmed.** `hinnad.json` sisaldab maja 15-min tarbimist ja `paike.json` jaama võimsusi; mõlemad on avalikud nii GitHub Pagesis kui ka repo ajaloos (`noindex` ei takista ligipääsu). Kui see pole KÜ jaoks sobiv, on vaja privaatset hostingut.
+6. **Otseühendus.** Kui seda ei kasutata, võiks funktsiooni eemaldada — brauseris hoitavad Solarmani võtmed on lehe suurim turvarisk. CSP `frame-ancestors` (clickjacking) vajaks HTTP-päist, mida GitHub Pages ei toeta.
+7. **Jõudlus.** `renderAll` ehitab iga minut kõik kaardid uuesti; `prepareBuildingData` arvutatakse renderduse kohta kaks korda. Vahemälu `dataVersion` järgi vähendaks tööd (praegu pole see märgatav).
+8. **Ligipääsetavus.** Maja üldelektri kuutulpi saab valida ainult hiire/puutega; `tabindex` + nooleklahvid (nagu hinnagraafikul) teeks need klaviatuuriga kasutatavaks.
 
 ---
 
@@ -150,7 +256,12 @@ Versioon `2.0.0` (defineeritud konstandina `APP_VERSION = '2.0.0'` failis `index
 
 ## Arhitektuurireeglid edasiseks arenduseks (Claude AI juhis)
 
-1. **Ühe faili põhimõte:** Kogu HTML, CSS ja JS asub failis `index.html`. Väliseid raamistikke ega bundlereid ei kasutata.
-2. **`CONFIG` puutumatus:** Kõik kasutaja poolt muudetavad parameetrid asuvad skripti alguses objektis `CONFIG`. Selle võtmeid ei tohi ümber nimetada.
-3. **Turvaline DOM:** Kasuta elementide loomiseks ainult abifunktsioone `el()` ja `svgEl()` ning `textContent` omistamist. Ära kasuta `innerHTML`-i.
-4. **Ajavöönd:** Kõik kuupäevade ja päeva alguste (`00:00`) arvutused peavad käima läbi `getTallinnDateParts` ja `getTallinnDayStart` (`Europe/Tallinn`), mitte brauseri kohaliku ajavööndi.
+1. **Failide jaotus:** `index.html` sisaldab HTML-i, CSS-i ja JS-i ühes failis (alates 2.4.0). `energy-dashboard.html` kasutab faile `css/common.css` ja `css/energy-dashboard.css`. CSS-i muutmisel suurenda linkides `?v=` väärtust. Väliseid raamistikke ega bundlereid ei kasutata.
+2. **Muuda alati viimast versiooni:** enne muutmist tõmba `main`. Ära asenda faili vanema koopiaga: 2.4.0 kirjutas nii PR #5 parandused üle.
+3. **`CONFIG` puutumatus:** Kõik kasutaja muudetavad parameetrid on skripti alguses objektis `CONFIG`. Võtmeid ei tohi ümber nimetada, sest `index.html`-i `CONFIG`-i loevad regulaaravaldisega ka `energy-dashboard.html` (`loadTariffs`) ja töövoog `uuenda-hinnad.yml` (`load_tariff_config`).
+4. **Turvaline DOM:** Kasuta elementide loomiseks ainult `el()` / `svgEl()` ja `textContent`-i, mitte `innerHTML`-i. Uue välise hosti lisamisel uuenda `Content-Security-Policy` meta-silti.
+5. **Ajavöönd:** Kõik kuupäevade ja päeva alguste arvutused käivad läbi `getTallinnDateParts` / `getTallinnDayStart` (`Europe/Tallinn`).
+6. **Mõõtmised vs hinnangud:** Näita mõõtmisi (Estfeed, inverter) ainult mõõtmistena. Tulevikku ei summeerita „tänase“ koguse sisse. Mudel või prognoos peab olema selgelt märgistatud, mitte „(Inverter)“. Solarmani päevakoguseid (`data.day`) ei kasutata, sest need on ~10× liiga väikesed: kogused arvutatakse 15-min mõõtmistest.
+7. **Hinnad:** Tariif ja KM rakenduvad nii lehtedel (`calculateFinalPrice`) kui ka töövoos (`calc_final_cents_kwh`); hoia need samad. Odavaima aja otsing kasutab hinda koos tasudega (`avgFinal`).
+8. **Päringute sagedus:** Kasutaja algatatud värskendus arvestab ooteaega ja nupp on laadimise ajal keelatud.
+9. **Navigatsioon:** Mõlemal lehel peab olema link teisele lehele.
