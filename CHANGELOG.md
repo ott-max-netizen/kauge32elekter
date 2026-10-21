@@ -7,6 +7,7 @@ See fail kirjeldab rakenduse `index.html` versioonimuudatusi, arhitektuurilisi k
 ## Töövood — 2026-10-21
 
 - **„Uuenda elektrihinnad“ käivitab käsitsi käivitamisel ka „Uuenda päikeseandmed“.** `uuenda-hinnad.yml`-is on uus töö `paike`: kui töövoog käivitatakse käsitsi (Run workflow või väline ajastaja, `workflow_dispatch`), käivitab see `gh workflow run uuenda-paike.yml` (õigus `actions: write`). Päikeseandmed uuenevad paralleelselt hindadega ega oota 15:00 akna hindu. Ajastatud käivitustel seda ei tehta: päikeseandmed uuenevad niigi iga 10 min järel ja lisakäivitused ületaksid GitHub Pagesi avaldamise piirangu.
+- Järjekorralukk (`concurrency: uuenda-hinnad`) on töövoo tasemelt viidud ainult tööle `uuenda`. Nii käivitub `paike` kohe ka siis, kui eelmine käivitus alles ootab 15:00 hindu. Varem jäi kogu käsitsi käivitus ootele ja järgmine ajastatud käivitus võis selle tühistada. Hindade uuendus töötab nagu enne: korraga üks, ootel ainult viimane.
 
 ---
 
