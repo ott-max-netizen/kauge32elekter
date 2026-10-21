@@ -7,14 +7,14 @@ See fail kirjeldab rakenduse `index.html` versioonimuudatusi, arhitektuurilisi k
 ## [2.4.2] ja energy-dashboard.html [1.1.1] — 2026-10-21
 
 ### Ülevaade
-Elektriinfo lehe (`index.html`) andmete ja arvutusvalemite kontroll. Põhiprobleem: päikesemoodul (2.4.0) ei kasutanud inverteri andmeid üldse, vaid **selge taeva mudelit**, ja näitas selle tulemusi siltidega „(Inverter)“. Mudeli järgi oli lõunaaeg kell 12:00 (tegelikult ~13:05 suveajal), päikesepargi võimsus 15 kWp (Solarmani järgi 27,5 kWp). „Täna toodang“ ja sääst sisaldasid kogu päeva, ka tulevikku. Seepärast näitas graafik juba hommikul keskpäeva päikesetoodangut. `APP_VERSION` on `index.html`-is `2.4.2` ja `energy-dashboard.html`-is `1.1.1`.
+Elektriinfo lehe (`index.html`) andmete ja arvutusvalemite kontroll. Põhiprobleem: päikesemoodul (2.4.0) ei kasutanud inverteri andmeid üldse, vaid **selge taeva mudelit**, ja näitas selle tulemusi siltidega „(Inverter)“. Mudeli järgi oli lõunaaeg kell 12:00 (tegelikult ~13:05 suveajal), päikesepargi võimsus 15 kWp (tegelikult 27,5 kWp, nagu Solarmanis; `CONFIG.paike.paneelideKw` on parandatud). „Täna toodang“ ja sääst sisaldasid kogu päeva, ka tulevikku. Seepärast näitas graafik juba hommikul keskpäeva päikesetoodangut. `APP_VERSION` on `index.html`-is `2.4.2` ja `energy-dashboard.html`-is `1.1.1`.
 
 ### 1. Päike, maja tarbimine ja aku ainult mõõtmistest (`paike.json`)
 - Mudel (`getSolarMetrics`, `calculateSolarDay`, fikseeritud 65% omatarve) on eemaldatud. `index.html` loeb nüüd sama faili `paike.json` (Solarman, töövoog `uuenda-paike.yml`) mis energialeht: `loadSolarData` → `buildSolarView` (arvutatakse igal renderdamisel, et keskööl vahetuks päev).
 - **Energiavoog** näitab inverteri hetkeseisu: päike, maja ja võrk (ost või müük). Maja tarbimise allikad on jaotatud päikese, aku ja võrgu vahel; aku laetus ja suund on eraldi real. Müük võrku tuletatakse energiabilansist, mitte fikseeritud osakaalust. Kui viimane mõõtmine on vanem kui `CONFIG.paike.aegunudMinutites` (45 min), hetkeseisu ei kuvata ja märk on kollane.
 - **Kogused** (täna toodetud, maja tarbis, ost võrgust, päikeseenergia väärtus) on 15-min mõõtmiste summad kuni viimase mõõtmiseni, mitte terve päeva prognoos. Maja tarbimine = inverteri `usePower`. Varasem valem „Enefiti ost + päikese omatarve“ luges ka öise aku laadimise võrgust maja tarbimiseks (21.10 kella 8-ni: 114,7 kWh vs mõõdetud 60,8 kWh).
 - **Hinnagraafik**: päikesetoodang on mõõdetud 15-min energia (kWh) ainult tänase päeva möödunud perioodides. Sellel on ühine parempoolne kWh-telg ostuga võrgust, ja telgedel on ühikud. Eile/homme päikesekihti ei näidata, sest `paike.json` sisaldab ainult tänast päeva.
-- `CONFIG.paike`: lisatud `andmefail` ja `aegunudMinutites`. Eemaldatud ainult mudelis kasutatud võtmed `asimuut`, `kaldenurk`, `inverteriKasutegur`, `omatarbimiseOsa`, `aastaneToodangKwh`. `paneelideKw`/`paneelideArv` jäävad ainult sildile.
+- `CONFIG.paike`: lisatud `andmefail` ja `aegunudMinutites`. Eemaldatud ainult mudelis kasutatud võtmed `asimuut`, `kaldenurk`, `inverteriKasutegur`, `omatarbimiseOsa`, `aastaneToodangKwh`. `paneelideKw`/`paneelideArv` jäävad ainult sildile; `paneelideKw` = 27,5 (oli 15).
 - Päise märk „OTSEÜHENDUS“ (alati roheline) → tegelik andmete värskus: **ANDMED AJAKOHASED** / **OSA ANDMEID VANANENUD** / **ANDMED PUUDUVAD**. Andmed tulevad GitHub Actionsi failidest, mitte otseühendusest.
 
 ### 2. Arvutusvalemite parandused
@@ -38,6 +38,7 @@ Elektriinfo lehe (`index.html`) andmete ja arvutusvalemite kontroll. Põhiproble
 - Värskendusnupu ja „Proovi uuesti“ ooteaeg 15 s (kiire mitmekordne vajutamine teeb ühe päringu). Teema salvestamine ei murra lehte, kui salvestusruum on keelatud.
 - Tekstid: „12 kuu ost“, „12 kuu keskmine“, „Taastuvenergia- ja varustuskindluse tasu“, jaluses kõik kolm andmeallikat.
 - CSS-i järjekorravead: `.legend__swatch--solar`, `.badge-pill--solar` ja `.stats--solar` kirjutati hiljem defineeritud baasreeglitega üle (hall ruut legendis, mobiilis 3+1 kasti).
+- **Kujundus on eraldi failis `css/index.css`** (varem ~1 490-realine `<style>`-plokk `index.html`-is, link `css/index.css?v=20261021`). Sisu jäi samaks: lehe pildid enne ja pärast olid piksel-identsed heledas ja tumedas teemas, telefoni ja arvuti laiusel. `css/common.css` faili elektriinfo leht ei kasuta, sest 2.4.0 teemamootoril on oma tokenid ja klassinimed.
 
 ### 4. Energialeht (`energy-dashboard.html` 1.1.1)
 - **Päeva kogused ~10× liiga väikesed**: Solarmani päevakogused (`paike.json` → `data.day`) on selle jaama puhul ~10 korda väiksemad kui 15-min mõõtmiste summa, kuigi mõõtmised klapivad Estfeedi arvestiga. Näiteks 20.10: päike 5,5 vs 55,6 kWh; maja 24,5 vs 246 kWh; ost 19,3 vs 196 kWh. `computeDayTotals` eelistab nüüd mõõtmiste summat, päevakoguseid kasutatakse ainult siis, kui mõõtmisi pole.
@@ -94,7 +95,7 @@ Versioon `2.4.0` (defineeritud konstandina `APP_VERSION = '2.4.0'` failis `index
 
 > NB: commit 733e5c5 (2.4.0) ehitas `index.html`-i PR #5-eelsest koopiast, mistõttu selle kirje
 > `index.html`-i osad (CSS-failid, nav, CSP, ooteaeg, graafiku- ja tekstiparandused) kadusid. Enamik neist
-> on taastatud versioonis 2.4.2; `index.html` hoiab CSS-i jälle faili sees ja `css/index.css` on eemaldatud.
+> on taastatud versioonis 2.4.2. PR #5 `css/index.css` asendati 2.4.2-s 2.4.0 kujundusega (vt allpool).
 > Energialehe (`energy-dashboard.html` 1.1.0) muudatused kehtivad.
 
 ### Ülevaade
@@ -256,7 +257,7 @@ Versioon `2.0.0` (defineeritud konstandina `APP_VERSION = '2.0.0'` failis `index
 
 ## Arhitektuurireeglid edasiseks arenduseks (Claude AI juhis)
 
-1. **Failide jaotus:** `index.html` sisaldab HTML-i, CSS-i ja JS-i ühes failis (alates 2.4.0). `energy-dashboard.html` kasutab faile `css/common.css` ja `css/energy-dashboard.css`. CSS-i muutmisel suurenda linkides `?v=` väärtust. Väliseid raamistikke ega bundlereid ei kasutata.
+1. **Failide jaotus:** `index.html` sisaldab HTML-i ja JS-i, kujundus on failis `css/index.css` (alates 2.4.2). `energy-dashboard.html` kasutab faile `css/common.css` ja `css/energy-dashboard.css`. CSS-i muutmisel suurenda linkides `?v=` väärtust. Väliseid raamistikke ega bundlereid ei kasutata.
 2. **Muuda alati viimast versiooni:** enne muutmist tõmba `main`. Ära asenda faili vanema koopiaga: 2.4.0 kirjutas nii PR #5 parandused üle.
 3. **`CONFIG` puutumatus:** Kõik kasutaja muudetavad parameetrid on skripti alguses objektis `CONFIG`. Võtmeid ei tohi ümber nimetada, sest `index.html`-i `CONFIG`-i loevad regulaaravaldisega ka `energy-dashboard.html` (`loadTariffs`) ja töövoog `uuenda-hinnad.yml` (`load_tariff_config`).
 4. **Turvaline DOM:** Kasuta elementide loomiseks ainult `el()` / `svgEl()` ja `textContent`-i, mitte `innerHTML`-i. Uue välise hosti lisamisel uuenda `Content-Security-Policy` meta-silti.
