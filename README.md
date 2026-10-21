@@ -42,7 +42,8 @@ jutumärgid alles. Muudatus jõuab lehele mõne minuti jooksul.
 ## Kui hinnad ei uuene
 
 1. Ava **Actions → Uuenda elektrihinnad** ja vaata viimast käivitust.
-2. Käivita töövoog käsitsi: **Run workflow**.
+2. Käivita töövoog käsitsi: **Run workflow**. Käsitsi käivitamine (ka välise ajastajaga) käivitab
+   kohe ka töövoo **Uuenda päikeseandmed**, nii et mõlemad andmefailid uuenevad korraga.
 3. Punane käivitus tähendab, et Elering ei vastanud või vastus oli vigane.
    Vana `hinnad.json` jääb sel juhul alles.
 
