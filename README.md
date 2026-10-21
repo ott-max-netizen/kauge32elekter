@@ -22,9 +22,12 @@ Elering API → GitHub Actions → hinnad.json → GitHub Pages → index.html b
 
 | Fail | Sisu |
 |---|---|
-| `index.html` | **Elektriinfo**: börsihind, odavaim aeg, päikesekaart, maja lõpphind ja üldelekter (HTML, CSS ja JS ühes failis) |
+| `index.html` | **Elektriinfo**: börsihind, odavaim aeg, päikesekaart, maja lõpphind ja üldelekter (HTML ja JS; kujundus failis `css/index.css`) |
 | `energy-dashboard.html` | **Energia**: päikesepark, akupank, energiavoog ja soovitus |
-| `css/common.css`, `css/energy-dashboard.css` | energialehe kujundus (CSS-i muutmisel suurenda HTML-i linkides `?v=` väärtust) |
+| `css/index.css` | elektriinfo lehe kujundus (teemamootor, hele/tume) |
+| `css/common.css`, `css/energy-dashboard.css` | energialehe kujundus |
+
+CSS-i muutmisel suurenda HTML-i linkides `?v=` väärtust (GitHub Pages hoiab faile vahemälus 10 min).
 | `hinnad.json`, `paike.json` | GitHub Actionsi kirjutatud andmefailid |
 
 Lehtede vahel liigub elektriinfo lehe vaadete ribal oleva lingiga **🔋 Energia** ja energialehe päises
@@ -90,8 +93,7 @@ seetõttu arvutatakse kõik päeva kogused 15-min mõõtmistest.
   graafikul on päike ainult tänase päeva möödunud perioodides (kWh 15 min kohta, parem telg).
 - Kui viimane mõõtmine on vanem kui `CONFIG.paike.aegunudMinutites` (45 min), hetkeseisu ei kuvata
   ja päise olekumärk on kollane („OSA ANDMEID VANANENUD“).
-- `CONFIG.paike.paneelideKw` ja `paneelideArv` on ainult sildil. NB: Solarmani andmetes on jaama
-  võimsus 27,5 kWp; kontrolli, kumb on õige.
+- `CONFIG.paike.paneelideKw` (27,5 kWp, sama mis Solarmanis) ja `paneelideArv` on ainult sildil.
 - **Vaadete lüliti** (*Kõik*, *⚡ Elekter*, *☀️ Päike*, *⏱️ Planeerija*, *🏢 Maja 12 k*) ja link
   energialehele, **teemamootor** (hele/tume) päises.
 
