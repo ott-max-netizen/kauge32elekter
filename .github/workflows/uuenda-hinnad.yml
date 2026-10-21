@@ -34,6 +34,23 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Käsitsi käivitamisel (Run workflow või väline ajastaja) käivitatakse kohe ka töövoog
+  # „Uuenda päikeseandmed“ (uuenda-paike.yml), paralleelselt hindade uuendusega.
+  # Ajastatud käivitustel mitte: päikeseandmed uuenevad niigi iga 10 min järel ja lisakäivitused
+  # ületaksid GitHub Pagesi avaldamise piirangu (~10 korda tunnis).
+  # GITHUB_TOKEN-iga käivitatud workflow_dispatch loob GitHubi reeglite järgi uue käivituse.
+  paike:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      actions: write
+    steps:
+      - name: Käivita töövoog „Uuenda päikeseandmed“
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run uuenda-paike.yml --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME"
+
   uuenda:
     runs-on: ubuntu-latest
     timeout-minutes: 50   # skript ootab 15:00 akna ajal kuni 40 min
