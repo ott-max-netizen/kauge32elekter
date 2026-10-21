@@ -69,6 +69,10 @@ jobs:
           SAMM_S = 60             # kontrolli iga minuti järel
           ESTFEED_DELAY_S = 5.5   # Estfeed rate limit: max 1 päring 5 sekundi jooksul
           MAX_BACKFILL_PAIRS = 12  # laeb ühe käivitusega kõik puuduvad kuud viimase 12 kuu aknas
+          # Kuu kWh/€ arvutusreeglite versioon. Suurenda, kui reeglid muutuvad: vahemälus olevad
+          # teise versiooniga kuud arvutatakse uuesti. 2 = riigipühade öötariif, KM 22% enne 01.07.2025.
+          CALC_VERSION = 2
+          KM_AJALUGU = ((datetime(2025, 7, 1, tzinfo=TZ), 22.0),)  # (kuni, määr %): enne 01.07.2025 oli KM 22%
 
           def tallinn_now():
               return datetime.now(TZ)
@@ -112,6 +116,7 @@ jobs:
                   "algus": 22.0,
                   "lopp": 7.0,
                   "nadalavahetusOnOo": True,
+                  "riigipuhadOnOo": True,
               }
               try:
                   with open("index.html", encoding="utf-8") as f:
@@ -120,12 +125,31 @@ jobs:
                       m = re.search(rf"\b{key}\s*:\s*(-?\d+(?:\.\d+)?)", html)
                       if m:
                           cfg[key] = float(m.group(1))
-                  m_bool = re.search(r"\bnadalavahetusOnOo\s*:\s*(true|false)", html)
-                  if m_bool:
-                      cfg["nadalavahetusOnOo"] = (m_bool.group(1) == "true")
+                  for key in ("nadalavahetusOnOo", "riigipuhadOnOo"):
+                      m_bool = re.search(rf"\b{key}\s*:\s*(true|false)", html)
+                      if m_bool:
+                          cfg[key] = (m_bool.group(1) == "true")
               except OSError:
                   pass
               return cfg
+
+          def easter_sunday(year):
+              """Lihavõttepüha (1. püha) kuupäev, anonüümne Gregoriuse algoritm (sama mis index.html-is)."""
+              a, b, c = year % 19, year // 100, year % 100
+              d, e = b // 4, b % 4
+              f = (b + 8) // 25
+              g = (b - f + 1) // 3
+              h = (19 * a + b - d - g + 15) % 30
+              i, k = c // 4, c % 4
+              l = (32 + 2 * e + 2 * i - h - k) % 7
+              m = (a + 11 * h + 22 * l) // 451
+              return datetime(year, (h + l - 7 * m + 114) // 31, ((h + l - 7 * m + 114) % 31) + 1).date()
+
+          def is_public_holiday(day):
+              """Eesti riigipüha: fikseeritud päevad, suur reede, ülestõusmis- ja nelipühade 1. püha."""
+              if (day.month, day.day) in ((1, 1), (2, 24), (5, 1), (6, 23), (6, 24), (8, 20), (12, 24), (12, 25), (12, 26)):
+                  return True
+              return (day - easter_sunday(day.year)).days in (-2, 0, 49)
 
           def calc_final_cents_kwh(spot_eur_mwh, dt_tl, cfg):
               """Arvutab maja lõpphinna (s/kWh koos võrgutasu, aktsiisi, marginaali ja KM-ga) antud hetkel."""
@@ -134,10 +158,16 @@ jobs:
               hour = dt_tl.hour + dt_tl.minute / 60.0
               algus, lopp = cfg["algus"], cfg["lopp"]
               is_night_hour = (hour >= algus or hour < lopp) if algus > lopp else (algus <= hour < lopp)
-              is_night = (cfg["nadalavahetusOnOo"] and is_weekend) or is_night_hour
+              is_holiday = cfg["riigipuhadOnOo"] and is_public_holiday(dt_tl.date())
+              is_night = (cfg["nadalavahetusOnOo"] and is_weekend) or is_holiday or is_night_hour
               network = cfg["vorgutasuOo"] if is_night else cfg["vorgutasuPaev"]
               subtotal = spot_s + cfg["marginaal"] + network + cfg["taastuvenergiaTasu"] + cfg["aktsiis"]
-              return subtotal * (1.0 + cfg["kaibemaks"] / 100.0)
+              vat = cfg["kaibemaks"]
+              for until, rate in KM_AJALUGU:
+                  if dt_tl < until:
+                      vat = rate
+                      break
+              return subtotal * (1.0 + vat / 100.0)
 
           def fetch_nps_prices(start_dt, end_dt, strict=True):
               """Laeb Eleringi börsihinnad vahemikus [start_dt, end_dt). Tagastab [{timestamp, price}, ...]."""
@@ -338,11 +368,21 @@ jobs:
               todate_eur = 0.0
               count = 0
 
-              for ts, kwh in kwh_map.items():
-                  if not (t0 <= ts < t1):
-                      continue
+              # Börsihind perioodi kaupa (15-min või varasem tunnihind). Kui hinnapäring ebaõnnestus,
+              # ei tohi puuduvaid perioode arvestada hinnaga 0 €/MWh: >1% puudu -> kirjet ei uuendata
+              # (jääb varasem), üksikud augud kaetakse kuu keskmise börsihinnaga.
+              periods = [(ts, kwh) for ts, kwh in kwh_map.items() if t0 <= ts < t1]
+              spots = {ts: price_by_ts.get(ts, price_by_ts.get(ts - (ts % 3600))) for ts, _ in periods}
+              known = [v for v in spots.values() if v is not None]
+              missing = len(spots) - len(known)
+              if periods and missing > 0.01 * len(periods):
+                  warn(f"Kuu {year:04d}-{month:02d}: börsihind puudub {missing}/{len(periods)} perioodil; kuu kirjet ei uuendata")
+                  return None
+              avg_spot = sum(known) / len(known) if known else 0.0
+
+              for ts, kwh in periods:
                   count += 1
-                  spot_eur_mwh = price_by_ts.get(ts, price_by_ts.get(ts - (ts % 3600), 0.0))
+                  spot_eur_mwh = spots[ts] if spots[ts] is not None else avg_spot
                   dt_tl = datetime.fromtimestamp(ts, TZ)
                   final_s = calc_final_cents_kwh(spot_eur_mwh, dt_tl, tariff_cfg)
                   eur = kwh * final_s / 100.0
@@ -363,6 +403,7 @@ jobs:
                   "kwh": round(total_kwh, 2),
                   "eur": round(total_eur, 2),
                   "complete": bool(complete_flag),
+                  "v": CALC_VERSION,
               }
               if cutoff_ts is not None and todate_kwh > 0:
                   rec["kwhToDate"] = round(todate_kwh, 2)
@@ -477,10 +518,15 @@ jobs:
                               months_to_check.append((ty, tm, not force_refresh_prev, None))
                               months_to_check.append((py, pm, True, None))
 
+                          # Vahelejätmine ainult siis, kui kuu on lõplik ja sama arvutusversiooniga. Eelmise aasta
+                          # sama kuu „sama ajani“ (cutoff) arvutatakse igal käivitusel uuesti, sest lõpphetk liigub
+                          # (varem jäi kwhToDate esimese arvutuse hetke külge ja võrdlus muutus päev-päevalt valemaks).
                           need_fetch = [
                               (y, m, comp, cutoff)
                               for (y, m, comp, cutoff) in months_to_check
-                              if not (cached_months.get(f"{y:04d}-{m:02d}", {}).get("complete") is True and (cutoff is None or "kwhToDate" in cached_months.get(f"{y:04d}-{m:02d}", {})))
+                              if cutoff is not None
+                              or not (cached_months.get(f"{y:04d}-{m:02d}", {}).get("complete") is True
+                                      and cached_months.get(f"{y:04d}-{m:02d}", {}).get("v") == CALC_VERSION)
                           ]
                           if not need_fetch:
                               continue
@@ -499,7 +545,7 @@ jobs:
                               if not m_kwh:
                                   print(f"Kuu {y:04d}-{m:02d} kohta mõõteandmed puuduvad.")
                                   if is_comp:
-                                      cached_months[f"{y:04d}-{m:02d}"] = {"kuu": f"{y:04d}-{m:02d}", "kwh": 0.0, "eur": 0.0, "complete": True, "noData": True}
+                                      cached_months[f"{y:04d}-{m:02d}"] = {"kuu": f"{y:04d}-{m:02d}", "kwh": 0.0, "eur": 0.0, "complete": True, "noData": True, "v": CALC_VERSION}
                                   continue
                               m_prices = fetch_nps_prices(ms, me, strict=False)
                               m_price_map = {r["timestamp"]: r["price"] for r in m_prices}
