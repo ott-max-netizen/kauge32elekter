@@ -29,7 +29,7 @@ Elering API → GitHub Actions → hinnad.json → GitHub Pages → index.html b
 | `energy-dashboard.html` | **Energia**: päikesepark, akupank, energiavoog, soovitus, „Täna kokku“ (kWh ja €) ja päeva graafik |
 | `css/index.css` | elektriinfo lehe kujundus (teemamootor, hele/tume) |
 | `css/common.css`, `css/energy-dashboard.css` | energialehe kujundus |
-| `hinnad.json`, `paike.json` | GitHub Actionsi kirjutatud andmefailid |
+| `hinnad.json`, `paike.json`, `paevad.json` | GitHub Actionsi kirjutatud andmefailid (`paevad.json`: inverteri päevakokkuvõtted kWh ja €) |
 
 CSS-i muutmisel suurenda HTML-i linkides `?v=` väärtust (GitHub Pages hoiab faile vahemälus 10 min).
 
@@ -137,6 +137,40 @@ mõnetunnise viivitusega, seega võib viimane `kwh` rida olla mitu tundi vana. F
 - Solarmani päevakoguseid (`data.day`) enam ei kirjutata: selle jaama puhul on need ~10× liiga
   väikesed; kõik päeva kogused arvutatakse 15-min kaadritest.
 
+## Päevakokkuvõtted (`paevad.json`)
+
+Energialehe kokkuvõtte perioodivaliku (eile, 7 päeva, kuu) andmed. Faili kirjutab töövoog `uuenda-hinnad.yml`
+(sama käivitus mis `hinnad.json`; eurode reeglid ja perioodikohased tasud on seal ühes kohas):
+
+```json
+{"success":true,"generatedAt":"2026-10-22T20:00:00Z","source":"Solarman (inverter, 15-min) + Elering (börsihind)",
+ "data":{
+   "days":[{"paev":"2026-10-21","pvKwh":46.11,"pvEur":5.351,"loadKwh":235.08,"loadEur":36.455,"importKwh":148.18,
+     "importEur":18.919,"exportKwh":0.0,"exportEur":0.0,"chargeKwh":17.43,"chargeEur":1.322,"dischargeKwh":59.59,
+     "dischargeEur":13.722,"socStart":70.0,"socEnd":28.0,"kaadrid":96,"complete":true,"src":"paike","v":1,
+     "cfg":"aeacd889b482","updatedAt":"2026-10-22T00:31:00Z"}],
+   "meta":{"from":"2026-06-01","pending":0,"sellFee":1.05,"warnings":[]}
+ }}
+```
+
+- Üks kirje iga **lõppenud** Tallinna päeva kohta; tänast päeva failis pole (leht arvutab selle `paike.json`-ist).
+- Kogused ja eurod arvutatakse inverteri 15-min kaadritest **samade reeglitega mis energialehe „Täna kokku“**
+  (`computeDayTotals`; kontrollitud: sama kaadrite ja hindade korral on tulemus sama). Ost, maja tarbimine ja aku
+  tühjendamine on lõpphinnaga (`calc_final_cents_kwh`, sel ajal kehtinud tasud ja KM), müük ja päikesest laetud
+  energia müügihinnaga (börsihind ilma KM-ta − `energy-dashboard.html` `CONFIG.muuk.tasu`), päike otse majja
+  lõpphinnaga ning akusse ja võrku müügihinnaga. Eurod on 3 komakohaga (summeerimiseks), kWh 2 komakohaga.
+- **Eilne päev** arvutatakse `paike.json`-i kaadritest; kui päev on seal veel poolik (`complete: false`, nt
+  käivitus kell 00:05), arvutatakse see järgmistel käivitustel uuesti. **Varasemad päevad** alates
+  `index.html` `CONFIG.paike.kasutuselAlates` kuust laaditakse Solarmani history-päringuga järk-järgult
+  (10 päeva käivituse kohta, uuemad enne; vajab samu `SOLARMAN_*` Secrets'eid mis `uuenda-paike.yml`).
+  `meta.pending` = veel laadimata päevi; päev, mille kohta Solarman mõõtmisi ei andnud, on `"noData": true`.
+- `complete: false` = kaadrid katavad alla 97 % päevast (kogused on mõõdetud osa summa; leht märgib selle).
+  `src` = `"paike"` või `"solarman"`; poolik `paike`-kirje laaditakse hiljem üks kord Solarmanist uuesti.
+- `v` = arvutusreeglite versioon (`PAEVAD_VERSION`), `cfg` = sõrmejälg (tasude sõrmejälg + müügitasu). Kui need
+  muutuvad (nt tasu muudeti), arvutatakse päevad Solarmanist järk-järgult uuesti; kuni selleni jääb vana kirje.
+- Kui hinda pole vähemalt 90 % kogusest, jäävad selle sarja eurod kirjest välja (leht näitab perioodi eurosid
+  „—“, mitte liiga väikest summat). Päevakokkuvõtte viga ei takista `hinnad.json`-i uuendamist.
+
 ## Mõõtmiste loogika: Estfeed vs inverter
 
 Rakendus kasutab kahte teineteist täiendavat mõõtmist:
@@ -199,7 +233,7 @@ Solarmani välja nimed ja märgid on failis muutmata; lehed tõlgendavad neid ni
   paigutuses (768–1023 px) on sõlmedes telefoni lühikesed sildid ja 768–1179 px ning printimisel on neli
   plaati kahes veerus.
 - Pargi võimsus (kWp) tuleb `paike.json`-i väljast `installedCapacityKw` (töövoog pärib selle Solarmanist
-  kord päevas); `CONFIG.paike.paneelideKw` on varuväärtus. `paneelideArv` ja `kasutuselAlates` on ainult sildil.
+  kord päevas); `CONFIG.paike.paneelideKw` on varuväärtus. `paneelideArv` on ainult sildil; `kasutuselAlates` on sildil ja sellest kuust alates arvutab töövoog päevakokkuvõtted (`paevad.json`).
 - **Vaadete lüliti** (*Kõik vaated*, *Elekter*, *Päike*, *Planeerija & EV*, *Maja üldelekter*; SVG-ikoonidega)
   ja **teemamootor** (hele/tume) päises.
 
@@ -344,6 +378,13 @@ Elering API      → GitHub Actions (uuenda-hinnad.yml) → hinnad.json ┴→ G
     ja müük ülespoole kWh-des perioodi kohta (mõõdetud osa; tooltipis ka ≈ €).
   - **Päeva kogusummad** (avatav plokk graafiku all): päike, maja, ost, müük, aku laetud ja tühjendatud – kWh,
     ≈ € ja keskmine s/kWh.
+- **Kokkuvõtte periood** (lüliti kaardi ülaosas, nähtav siis, kui `paevad.json` on olemas): *Täna* (`paike.json`,
+  kuni viimase mõõtmiseni), *Eile*, *7 päeva* (eilsega lõppevad 7 päeva), *jooksev kuu* (kuu algusest koos tänase
+  poolelioleva päevaga) ja *eelmine kuu* (sildid on kuu nimed). Perioodi summad on päevade summad; eurod ainult
+  siis, kui igal päeval on eurod olemas. Aku laetuse muutus on perioodi esimese ja viimase päeva järgi. Puuduvad
+  või aukudega päevad on kaardil märkusena. Mitme päeva perioodil on all **päevade graafik** (näitajad *Päike*,
+  *Tarbimine*, *Võrk* – ost alla, müük üles, *Aku* – laetud üles, tühjendatud alla, *Energiahind* – keskmine
+  ostuhind ja maja maksis s/kWh), valitud päeva rida graafiku kohal (hiir, puudutus, nooleklahvid) ja tabelivaade.
 - **Täna kokku** (inverter, kuni viimase mõõtmiseni; eurod on hinnang perioodi hinnaga):
   - **Aku:** tulu = tühjendamise väärtus (lõpphinnaga) − laadimise kulu (päikesest laetud osa müügihinnaga, ülejäänu
     lõpphinnaga) ± laetuse muutus (laetuse vahe × mahutavus tänase keskmise laadimishinnaga; laadimiseta päeval maja
@@ -397,6 +438,6 @@ ootab 15 s.
 
 ## Versioon ja muudatuste ajalugu
 
-- Praegune versioon: **v2.5.0** (`APP_VERSION` failis `index.html`), energialehel **v1.3.0**
+- Praegune versioon: **v2.5.0** (`APP_VERSION` failis `index.html`), energialehel **v1.4.0**
   (`APP_VERSION` failis `energy-dashboard.html`).
 - Üksikasjalik ülevaade UI/UX muudatustest, komponentide klassidest ja arhitektuurireeglitest (sh juhised Claude AI-le) asub failis [CHANGELOG.md](CHANGELOG.md).
