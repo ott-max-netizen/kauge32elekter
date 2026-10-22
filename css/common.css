@@ -516,7 +516,8 @@ body {
 }
 
 .bar { transition: opacity 0.1s ease; }
-.bar--past { opacity: 0.38; }
+/* Möödunud perioodid heledamad, kuid kategooriavärv jääb eristatavaks (legendis „heledam = möödunud“) */
+.bar--past { opacity: 0.58; }
 .bar--active { stroke: var(--text); stroke-width: 2; opacity: 1 !important; }
 .bar-current { animation: pulse 2.4s ease-in-out infinite; }
 @keyframes pulse {
