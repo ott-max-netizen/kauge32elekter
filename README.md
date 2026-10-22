@@ -136,10 +136,20 @@ Elering API      → GitHub Actions (uuenda-hinnad.yml) → hinnad.json ┴→ G
   võtmeteta). GitHub Pagesi leht on avalik, seega on avalikud ka need andmed.
 - Tariifid, hinnapiirid ja hinnasildid loeb töölaud `index.html`-i `CONFIG`-ist, nii et
   neid tuleb muuta ainult ühes kohas.
-- Kui aku või võrgu suund kuvatakse valepidi, määra `energy-dashboard.html` `CONFIG`-is
-  `solarman.akuMark` / `solarman.vorguMark` käsitsi (vaikimisi tuvastatakse
-  energiabilansist automaatselt). Aku mahtu (`aku.mahtKwh`) on vaja laadimis- ja
-  tühjenemisaja hinnanguks.
+- Aku võimsus on |`chargePower`| − |`dischargePower`| (+ laeb, − tühjeneb), ost võrgust `purchasePower`.
+  Ühise välja `batteryPower` märki kasutatakse ainult siis, kui laadimise/tühjenemise väljad puuduvad;
+  see kalibreeritakse kaadritest (selle jaama puhul `batteryPower` < 0 = laeb). Kui aku suund kuvatakse
+  siiski valepidi, määra `energy-dashboard.html` `CONFIG`-is `solarman.akuMark` käsitsi. Hoidevool
+  (alla 0,2 kW muutumatu laetusega) on „Ootel · hoiab +0,1 kW“, mitte „Laeb“. Aku mahtu (`aku.mahtKwh`)
+  on vaja laadimis- ja tühjenemisaja hinnanguks.
+- Päikeseandmete aegumislävi (45 min) loetakse `index.html`-i `CONFIG.paike.aegunudMinutites`-ist, nii et
+  mõlemal lehel kehtib sama lävi. Vanema mõõtmise korral on energiavoog tuhm, liikumatu ja pealkirjas on
+  mõõtmise kellaaeg („Energiavoog kell 14:59“). Kui `index.html`-i ei õnnestu lugeda, kasutatakse
+  energialehe varukoopiat ja bänneris on vastav teade; erinevus `hinnad.json`-i `meta.tariffs`-iga kuvatakse samuti.
+- Tänased kogused on inverteri 15-min mõõtmiste summad kuni viimase kaadri lõpuni („Täna kuni 15:00
+  (inverter)“); arve alus (ost võrgust Estfeedi arvestist) on elektriinfo lehel. „Päikesest kaetud“ on sama
+  mõõdik mis elektriinfo lehel. Päeva graafikul on lisaks päikesele ja maja tarbimisele ost võrgust
+  (katkendjoon) ja aku võimsus (+ laeb / − tühjeneb) ning odavaim 2 h aken (lõpphinna järgi).
 
 **Otseühendus (valikuline):** jaluse lingi „Solarmani otseühendus“ kaudu saab ühes
 seadmes pärida andmed brauserist otse Solarmani API-st. Võtmed ja token salvestatakse
@@ -170,9 +180,13 @@ ootab 15 s.
 - Lõpphind ja kuu € on hinnangud; tegelik arve sõltub elektri- ja võrgulepingust.
 - Solarmani välja `gridPower` märgikokkulepe ja päevakoguste tähendus ei ole Solarmani dokumentatsioonis
   üheselt kirjeldatud; müük võrku tuletatakse energiabilansist.
+- Selle jaama `gridPower` on müügi (feed-in) väli: see on peaaegu alati 0 ja ostu ajal paar vatti
+  (`wirePower` = `purchasePower` − `gridPower`), seega ei loe kumbki leht seda ostuks ega müügiks. Müük
+  tuletatakse mõlemal lehel energiabilansist (ainult ostuta ja kadude varu ületava ülejäägiga); kui päike või
+  maja tarbimine puudub, näitab energialeht „müüki ei mõõdeta“.
 
 ## Versioon ja muudatuste ajalugu
 
-- Praegune versioon: **v2.4.2** (`APP_VERSION` failis `index.html`), energialehel **v1.1.1**
+- Praegune versioon: **v2.4.2** (`APP_VERSION` failis `index.html`), energialehel **v1.2.0**
   (`APP_VERSION` failis `energy-dashboard.html`).
 - Üksikasjalik ülevaade UI/UX muudatustest, komponentide klassidest ja arhitektuurireeglitest (sh juhised Claude AI-le) asub failis [CHANGELOG.md](CHANGELOG.md).
