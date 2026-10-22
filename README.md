@@ -194,8 +194,8 @@ Solarmani välja nimed ja märgid on failis muutmata; lehed tõlgendavad neid ni
   värvivõtmega (ost võrgust (Estfeed) koos maksumusega, päike ja maja (inverter), aku laadimine) ning võrdlus
   päeva keskmisega. Puutel tooltipi ei kuvata: info on graafiku kohal fikseeritud kõrgusega inspektoris, nii et
   graafik ei nihku sõrme all. Ekraanilugeja teade (`#chart-announcer`) tuleb ainult klaviatuuriga liikudes.
-- Puuduvat hinnaperioodi ei täideta eelmise hinnaga: graafikul jääb tühi koht, praeguse hetke puudumisel on
-  hinnakaart ütleb, et praeguse hetke hinnaperiood puudub, ja osaliste homsete hindade korral on teade „Homsed börsihinnad on osalised (puudub …)“.
+- Puuduvat hinnaperioodi ei täideta eelmise hinnaga: graafikul jääb tühi koht, praeguse hetke puudumisel
+  ütleb hinnakaart, et praeguse hetke hinnaperiood puudub, ja osaliste homsete hindade korral on teade „Homsed börsihinnad on osalised (puudub …)“.
 - Graafiku all on valitud päeva kokkuvõte kahes rühmas: „Hind, s/kWh“ (madalaim, keskmine, kõrgeim, võrdlus;
   tunnivaates märkega „15 min“, sest need on päeva tegelikud veerandtunni hinnad) ja „Ost võrgust sel päeval“
   (Estfeed: kogus allika ja lõikeajaga, kulu koos tasudega, sh börsiosa koos KM-ga). Inverteri kogused on
