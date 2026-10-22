@@ -91,8 +91,8 @@ seetõttu arvutatakse kõik päeva kogused 15-min mõõtmistest.
 
 - Kõik päikese, maja tarbimise ja aku numbrid on **mõõtmised** failist `paike.json` (vt allpool
   „Energia töölaud“). Mudelit ega prognoosi ei kuvata: kogused on summad kuni viimase mõõtmiseni ja
-  graafikul on päike ainult mõõdetud perioodides (kWh 15 min kohta, parem telg): täna kuni viimase
-  mõõtmiseni ja „Eile“ vaates, kui `paike.json` sisaldab eilseid kaadreid.
+  graafikul on päike ainult lõppenud ja täielikult mõõdetud perioodides (kWh 15 min või 1 h kohta, parem
+  telg): täna kuni viimase lõppenud perioodini ja „Eile“ vaates, kui `paike.json` sisaldab eilseid kaadreid.
 - Kaardi märgil on mõõtmise kellaaeg ja vanus („Mõõdetud 14:59 · 23 min tagasi“). Kui viimane mõõtmine on
   vanem kui `CONFIG.paike.aegunudMinutites` (45 min, sama lävi kehtib energialehel), hetkeseisu ei kuvata
   ja päise olekumärk on kollane („OSA ANDMEID VANANENUD“). Pärast keskööd, kuni esimese tänase mõõtmiseni,
@@ -105,6 +105,20 @@ seetõttu arvutatakse kõik päeva kogused 15-min mõõtmistest.
   kord päevas); `CONFIG.paike.paneelideKw` on varuväärtus. `paneelideArv` ja `kasutuselAlates` on ainult sildil.
 - **Vaadete lüliti** (*Kõik*, *⚡ Elekter*, *☀️ Päike*, *⏱️ Planeerija*, *🏢 Maja 12 k*) ja link
   energialehele, **teemamootor** (hele/tume) päises.
+
+## Hinnagraafik (elektriinfo leht)
+
+- Tulbad on börsihind (s/kWh koos KM-ga, vasak telg), värv = hinnaklass; möödunud perioodid on heledamad.
+  Arvutis on vaikimisi 15 min samm, telefonis (< 768 px) 1 h; lüliti „1 h / 15 min“ valik jääb kehtima.
+- Ost võrgust (Estfeed) ja päikesetoodang (inverter) on perioodi energia (kWh 15 min või 1 h kohta, parem
+  telg). kWh-telje null on hinna nulljoonel ja kWh-skaala kasutab poolt hinnaala kõrgusest, et öine ostutipp
+  (aku laadimine võrgust) ei paistaks hinnatipuna. Puuduv periood katkestab joone; pooleli olevat perioodi
+  joonele ei kanta (tooltipis „pooleli, kuni HH:MM“). Tooltipis on ka keskmine võimsus (kW) ja aku laadimine.
+- Roheline kast on planeerijas valitud kestusega odavaim aken (lõpphinna järgi koos võrgutasuga), sildiga
+  „odavaim 2 h · 04:15–06:15“. Päeva keskmise silt pannakse vabale küljele; kui see kataks tulpi või kWh-joont,
+  on väärtus legendis.
+- Kellakeeramise päeval on päeva sildi juures märkus; sügisel on korduva tunni ajad märgitud „(suveaeg)“ /
+  „(talveaeg)“ ning laial graafikul on x-teljel „03“ ja „03*“.
 
 ## Hinnad ja tariifid
 
