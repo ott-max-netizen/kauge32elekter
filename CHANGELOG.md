@@ -4,6 +4,35 @@ See fail kirjeldab rakenduse `index.html` versioonimuudatusi, arhitektuurilisi k
 
 ---
 
+## Kujundus: mõlemad lehed — 2026-10-22
+
+Graafikute ülevaate (21.10.2026) punkti 5 kujunduse, siltide ja ligipääsetavuse soovitused (`index.html`, `energy-dashboard.html`, `css/*`). Numbrid ja arvutused ei muutunud, muutusid värvid, sildid, täpsus ja paigutus.
+
+### 1. Ühised tokenid ja värvide tähendus
+- **Üks tokenikomplekt kahes failis:** `css/index.css` ja `css/common.css` kasutavad samu väärtusi (pinnad, tekst, hinnaklassid, `--solar`/`--home`/`--grid`, `--solar-line`, `--avg-line`); varem erinesid `--cat-kollane` (`#c48f00` vs `#b58500`), tumedad pinnad (`#131c27` vs `#1a2230`) ja nupuga valitud hele teema süsteemi heledast (`--surface-2 #eef2f6`). Energialehe kasutamata `--bar-primary`/`--share-*` on eemaldatud.
+- **Tume teema üks kord:** elektriinfo leht seab `<html data-theme>` alati („auto“ = süsteemi eelistus, ka süsteemi teema vahetusel), juba `<head>`-is enne esimest joonistamist; `css/index.css`-is on hele `:root` ja tume `:root[data-theme="dark"]` (varem kolm koopiat). Tume komplekt on `@media screen` all, seega **prinditakse heledana**.
+- **Hinnaklassid:** heledas `--cat-kollane #b07f00` (≥ 3:1 ka `#f5f7fa` plaadil), `--cat-oranz #b54a10`, `--cat-punane #a51a1a` – heledus langeb hinnaga ja kollane/oranž eristuvad ka deuteranoopias; tumedas `#2d9b5a`/`#b08c18`/`#f09549`/`#ff8585` – kallis on kontrastseim, odav ei helenda. Hinnagraafikutel on lävedel 10 ja 20 s/kWh siltideta ruudustiku joon, kui teljejaotus seda ei anna.
+- **Osapooled mõlemal lehel:** maja = sinine `--home`, võrk ja ost võrgust = terashall `--grid` (`#4f6a8a`, varem lilla energialehel ja sinine `--bar-primary` elektriinfo lehel), päike = `--solar` (`#c27a12`; elektriinfo `--solar-gold` on sellele viide). Elektriinfo lehel kasutavad `--grid`-i ostu joon, voo nool, Elektrivõrgu sõlm ja maja üldelektri tulbad; Maja sõlm on sinine (oli roheline).
+- **Mõõdetud päikesetoodangu joon** on mõlemal lehel `--solar-line` (`#92400e` / tumedas `#fde68a`), mitte kollase/oranži tulbaga sama toon; elektriinfo hinnagraafikul päikese ala pole, ostu ala 0,06.
+- **Roheline ainult hinnale ja olekule:** odavaim aken, planeerija plaan, legendi ruut ja „Homme“ täpp on sinise aktsendiga `--focus`; madalaim/kõrgeim hind on selle hinna klassi tooniga (2,53 roheline, 23,40 punane), „Täna toodetud“ päikese tooniga; `.stat__value--good/--bad` on mõlemal lehel `-fg` toonides (punane/roheline ainult võrdlusplaatidel). Lõpphinna osakaalude „Võrgutasu“ on hallsinine (`--share-2 #5b7a9a`, oli roheline).
+- **Märgid:** jooned 2,5 px pinnavärvi haloga (ka energialehe päikese ja maja joon), päeva keskmise punktiiri all sama kriipsutusega halo (tumedas teemas oli joon kollastel tulpadel 1,45:1), möödunud tulbad 0,6. Legendis on joonte võti mõlemal lehel `.line-key` (ka keskmine). Maja üldelektri graafiku tekst 12 px, aasta varem tulp hele täide + pidev kontuur.
+
+### 2. Sildid ja täpsus
+- **Täpsus:** kW ja kWh ühe komakohaga mõlemal lehel (energialeht: `formatKw`/`formatKwh` ja suur päikesenumber „6,6 kW“, varem „6,59“/„137 kWh“; elektriinfo tooltip ja inspektor „1,8 kWh“, varem „1,83“).
+- **Allikad:** energialehe võrgusõlm „Elektrivõrk“ / „ost võrgust“ (nagu elektriinfo lehel); jaluses failinimede asemel „inverter (Solarman)“, „Börsihinnad: Elering“, „Tariifid: elektriinfo lehe seaded“ (varukoopia korral „sisemine koopia“). „SoC“ → „laetuse tase“.
+- **Hinnangud ≈-ga:** päeva ostukulu, perioodi maksumus tooltipis, päikeseenergia väärtus; „sh börsiosa“ → „sellest börsihind“.
+- **Maja üldelekter:** vaate pill „Maja üldelekter“ (oli „Maja 12 k“), märk „92 000 kWh“ (oli „92,0 MWh“), märkus „Eurod on hinnang (≈) …“; varuandmed „haldaja sisestatud arved“.
+- **Lõpphinna osakaalud** samal baasil kui tabel: „Börsihind (ilma KM-ta)“, võrgutasu, marginaal, „Taastuvenergia tasu ja aktsiis“ ja eraldi „Käibemaks 24%“ (39/25/4/13/19 %); segmentide vahel on pinnavärvi vahe.
+
+### 3. Piktogrammid, navigatsioon ja ligipääsetavus
+- **Üks ikoonisüsteem:** emojid (vaatepillid ⚡ ☀️ ⏱️ 🏢 🔋, voosõlmed ☀️/🌙 🏢 ⚡, maja graafiku ☀) on asendatud 24×24 stroke-SVG-ga (`<symbol id="i-…">` sprite `index.html`-i alguses, `iconEl()`), kujundid samad mis energialehe `flowIcon`-is. Välk = elekter, mast = elektrivõrk (⚡ ei tähista enam kaht asja). Ikoonid on `aria-hidden`, ekraanilugeja loeb pillist ainult teksti.
+- **Navigatsioon:** elektriinfo lehe päises on sama `nav.site-nav` mis energialehel („Elektriinfo“ / „Energia“); vaadete ribal on ainult vaated (telefonis oli link 6. pillina vaatest väljas).
+- **Odavaim 2 h aken** on hinnakaardi faktides ka soodsa hinna ajal („Odavaim 2 h aken: Homme 04:15–06:15 (koos tasudega 7,34 s/kWh)“); soovitus „Võimalusel oota“ ei korda seda. Faktid järgnevad nõuandele (töölaual ei jää kaardi keskele tühja ala).
+- **Puuteala:** puuteekraanil (`pointer: coarse`) on vaadete pillid, lehtede navigatsioon, vahelehed, lülitid ja ikoonnupud ≥ 44 px; `.site-nav__link` on alati ≥ 40 px.
+- **Liikumine ja printimine:** `prefers-reduced-motion` peatab ka olekutäpi pulsi, voo nooled ja spinneri. `@media print`: heledad tokenid, nupud/vaated/navigatsioon peidetud, möödunud tulbad 0,75, kaardid ei murdu.
+
+---
+
 ## energy-dashboard.html [1.2.0] — 2026-10-22
 
 Energialehe parandused graafikute ülevaate (21.10.2026) punkti 5 järgi. Kõik numbrid on endiselt mõõtmised (`paike.json`, `hinnad.json`); muutusid tõlgendus, sildid ja graafik.
@@ -148,7 +177,7 @@ Koodi-, kujunduse- ja turvaülevaate tulemused: ühine CSS, lehtedevaheline navi
 - Lingid on kujul `css/common.css?v=20261020`: GitHub Pages hoiab faile vahemälus 10 min, seega **CSS-i muutmisel suurenda `?v=` väärtust mõlemas HTML-failis**.
 
 ### 2. Navigatsioon lehtede vahel
-- Mõlema lehe päises on `nav.site-nav` lingid **Elektriinfo** (`index.html`) ja **Energia** (`energy-dashboard.html`); aktiivne leht on märgitud `aria-current="page"`. Energialehe jaluse eraldi link eemaldati.
+- Mõlema lehe päises on `nav.site-nav` lingid **Elektriinfo** (`index.html`) ja **Energia** (`energy-dashboard.html`); aktiivne leht on märgitud `aria-current="page"`. Energialehe jaluse eraldi link eemaldati. (2.4.0 kaotas selle elektriinfo lehelt – link oli vaadete ribal; taastatud 2026-10-22, vt „Kujundus: mõlemad lehed“.)
 
 ### 3. Värskendamise sagedusepiirang
 - **Energia „Värskenda“ ja „Proovi uuesti“:** pärast iga värskendust (ka automaatset) on nupud `REFRESH_COOLDOWN_MS` (30 s) keelatud; nupul on loendur `(28 s)` (`aria-hidden`, et ekraanilugeja seda iga sekund ette ei loeks). Kiire mitmekordne klõpsamine teeb ühe päringu. Kaitseb Solarmani API päringupiirangut otseühenduse korral.
@@ -168,7 +197,7 @@ Koodi-, kujunduse- ja turvaülevaate tulemused: ühine CSS, lehtedevaheline navi
 - Päeva kokkuvõte on desktopil 4 veerus (8. kast jäi varem üksi teisele reale); maja üldelektri kaardil on näitajad otse graafiku all (varem suur tühimik keskel).
 - Energialehe „Järgmised tunnid“: „homme 00:00“ murdus kahele reale → laiem esimene veerg; hinnakastides `kell 03:30` (varem murdus „03:30 · s/kWh“).
 - Väikseim tekst 11 → 12 px (maja üldelektri kastid), energiavoo sildid 12–13 → 13–14 px (SVG skaleerub mobiilis ~0,85-ni).
-- `--cat-kollane` `#c48f00` → `#b58500`: tulpade kontrast valgel taustal 2,9:1 → 3,3:1 (WCAG 1.4.11 nõuab 3:1). `.stat__value--good/--bad` kasutavad mõlemal lehel `-fg` toone (parem tekstikontrast).
+- `--cat-kollane` `#c48f00` → `#b58500`: tulpade kontrast valgel taustal 2,9:1 → 3,3:1 (WCAG 1.4.11 nõuab 3:1). `.stat__value--good/--bad` kasutavad mõlemal lehel `-fg` toone (parem tekstikontrast). (Kehtis ainult energialehel: 2.4.0 `css/index.css` jäi `#c48f00` ja `--cat-*` toonidega. 2026-10-22 on mõlemas failis `#b07f00` ja `-fg` toonid, vt „Kujundus: mõlemad lehed“.)
 - Mobiilis peidetakse energialehe olekust „· järgmine HH:MM“, et olek ja nupp mahuksid ühele reale.
 
 ### 6. Turvalisus
@@ -302,8 +331,9 @@ Versioon `2.0.0` (defineeritud konstandina `APP_VERSION = '2.0.0'` failis `index
 3. **`CONFIG` puutumatus:** Kõik kasutaja muudetavad parameetrid on skripti alguses objektis `CONFIG`. Võtmeid ei tohi ümber nimetada, sest `index.html`-i `CONFIG`-i loevad regulaaravaldisega ka `energy-dashboard.html` (`loadTariffs`, ka `aegunudMinutites`) ja töövoog `uuenda-hinnad.yml` (`load_tariff_config`). Tariifide varukoopiad on energialehe `CONFIG`-is ja töövoo vaikeväärtustes: tariifi muutmisel uuenda kõik kolm kohta või kontrolli `hinnad.json`-i `meta.tariffs`-i järgi (energialeht hoiatab erinevuse ja varukoopia kasutamise korral bänneris).
 4. **Turvaline DOM:** Kasuta elementide loomiseks ainult `el()` / `svgEl()` ja `textContent`-i, mitte `innerHTML`-i. Uue välise hosti lisamisel uuenda `Content-Security-Policy` meta-silti.
 5. **Ajavöönd:** Kõik kuupäevade ja päeva alguste arvutused käivad läbi `getTallinnDateParts` / `getTallinnDayStart` (`Europe/Tallinn`).
-6. **Mõõtmised vs hinnangud:** Näita mõõtmisi (Estfeed, inverter) ainult mõõtmistena. Tulevikku ei summeerita „tänase“ koguse sisse. Mudel või prognoos peab olema selgelt märgistatud, mitte „(Inverter)“. Solarmani päevakoguseid (`data.day`) ei kasutata, sest need on ~10× liiga väikesed: kogused arvutatakse 15-min mõõtmistest.
+6. **Mõõtmised vs hinnangud:** Näita mõõtmisi (Estfeed, inverter) ainult mõõtmistena. Tulevikku ei summeerita „tänase“ koguse sisse. Mudel või prognoos peab olema selgelt märgistatud, mitte „(inverter)“. Mõõtmise allikas on siltides väiketähega: „(inverter)“, „ost võrgust (Estfeed)“; täisnimi „inverter (Solarman)“ ainult kaardi vihjes ja jaluses. Solarmani päevakoguseid (`data.day`) ei kasutata, sest need on ~10× liiga väikesed: kogused arvutatakse 15-min mõõtmistest.
 7. **Hinnad:** Tariif ja KM rakenduvad nii lehtedel (`calculateFinalPrice`) kui ka töövoos (`calc_final_cents_kwh`); hoia need samad. Odavaima aja otsing kasutab hinda koos tasudega (`avgFinal`).
 8. **Päringute sagedus:** Kasutaja algatatud värskendus arvestab ooteaega ja nupp on laadimise ajal keelatud.
 9. **Navigatsioon:** Mõlemal lehel peab olema link teisele lehele.
 10. **Ekraanilugeja teated:** Live-region (`aria-live`) uueneb ainult klaviatuuri ja fookuse rajalt (graafikul püsiv peidetud `#chart-announcer`). Hiire ja sõrme liigutus uuendab ainult nähtavat inspektorit, muidu tekiks iga liigutusega teadete tulv.
+11. **Kujundus:** värvid ainult tokenitena; ühised tokenid on samade väärtustega failides `css/index.css` ja `css/common.css` (muuda mõlemas). Roheline = ainult „Väga odav“ ja olek „korras“; valik/aktsent = `--focus`; mõõdetud seeria joon ei kasuta hinnaklassi tooni. Piktogrammid on 24×24 stroke-SVG (`currentColor`, `aria-hidden`), mitte emojid. kW ja kWh ühe komakohaga, € kahega, € hinnangud „≈“-ga.

@@ -1,7 +1,10 @@
 /* ==========================================================================
-   Kauge 32 — ühine kujundus (index.html ja energy-dashboard.html)
+   Kauge 32 — energialehe (energy-dashboard.html) ühine kujundus
    Kõik värvid, raadiused ja vahed on defineeritud custom property'tena.
-   Lehepõhised reeglid on failides css/index.css ja css/energy-dashboard.css.
+   Ühised tokenid (pinnad, tekst, hinnakategooriad, --solar/--home/--grid, --solar-line, --avg-line) on
+   samade väärtustega failis css/index.css (elektriinfo leht): värvi muutmisel muuda mõlemas failis.
+   Lehepõhised reeglid on failis css/energy-dashboard.css. Tume komplekt kehtib ainult ekraanil
+   (@media screen): prinditakse alati heledate tokenitega.
    NB! Pärast CSS-i muutmist suurenda mõlemas HTML-failis linkide ?v= väärtust,
    et brauserid ei kasutaks vahemälust vana faili.
    ========================================================================== */
@@ -29,77 +32,77 @@
   --shadow: 0 2px 8px rgba(27, 36, 51, 0.05), 0 1px 2px rgba(27, 36, 51, 0.04);
   --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 
-  /* Hinnakategooriad: tulba/aktsendi värv, sildi taust, sildi tekst.
-     Tulbavärvid on valgel taustal vähemalt 3:1 kontrastiga (WCAG 1.4.11). */
+  /* Hinnakategooriad: tulba/aktsendi värv, sildi taust, sildi tekst. Heledas langeb heledus hinnaga
+     (L* 57/56/45/36), tulbavärvid on heledatel pindadel vähemalt 3:1 (WCAG 1.4.11); kollane ja oranž
+     eristuvad ka deuteranoopias heleduse järgi. Roheline = ainult „Väga odav“ ja olek „korras“. */
   --cat-roheline: #1f9d55;
   --cat-roheline-bg: #dbf3e4;
   --cat-roheline-fg: #0f5a31;
-  --cat-kollane: #b58500;
+  --cat-kollane: #b07f00;
   --cat-kollane-bg: #fbf0c4;
   --cat-kollane-fg: #614700;
-  --cat-oranz: #e8701a;
+  --cat-oranz: #b54a10;
   --cat-oranz-bg: #fde3cf;
   --cat-oranz-fg: #7a3a08;
-  --cat-punane: #d22f2f;
+  --cat-punane: #a51a1a;
   --cat-punane-bg: #fadcdc;
   --cat-punane-fg: #861c1c;
 
   --avg-line: #1b2433;
-  --bar-primary: #2c5aa0;
-  --share-1: #2c5aa0;
-  --share-2: #3f8f5e;
-  --share-3: #a0692a;
-  --share-4: #7a5e9a;
 
-  /* Energiavoo osapooled (energy-dashboard.html) */
+  /* Osapooled mõlemal lehel: päike kuldne, maja sinine, võrk terashall (neutraalne, eristub majast ja
+     akust ka deuteranoopias heleduse järgi; graafikul lisaks katkendjoon), aku roheline */
   --solar: #c27a12;
   --home: #2c5aa0;
   --battery: #3f8f5e;
-  --grid: #7b55b5;
+  --grid: #4f6a8a;
+  /* Mõõdetud päikesetoodangu joon graafikutel (sama mis elektriinfo lehel) */
+  --solar-line: #92400e;
 
   --skeleton: #e6ebf1;
   --skeleton-hi: #f5f7fa;
 }
 
-@media (prefers-color-scheme: dark) {
+@media screen and (prefers-color-scheme: dark) {
   :root {
-    --bg: #0f1620;
-    --surface: #1a2230;
-    --surface-2: #232d3c;
+    --bg: #0b1119;
+    --surface: #131c27;
+    --surface-2: #1b2736;
     --text: #edf1f6;
     --muted: #b7c1ce;
-    --border: #33404f;
+    --border: #243245;
     --focus: #8ab4f8;
-    --shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+    --shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
 
-    --cat-roheline: #3fcb79;
+    /* Tumedas kasvab kontrast hinnaga: kallis on kontrastseim (L* 57/60/70/69), odav ei helenda */
+    --cat-roheline: #2d9b5a;
     --cat-roheline-bg: #16402a;
     --cat-roheline-fg: #bff2d2;
-    --cat-kollane: #f0c531;
+    --cat-kollane: #b08c18;
     --cat-kollane-bg: #4a3b08;
     --cat-kollane-fg: #fbe7a3;
-    --cat-oranz: #f5924a;
+    --cat-oranz: #f09549;
     --cat-oranz-bg: #4f2a0e;
     --cat-oranz-fg: #ffd2b0;
-    --cat-punane: #f26565;
+    --cat-punane: #ff8585;
     --cat-punane-bg: #4e1a1a;
     --cat-punane-fg: #ffc7c7;
 
     --avg-line: #edf1f6;
-    --bar-primary: #7faae8;
-    --share-1: #7faae8;
-    --share-2: #6fcf97;
-    --share-3: #e0a860;
-    --share-4: #b79ddb;
 
-    --solar: #c4862a;
+    --solar: #e5a91f;
     --home: #5a8ad0;
     --battery: #38a56a;
-    --grid: #9a76d8;
+    --grid: #8fa3bd;
+    --solar-line: #fde68a;
 
-    --skeleton: #232d3c;
-    --skeleton-hi: #2d394b;
+    --skeleton: #1b2736;
+    --skeleton-hi: #263548;
   }
+}
+/* Prinditakse heledana ka tumeda süsteemiteema korral (ülal olev tume komplekt on ainult ekraanil) */
+@media print {
+  :root { color-scheme: light; }
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -154,7 +157,7 @@ body {
 .site-nav__link {
   display: inline-flex;
   align-items: center;
-  min-height: 34px;
+  min-height: 40px;
   padding: 0 14px;
   border-radius: 999px;
   color: var(--text);
@@ -473,7 +476,7 @@ body {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--cat-roheline);
+  background: var(--focus);
   display: inline-block;
 }
 
@@ -517,7 +520,7 @@ body {
 
 .bar { transition: opacity 0.1s ease; }
 /* Möödunud perioodid heledamad, kuid kategooriavärv jääb eristatavaks (legendis „heledam = möödunud“) */
-.bar--past { opacity: 0.58; }
+.bar--past { opacity: 0.6; }
 .bar--active { stroke: var(--text); stroke-width: 2; opacity: 1 !important; }
 .bar-current { animation: pulse 2.4s ease-in-out infinite; }
 @keyframes pulse {
@@ -570,18 +573,18 @@ body {
   border-radius: 3px;
   background: var(--swatch, var(--muted));
 }
-.legend__swatch--line {
-  width: 18px;
-  height: 0;
-  border-radius: 0;
-  background: none;
-  border-top: 2px dashed var(--avg-line);
-}
 .legend__swatch--current {
   background: none;
   border: 2px solid var(--text);
 }
-/* Joonte värvivõti (legend, tooltip, nimekirjad) */
+/* Päeva keskmise punktiiri halo: sama kriipsutusega, et joon eristuks ka tumedas teemas kollastel tulpadel */
+.avg-halo {
+  stroke: var(--surface);
+  stroke-width: 4;
+  stroke-opacity: 0.85;
+  pointer-events: none;
+}
+/* Joonte värvivõti (legend, tooltip, nimekirjad; sama mis elektriinfo lehel) */
 .line-key {
   flex: none;
   width: 18px;
@@ -617,6 +620,11 @@ body {
 /* Tekstivärvid -fg toonides, et kontrast oleks piisav ka heledal taustal */
 .stat__value--good { color: var(--cat-roheline-fg); }
 .stat__value--bad { color: var(--cat-punane-fg); }
+/* Madalaim/kõrgeim hind: selle hinna kategooria toon (nagu tulp graafikul) */
+.stat__value--cat-roheline { color: var(--cat-roheline-fg); }
+.stat__value--cat-kollane { color: var(--cat-kollane-fg); }
+.stat__value--cat-oranz { color: var(--cat-oranz-fg); }
+.stat__value--cat-punane { color: var(--cat-punane-fg); }
 .stat__time {
   margin: 2px 0 0;
   font-size: 13px;
@@ -701,6 +709,23 @@ body {
   .card__title { font-size: 18px; }
 }
 
+/* Puuteekraanil vähemalt 44 px puuteala; hiirega töölaual jäävad kompaktsed kõrgused */
+@media (pointer: coarse) {
+  .site-nav__link,
+  .tab { min-height: 44px; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .bar-current { animation: none; }
+}
+
+/* Printimine: heledad tokenid (tume komplekt on ainult @media screen all), juhtelemendid peidetud */
+@media print {
+  .site-nav,
+  .tooltip,
+  .banner .btn { display: none !important; }
+  .bar { transition: none; }
+  .bar--past { opacity: 0.75; }
+  .bar-current { animation: none; }
+  .card { break-inside: avoid; box-shadow: none; }
 }
