@@ -212,17 +212,23 @@ const CONFIG = {
     kallis: "Kallis"
   },
 
-  // Maja elektripaketi tasud. Kõik s/kWh (senti ühe kilovatt-tunni kohta) ILMA
-  // käibemaksuta, välja arvatud "kuutasu" (eurot kuus, arvel toodud kujul) ja
+  // Maja elektripaketi PRAEGU kehtivad tasud. Kõik s/kWh (senti ühe kilovatt-tunni kohta) ILMA
+  // käibemaksuta, välja arvatud "kuutasu" (eurot kuus koos KM-ga, nagu arvel) ja
   // "kaibemaks" (protsent). Rakendus lisab käibemaksu kogu summale ühe korra.
   // Võta väärtused elektrilepingust ja võrguettevõtja hinnakirjast. Ohutu muuta.
+  // Neid väärtusi loevad ka energialeht ja töövoog uuenda-hinnad.yml (kuu € „Maja üldelektris“,
+  // kasutatud väärtused on hinnad.json-i meta.tariffs-is). Töövoog arvutab iga kuu sel ajal kehtinud
+  // tasudega: varasemate perioodide väärtused (taastuvenergia- ja varustuskindluse tasu, aktsiis,
+  // kuutasu) on töövoos TASUDE_AJALUGU-s, KM-i omad KM_AJALUGU-s. TASU MUUTUMISEL lisa vana väärtus
+  // kõigepealt TASUDE_AJALUGU-sse (kuni muutuse kuupäevani) ja muuda siis siin – muidu arvutatakse
+  // ka varasemad kuud uue tasuga. Vahemälus olevad kuud arvutab töövoog järgmisel käivitusel ise uuesti.
   hinnad: {
     marginaal: 0.6,          // müüja marginaal börsipaketis, s/kWh ilma KM-ta
     vorgutasuPaev: 3.49,      // võrgutasu päevatariif, s/kWh ilma KM-ta
     vorgutasuOo: 1.99,        // võrgutasu öötariif, s/kWh ilma KM-ta
-    taastuvenergiaTasu: 1.598, // taastuvenergia tasu, s/kWh ilma KM-ta lisatud ka varustuskindluse tasu. 0.758
+    taastuvenergiaTasu: 1.598, // taastuvenergia tasu 0.84 + varustuskindluse tasu 0.758 (alates 01.01.2026), s/kWh ilma KM-ta
     aktsiis: 0.21,            // elektriaktsiis, s/kWh ilma KM-ta
-    kuutasu: 0.00,            // fikseeritud kuutasu, €/kuu; kuvatakse eraldi reana, 0 peidab rea
+    kuutasu: 0.00,            // fikseeritud kuutasud kokku (võrgu kuu- ja läbilaskevõimetasu, müüja kuutasu), €/kuu koos KM-ga; kuvatakse eraldi reana, 0 peidab rea
     kaibemaks: 24             // käibemaksu määr, % (kasutatakse kõikjal, ka börsihinna KM-ga näitamisel)
   },
 
@@ -270,9 +276,12 @@ const CONFIG = {
   },
 
   // Maja üldelektri tarbimine kuude kaupa. "kuu" kujul "AAAA-KK", "kwh" tarbitud
-  // kilovatt-tunnid, "eur" arve summa eurodes. Lisa iga kuu kohta üks rida;
-  // eelmise aasta sama kuu kuvatakse võrdlusena automaatselt. Allolevad read on
-  // näidisväärtused. Tühi massiiv [] peidab kogu "Maja üldelekter" ploki. Ohutu muuta.
+  // kilovatt-tunnid, "eur" arve summa eurodes (kõik read ja tasud koos KM-ga). Lisa iga kuu kohta
+  // üks rida; eelmise aasta sama kuu kuvatakse võrdlusena automaatselt. Allolevad read on arvete
+  // kuusummad (kWh klapib Estfeedi arvestiga); neid kuvatakse ainult varuvariandina, kui hinnad.json-is
+  // kuuandmeid (Estfeed) pole – muidu arvutab kuu kWh ja € töövoog. Kui arve € on töövoo hinnangust
+  // järjepidevalt suurem, sisesta fikseeritud kuutasud (hinnad.kuutasu). Tühi massiiv [] peidab kogu
+  // "Maja üldelekter" ploki. Ohutu muuta.
   majaElekter: [
     { kuu: "2025-05", kwh: 7245, eur: 1139.49 },
     { kuu: "2025-06", kwh: 6916, eur: 878.37 },
@@ -492,7 +501,9 @@ function normalizePrices(rawList) {
     if (!Number.isFinite(timestamp) || !Number.isFinite(price)) continue;
     const rawKwh = item.kwh != null ? Number(item.kwh) : NaN;
     const kwh = Number.isFinite(rawKwh) && rawKwh >= 0 ? rawKwh : null;
-    cleaned.push({ timestamp: Math.round(timestamp), rawEurMwh: price, kwh });
+    // kwhRes "hour": Estfeed andis ainult tunnise koguse, töövoog jagas selle veerandtundidele neljaks
+    const kwhHourly = kwh != null && item.kwhRes === 'hour';
+    cleaned.push({ timestamp: Math.round(timestamp), rawEurMwh: price, kwh, kwhHourly });
   }
   cleaned.sort((a, b) => a.timestamp - b.timestamp);
 
@@ -529,6 +540,7 @@ function normalizePrices(rawList) {
       spotIncVatCentsKwh,
       finalCentsKwh,
       kwh,
+      kwhHourly: item.kwhHourly,
       costEur,
       spotCostEur,
       durationMinutes
@@ -1820,7 +1832,7 @@ function showTooltip(index, avg, pointerType = 'mouse') {
   const timeRangeText = formatTimeRange(item.bar.start, item.bar.end);
   const priceText = formatCents(price);
   const hasKwh = kwh != null && Number.isFinite(kwh);
-  const kwhText = hasKwh ? `${numberFormat.d2.format(kwh)} kWh` : '';
+  const kwhText = hasKwh ? `${numberFormat.d2.format(kwh)} kWh${item.bar.kwhHourly ? ' (tunni keskmine)' : ''}` : '';
   const costText = hasKwh && costEur != null ? formatEur(costEur) : '';
 
   let diffText = '';
@@ -2483,7 +2495,7 @@ function renderBuildingElectricity() {
         el('span', { text: '* jooksev kuu (pooleli; aasta varem sama ajani)', style: 'font-size:12px;color:var(--muted);' })
       ]) : null
     ]),
-    el('p', { class: 'hero-meta', text: '€ on hinnang: arvutatud 15-min ostust, börsihinnast ja CONFIG-i tasudest (kuutasu ja muud fikseeritud tasud ainult siis, kui need on CONFIG-is). Tegelik arve võib erineda.' })
+    el('p', { class: 'hero-meta', text: '€ on hinnang: arvutatud 15-min ostust, börsihinnast ja vastaval ajal kehtinud tasudest koos KM-ga (fikseeritud kuutasu ainult siis, kui see on sisestatud). Tegelik arve võib erineda.' })
   );
 }
 
