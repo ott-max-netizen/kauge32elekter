@@ -4,6 +4,24 @@ See fail kirjeldab rakenduse `index.html` versioonimuudatusi, arhitektuurilisi k
 
 ---
 
+## energy-dashboard.html [1.4.0] ja päevakokkuvõtted — 2026-10-22
+
+Kokkuvõtte perioodivalik (eile, 7 päeva, kuu) ja päevade graafik. Uus andmefail `paevad.json`, mille kirjutab töövoog `uuenda-hinnad.yml`. `APP_VERSION` `1.4.0`, CSS-i lingid `?v=20261022c`.
+
+### 1. Töövoog ja andmefail (`uuenda-hinnad.yml`, `paevad.json`)
+- **Päevakokkuvõtted** (`update_daily_summaries`, `compute_day_record`): iga lõppenud päeva inverteri kWh ja € (päike, maja, ost, müük, aku laetud ja tühjendatud) ning laetus päeva alguses ja lõpus. Reeglid on samad mis energialehe `computeDayTotals`-is (`frame_sample` = `sampleFromRaw`, `solar_split` = `allocateFlows`); kontrollitud: tänaste kaadritega annavad mõlemad samad kWh ja € (3 komakohta).
+- Eurod `calc_final_cents_kwh`-ga (perioodikohased tasud ja KM, sama mis kuude summadel), müügihind = börsihind ilma KM-ta − `energy-dashboard.html` `CONFIG.muuk.tasu`.
+- **Eilne päev** `paike.json`-ist (poolik päev arvutatakse järgmistel käivitustel uuesti), **varasemad päevad** `CONFIG.paike.kasutuselAlates` kuust alates Solarmani history-päringuga, 10 päeva käivituse kohta (uuemad enne). Töövoo sammule lisati `SOLARMAN_*` Secrets; nende puudumisel arvutatakse ainult eilne päev.
+- Kirje sõrmejälg `cfg` (tasude sõrmejälg + müügitasu) ja `v` (`PAEVAD_VERSION`): muutusel arvutatakse päevad järk-järgult uuesti. Päevakokkuvõtte viga ei takista `hinnad.json`-i uuendamist. Commit lisab `paevad.json`-i, kui see on olemas.
+
+### 2. Energialeht
+- **Perioodivalik** kokkuvõtte kaardil (pealkiri „Täna kokku“, „Eile kokku“, „7 päeva kokku“, „Oktoober kokku“ …): sama neli plokki ja maja energiahind perioodi kohta (`buildPeriodView`, `sumTotals`, `finishTotals` – päeva ja perioodi tuletatud näitajad ühest funktsioonist). Lüliti on peidetud, kuni `paevad.json`-i pole (leht töötab nagu varem).
+- **Päevade graafik** (`buildDaysChart`, `renderDaysPanel`): päike, tarbimine, võrk (ost alla, müük üles), aku (laetud üles, tühjendatud alla) ja energiahind (keskmine ostuhind vs maja maksis, s/kWh); valitud päeva rida graafiku kohal, nooleklahvid, tuhmim tulp = pooleli päev või mõõtmistes auke; tabelivaade päeva kaupa.
+- Märkused: laadimata päevad („laaditakse järk-järgult“) ja aukudega päevad. Perioodi eurod on „—“, kui mõnel päeval eurod puuduvad.
+- `index.html`: `CONFIG.paike.kasutuselAlates` kommentaar (määrab ka päevakokkuvõtete alguse); väärtus ja võti on samad.
+
+---
+
 ## energy-dashboard.html [1.3.0] — 2026-10-22
 
 Energialehe täiendused olemasolevate andmetega (uut andmeallikat ega töövoo muudatust pole): päeva tulemus kWh ja eurodes, inverteri režiim, ostu- ja müügihind graafikul, aku laetus graafikul, võrguga vahetuse vaade ja 15 min / 1 h samm. `APP_VERSION` `1.3.0`, CSS-i lingid `?v=20261022b`. Kõik kogused on endiselt inverteri mõõtmised; eurod on ≈-ga hinnangud perioodi hinnaga.
@@ -430,4 +448,4 @@ Versioon `2.0.0` (defineeritud konstandina `APP_VERSION = '2.0.0'` failis `index
 9. **Navigatsioon:** Mõlemal lehel peab olema link teisele lehele.
 10. **Ekraanilugeja teated:** Live-region (`aria-live`) uueneb ainult klaviatuuri ja fookuse rajalt (graafikul püsiv peidetud `#chart-announcer`). Hiire ja sõrme liigutus uuendab ainult nähtavat inspektorit, muidu tekiks iga liigutusega teadete tulv.
 11. **Kujundus:** värvid ainult tokenitena; ühised tokenid on samade väärtustega failides `css/index.css` ja `css/common.css` (muuda mõlemas). Roheline = „Väga odav“, olek „korras“ ja soodne muutus (võrdlusplaatide vahe, planeerija sääst), energialehel ka aku – mitte valik ega aktsent; valik/aktsent = `--focus`; mõõdetud seeria joon ei kasuta hinnaklassi tooni. Piktogrammid on 24×24 stroke-SVG (`currentColor`, `aria-hidden`), mitte emojid. kW ja kWh ühe komakohaga, € kahega, € hinnangud „≈“-ga (märk ja „€“ summaga mittekatkeva tühikuga).
-12. **Andmefailide lepingud:** `hinnad.json` `meta` ja `paike.json` `data.meta`/`frameSeconds`/eilsed kaadrid on kirjeldatud README-s; lehed peavad toimima ka vanema failiga (väli puudub → käitu nagu varem). `meta.pricesOk: false` = hinnaridades on auk või tunnine samm (hinnad ise on värsked; ebaõnnestunud päring faili ei kirjuta), `estfeedOk: false` = Estfeedi päring ebaõnnestus. Töövoog ei kirjuta kunagi varem mõõdetud kWh-d ega kuukirjet tühja või osalise vastuse põhjal väiksemaks.
+12. **Andmefailide lepingud:** `hinnad.json` `meta`, `paike.json` `data.meta`/`frameSeconds`/eilsed kaadrid ja `paevad.json` on kirjeldatud README-s. Päevakokkuvõtte reeglid töövoos (`compute_day_record`) ja energialehel (`computeDayTotals`) peavad jääma samaks; reeglite muutmisel suurenda `PAEVAD_VERSION`-it; lehed peavad toimima ka vanema failiga (väli puudub → käitu nagu varem). `meta.pricesOk: false` = hinnaridades on auk või tunnine samm (hinnad ise on värsked; ebaõnnestunud päring faili ei kirjuta), `estfeedOk: false` = Estfeedi päring ebaõnnestus. Töövoog ei kirjuta kunagi varem mõõdetud kWh-d ega kuukirjet tühja või osalise vastuse põhjal väiksemaks.
