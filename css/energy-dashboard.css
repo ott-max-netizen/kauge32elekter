@@ -470,6 +470,16 @@
 .buy-line { stroke: var(--text); stroke-width: 1.5; }
 .sell-line { stroke: var(--muted); stroke-width: 2; stroke-dasharray: 1.5 3; stroke-linecap: round; }
 .line-halo--thin { stroke-width: 4; }
+/* Maja tarbimise prognoos: maja toon katkendjoonena (mõõdetud tarbimine on pidev joon) */
+.forecast-line {
+  fill: none;
+  stroke: var(--home);
+  stroke-width: 2;
+  stroke-dasharray: 5 4;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+.chart-forecast { margin: var(--s2) 0 0; }
 /* Aku laetus (%) parema telje järgi: punktiir aku tooniga (aku kW on pidev joon) */
 .soc-line {
   fill: none;

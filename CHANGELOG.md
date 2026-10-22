@@ -4,6 +4,20 @@ See fail kirjeldab rakenduse `index.html` versioonimuudatusi, arhitektuurilisi k
 
 ---
 
+## energy-dashboard.html [1.5.0] — tarbimise prognoos — 2026-10-22
+
+Maja tarbimise prognoos päeva graafikul. `APP_VERSION` `1.5.0`, CSS-i lingid `?v=20261022d`. Päikese prognoosi ja inverteri plaani ei kuvata (omaniku otsus).
+
+### 1. Töövoog (`uuenda-hinnad.yml`, `paevad.json`)
+- Päevakirjel on maja tarbimise tunniprofiil `loadH` (24 kellatundi, kWh tunnis; mõõtmisteta tund `null`, kellakeeramise päeval korduv tund keskmine). Viimase `PROFIIL_PAEVI` (14) päeva kirjed ilma `loadH`-ta arvutatakse üks kord uuesti (Solarmanist kuni 10 päeva käivituse kohta; eilne `paike.json`-ist). `PAEVAD_VERSION` jääb 1 (väli lisandub, olemasolevad väärtused ei muutu).
+
+### 2. Energialeht
+- **Prognoos** (`loadForecastProfile`, `buildLoadForecast`): viimase 7 täieliku päeva sama kellatunni keskmine (vähemalt 3 päeva). Võimsuspaneelil katkendjoon maja tooniga – „Täna“ praegusest hetkest päeva lõpuni, „Homme“ terve päev (alumine paneel on siis ainult prognoos). Tooltipis „maja prognoos 14,9 kW“ perioodidel, millel mõõtmist pole.
+- „Homme“ plaat **Tarbimise prognoos** (≈ kWh ja ≈ € võrgust ostes, lõpphinnaga) ning graafiku all selgitus (päevade vahemik, kogus, maksumus, täna lisaks mõõdetud + prognoos kokku).
+- Prognoos on märgitud „prognoos“ ja „N päeva keskmine“, mitte „(inverter)“ (reegel 6); nädalapäevi ja ilma ei arvestata.
+
+---
+
 ## energy-dashboard.html [1.4.0] ja päevakokkuvõtted — 2026-10-22
 
 Kokkuvõtte perioodivalik (eile, 7 päeva, kuu) ja päevade graafik. Uus andmefail `paevad.json`, mille kirjutab töövoog `uuenda-hinnad.yml`. `APP_VERSION` `1.4.0`, CSS-i lingid `?v=20261022c`.

@@ -841,6 +841,7 @@ jobs:
           PAEVAD_VERSION = 1          # päevakirje arvutusreeglite versioon; suurenda reeglite muutumisel (päevad arvutatakse uuesti)
           MAX_PAEVAD_PARING = 10      # mitu päeva ühe käivitusega Solarmanist laetakse
           MAX_PAEVAD = 800            # kirjeid failis (vanemad jäetakse välja)
+          PROFIIL_PAEVI = 14          # viimaste päevade kirjetel on maja tarbimise tunniprofiil loadH (energialehe prognoos)
           SOLAR_FRAME_S = 900
           SOLARMAN_URL = os.environ.get("SOLARMAN_URL", "https://globalapi.solarmanpv.com").rstrip("/")
           PAEVAD_HOIATUSED = []       # paevad.json meta.warnings (lehele nähtav, tavakeeles)
@@ -928,6 +929,7 @@ jobs:
               priced = {k: 0.0 for k in keys}
               hours = 0.0
               socs = []
+              load_h = {}  # Tallinna kellatund -> (kWh, mõõdetud tunde); kellakeeramise päeval on tund 23 või 25
               for i, f in enumerate(rows):
                   ts = f["dateTime"]
                   nxt = rows[i + 1]["dateTime"] if i + 1 < len(rows) else t1
@@ -954,6 +956,9 @@ jobs:
                       add("pv", pv, direct * buy + (pv - direct) * sell if buy is not None else None)
                   if s["load"] is not None:
                       add("load", s["load"] * h, s["load"] * h * buy if buy is not None else None)
+                      hour = datetime.fromtimestamp(ts, TZ).hour
+                      e_, c_ = load_h.get(hour, (0.0, 0.0))
+                      load_h[hour] = (e_ + s["load"] * h, c_ + h)
                   if s["imp"] is not None:
                       add("imp", s["imp"] * h, s["imp"] * h * buy if buy is not None else None)
                   if s["exp"] is not None:
@@ -979,6 +984,10 @@ jobs:
               if socs:
                   rec["socStart"] = socs[0]
                   rec["socEnd"] = socs[-1]
+              # Maja tarbimise tunniprofiil: kWh kellatunni kohta (= keskmine kW); alla poole tunni mõõtmisi -> null.
+              # Kellakeeramise päeval korduv tund on kahe tunni keskmine, puuduv tund null.
+              if has["load"]:
+                  rec["loadH"] = [round(load_h[hr][0] / load_h[hr][1], 2) if hr in load_h and load_h[hr][1] >= 0.5 else None for hr in range(24)]
               rec["kaadrid"] = len(rows)
               rec["complete"] = hours >= 0.97 * (t1 - t0) / 3600.0
               rec["src"] = src
@@ -1086,6 +1095,10 @@ jobs:
               def is_current(rec):
                   return rec.get("v") == PAEVAD_VERSION and rec.get("cfg") == day_hash
 
+              def needs_profile(day, rec):
+                  """Viimaste PROFIIL_PAEVI päeva kirje ilma tunniprofiilita (vanem kirje) arvutatakse üks kord uuesti."""
+                  return day > yesterday - timedelta(days=PROFIIL_PAEVI) and rec.get("loadKwh") is not None and "loadH" not in rec
+
               # Eilne päev paike.json-i kaadritest (hinnad: ee algab eilsest 00:00-st)
               try:
                   with open("paike.json", encoding="utf-8") as f:
@@ -1094,7 +1107,7 @@ jobs:
                   paike_frames = []
               price_map = {r["timestamp"]: r["price"] for r in ee}
               prev_y = days.get(yesterday.isoformat()) or {}
-              if not (is_current(prev_y) and prev_y.get("complete")):
+              if not (is_current(prev_y) and prev_y.get("complete")) or needs_profile(yesterday, prev_y):
                   rec = compute_day_record(yesterday, paike_frames, price_map, tariff_cfg, sell_fee, day_hash, "paike")
                   if rec and (not prev_y or rec["complete"] or not prev_y.get("complete")):
                       store(rec)
@@ -1105,7 +1118,7 @@ jobs:
               day = yesterday
               while day >= first:
                   rec = days.get(day.isoformat())
-                  if not rec or not is_current(rec) or (day < yesterday and not rec.get("complete") and rec.get("src") == "paike"):
+                  if not rec or not is_current(rec) or (day < yesterday and not rec.get("complete") and rec.get("src") == "paike") or needs_profile(day, rec):
                       todo.append(day)
                   day -= timedelta(days=1)
               if todo:
