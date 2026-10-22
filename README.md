@@ -149,13 +149,13 @@ Solarmani välja nimed ja märgid on failis muutmata; lehed tõlgendavad neid ni
 | `dischargePower` | aku tühjenemine, W (≥ 0) |
 | `batteryPower` | aku võimsus, **< 0 = laeb** |
 | `batterySoc` | aku laetuse tase, % |
-| `gridPower` | selle jaama puhul alati 0 |
-| `wirePower` | selle jaama puhul võrdne `purchasePower`-iga |
+| `gridPower` | selle jaama puhul peaaegu alati 0 (harva paar vatti); lehed seda ei kasuta |
+| `wirePower` | selle jaama puhul (peaaegu) võrdne `purchasePower`-iga |
 
 - **Aku:** `batteryKw = |chargePower| − |dischargePower|` (kW; + = laeb, − = tühjeneb), sama valem nii
   hetkeseisus kui kaadrites. Hoidevool (|batteryKw| < 0,2 kW ja laetuse tase ei muutu) on „ootel“, mitte „laeb“.
-- **`gridPower` / `wirePower`:** `gridPower = 0` ja `wirePower = purchasePower` selle jaama puhul;
-  energialeht loeb `gridPower = 0` märgiks, et `purchasePower` on usaldusväärne ostu mõõt. Väljad jäävad faili alles.
+- **`gridPower` / `wirePower`:** selle jaama puhul `gridPower ≈ 0` ja `wirePower ≈ purchasePower`; ost võrgust
+  on mõlemal lehel `purchasePower` ja `gridPower`-it ei loeta ostuks ega müügiks. Väljad jäävad faili alles.
 - **Müük võrku:** müüki pole mõõtmistes seni esinenud, seega on selle märgikokkulepe kontrollimata.
   Lehed näitavad müüki ainult siis, kui ost ≤ 0,05 kW **ja** ülejääk (päike + aku tühjenemine − tarbimine −
   aku laadimine) on üle max(0,3 kW; 3 % toodangust); bilansi jäägist müüki ei tuletata. Töövoog kirjutab
@@ -258,10 +258,20 @@ Elering API      → GitHub Actions (uuenda-hinnad.yml) → hinnad.json ┴→ G
 - Tariifid, hinnapiirid ja hinnasildid loeb töölaud `index.html`-i `CONFIG`-ist, nii et
   neid tuleb muuta ainult ühes kohas. Töövoog `uuenda-hinnad.yml` loeb tasud samast `CONFIG`-plokist
   ja kirjutab kasutatud väärtused `hinnad.json`-i `meta.tariffs`-i.
-- Kui aku või võrgu suund kuvatakse valepidi, määra `energy-dashboard.html` `CONFIG`-is
-  `solarman.akuMark` / `solarman.vorguMark` käsitsi (vaikimisi tuvastatakse
-  energiabilansist automaatselt). Aku mahtu (`aku.mahtKwh`) on vaja laadimis- ja
-  tühjenemisaja hinnanguks.
+- Aku võimsus on |`chargePower`| − |`dischargePower`| (+ laeb, − tühjeneb), ost võrgust `purchasePower`.
+  Ühise välja `batteryPower` märki kasutatakse ainult siis, kui laadimise/tühjenemise väljad puuduvad;
+  see kalibreeritakse kaadritest (selle jaama puhul `batteryPower` < 0 = laeb). Kui aku suund kuvatakse
+  siiski valepidi, määra `energy-dashboard.html` `CONFIG`-is `solarman.akuMark` käsitsi. Hoidevool
+  (alla 0,2 kW muutumatu laetusega) on „Ootel · hoiab +0,1 kW“, mitte „Laeb“. Aku mahtu (`aku.mahtKwh`)
+  on vaja laadimis- ja tühjenemisaja hinnanguks.
+- Päikeseandmete aegumislävi (45 min) loetakse `index.html`-i `CONFIG.paike.aegunudMinutites`-ist, nii et
+  mõlemal lehel kehtib sama lävi. Vanema mõõtmise korral on energiavoog tuhm, liikumatu ja pealkirjas on
+  mõõtmise kellaaeg („Energiavoog kell 14:59“). Kui `index.html`-i ei õnnestu lugeda, kasutatakse
+  energialehe varukoopiat ja bänneris on vastav teade; erinevus `hinnad.json`-i `meta.tariffs`-iga kuvatakse samuti.
+- Tänased kogused on inverteri 15-min mõõtmiste summad kuni viimase kaadri lõpuni („Täna kuni 15:00
+  (inverter)“); arve alus (ost võrgust Estfeedi arvestist) on elektriinfo lehel. „Päikesest kaetud“ on sama
+  mõõdik mis elektriinfo lehel. Päeva graafikul on lisaks päikesele ja maja tarbimisele ost võrgust
+  (katkendjoon) ja aku võimsus (+ laeb / − tühjeneb) ning odavaim 2 h aken (lõpphinna järgi).
 
 **Otseühendus (valikuline):** jaluse lingi „Solarmani otseühendus“ kaudu saab ühes
 seadmes pärida andmed brauserist otse Solarmani API-st. Võtmed ja token salvestatakse
@@ -293,6 +303,10 @@ ootab 15 s.
 - Solarmani välja `gridPower` märgikokkulepe ja päevakoguste tähendus ei ole Solarmani dokumentatsioonis
   üheselt kirjeldatud. Müüki võrku pole mõõtmistes seni esinenud ja selle tuletis on kontrollimata
   (vt „Märgid ja väljad“); esimesel müügipäeval tuleb märgikokkulepe andmetest üle kontrollida.
+- Selle jaama `gridPower` näib olevat müügi (feed-in) väli: see on peaaegu alati 0 ja harva ostu ajal paar
+  vatti (`wirePower` = `purchasePower` − `gridPower`), seega ei loe kumbki leht seda ostuks ega müügiks. Müük
+  tuletatakse mõlemal lehel energiabilansist (ainult ostuta ja kadude varu ületava ülejäägiga); kui päike või
+  maja tarbimine puudub, näitab energialeht „müüki ei mõõdeta“.
 - Aku märk Solarmani andmetes (kontrollitud selle jaama failidest): `realTime.chargePower` < 0 = laeb,
   15-min kaadrites (history) `chargePower` > 0 = laeb, `batteryPower` < 0 = laeb mõlemas, `dischargePower` ≥ 0.
   Lehed arvestavad aku võimsust kujul |`chargePower`| − |`dischargePower`| (+ laeb, − tühjeneb); alla 0,2 kW
@@ -300,6 +314,6 @@ ootab 15 s.
 
 ## Versioon ja muudatuste ajalugu
 
-- Praegune versioon: **v2.4.2** (`APP_VERSION` failis `index.html`), energialehel **v1.1.1**
+- Praegune versioon: **v2.4.2** (`APP_VERSION` failis `index.html`), energialehel **v1.2.0**
   (`APP_VERSION` failis `energy-dashboard.html`).
 - Üksikasjalik ülevaade UI/UX muudatustest, komponentide klassidest ja arhitektuurireeglitest (sh juhised Claude AI-le) asub failis [CHANGELOG.md](CHANGELOG.md).
