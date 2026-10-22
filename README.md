@@ -29,12 +29,12 @@ Elering API → GitHub Actions → hinnad.json → GitHub Pages → index.html b
 | `energy-dashboard.html` | **Energia**: päikesepark, akupank, energiavoog ja soovitus |
 | `css/index.css` | elektriinfo lehe kujundus (teemamootor, hele/tume) |
 | `css/common.css`, `css/energy-dashboard.css` | energialehe kujundus |
-
-CSS-i muutmisel suurenda HTML-i linkides `?v=` väärtust (GitHub Pages hoiab faile vahemälus 10 min).
 | `hinnad.json`, `paike.json` | GitHub Actionsi kirjutatud andmefailid |
 
-Lehtede vahel liigub elektriinfo lehe vaadete ribal oleva lingiga **🔋 Energia** ja energialehe päises
-oleva lingiga **Elektriinfo**.
+CSS-i muutmisel suurenda HTML-i linkides `?v=` väärtust (GitHub Pages hoiab faile vahemälus 10 min).
+
+Mõlema lehe päises on sama lehtede navigatsioon **Elektriinfo** / **Energia** (aktiivne leht on esile
+tõstetud); elektriinfo lehe päikesekaardil on lisaks link energialehele.
 
 ## Seadete muutmine
 
@@ -177,8 +177,8 @@ Solarmani välja nimed ja märgid on failis muutmata; lehed tõlgendavad neid ni
   energialehel. Aku laadimine (võrgust/päikesest) on voosõlmedes („sellest akusse“) ja selgitavas lauses.
 - Pargi võimsus (kWp) tuleb `paike.json`-i väljast `installedCapacityKw` (töövoog pärib selle Solarmanist
   kord päevas); `CONFIG.paike.paneelideKw` on varuväärtus. `paneelideArv` ja `kasutuselAlates` on ainult sildil.
-- **Vaadete lüliti** (*Kõik*, *⚡ Elekter*, *☀️ Päike*, *⏱️ Planeerija*, *🏢 Maja 12 k*) ja link
-  energialehele, **teemamootor** (hele/tume) päises.
+- **Vaadete lüliti** (*Kõik vaated*, *Elekter*, *Päike*, *Planeerija & EV*, *Maja üldelekter*; SVG-ikoonidega)
+  ja **teemamootor** (hele/tume) päises.
 
 ## Hinnagraafik (elektriinfo leht)
 
@@ -198,14 +198,40 @@ Solarmani välja nimed ja märgid on failis muutmata; lehed tõlgendavad neid ni
   ütleb hinnakaart, et praeguse hetke hinnaperiood puudub, ja osaliste homsete hindade korral on teade „Homsed börsihinnad on osalised (puudub …)“.
 - Graafiku all on valitud päeva kokkuvõte kahes rühmas: „Hind, s/kWh“ (madalaim, keskmine, kõrgeim, võrdlus;
   tunnivaates märkega „15 min“, sest need on päeva tegelikud veerandtunni hinnad) ja „Ost võrgust sel päeval“
-  (Estfeed: kogus allika ja lõikeajaga, kulu koos tasudega, sh börsiosa koos KM-ga). Inverteri kogused on
+  (Estfeed: kogus allika ja lõikeajaga, kulu koos tasudega „≈“, sellest börsihind koos KM-ga). Inverteri kogused on
   päikesekaardil. Kuu ost ja aasta tagune võrdlus on omaette rühmas „Käesolev kuu · ost võrgust“. Eile-vaates
   on päevade võrdlus neutraalse värviga lausena („eile oli … kallim kui täna“).
-- Roheline kast on planeerijas valitud kestusega odavaim aken (lõpphinna järgi koos võrgutasuga), sildiga
-  „odavaim 2 h · 04:15–06:15“. Päeva keskmise silt pannakse vabale küljele; kui see kataks tulpi või kWh-joont,
+- Sinine kast (valiku aktsent, mitte hinnaklassi roheline) on planeerijas valitud kestusega odavaim aken
+  (lõpphinna järgi koos võrgutasuga), sildiga „odavaim 2 h · 04:15–06:15“. Hinnakaardi faktides on alati
+  järgmise 24 h odavaim 2 h aken („Odavaim 2 h aken: Homme 04:15–06:15 (koos tasudega 7,34 s/kWh)“). Päeva keskmise silt pannakse vabale küljele; kui see kataks tulpi või kWh-joont,
   on väärtus legendis.
 - Kellakeeramise päeval on päeva sildi juures märkus; sügisel on korduva tunni ajad märgitud „(suveaeg)“ /
   „(talveaeg)“ ning laial graafikul on x-teljel „03“ ja „03*“.
+
+## Kujundus ja värvid (mõlemad lehed)
+
+- **Tokenid:** värvid on CSS-i custom property'd. Ühised tokenid (pinnad, tekst, hinnaklassid, `--solar`,
+  `--home`, `--grid`, `--solar-line`, `--avg-line`) on **samade väärtustega** failides `css/index.css` ja
+  `css/common.css` – värvi muutmisel muuda mõlemas. Hele komplekt on `:root`-is; tume elektriinfo lehel
+  `:root[data-theme="dark"]` all (leht seab `data-theme` alati, ka „auto“ korral süsteemi järgi, juba
+  `<head>`-is), energialehel `@media (prefers-color-scheme: dark)` all. Tume komplekt kehtib ainult ekraanil:
+  **prinditakse alati heledana**, juhtelemendid (nupud, vaadete riba, navigatsioon) on printimisel peidetud.
+- **Värvi tähendus:** tulba värv = hinnaklass (heledas tumeneb toon hinnaga, tumedas kasvab kontrast hinnaga;
+  kollane ja oranž eristuvad ka värvipimedale heleduse järgi, lävedel 10 ja 20 s/kWh on ruudustiku joon).
+  Roheline on ainult „Väga odav“ ja olek „andmed ajakohased“. Päike = kuldne (`--solar`), mõõdetud
+  päikesetoodangu **joon** graafikutel tumepruun/kreem (`--solar-line`, et see ei sarnaneks kollase/oranži
+  tulbaga); maja = sinine (`--home`); võrk ja ost võrgust (ka maja üldelektri tulbad) = terashall (`--grid`);
+  aku = roheline (energialeht); valik (odavaim aken, planeerija plaan, „Homme“ täpp) = sinine aktsent (`--focus`).
+- **Märgid:** tulbad on ainsad täisvärvis pinnad (möödunud perioodid 0,6 läbipaistvusega); jooned 2,5 px
+  pinnavärvi haloga; päeva keskmine punktiir sama kriipsutusega haloga; alad hõredad (ostu ala 0,06,
+  päikese ala elektriinfo hinnagraafikul pole). Legendis ja tooltipis on joonte võti sama `.line-key`.
+- **Täpsus:** kW ja kWh ühe komakohaga mõlemal lehel, € kahe komakohaga; € hinnangud on „≈“-ga.
+- **Piktogrammid:** üks süsteem – 24×24 stroke-SVG, värv pärib teksti värvi (`currentColor`), alati
+  `aria-hidden`, tähendus on kõrval tekstina. Elektriinfo lehel on sprite (`<symbol id="i-…">`) lehe alguses,
+  energialehe energiavoo ikoonid (`flowIcon`) on samade kujunditega. Välk = elekter/hind, mast = elektrivõrk,
+  päike/kuu = päikesepark, maja = maja, kell = planeerija. Emojisid ei kasutata.
+- **Ligipääsetavus:** puuteekraanil on vaadete pillid, lehtede navigatsioon, vahelehed ja lülitid vähemalt
+  44 px kõrged; `prefers-reduced-motion` peatab ka olekutäpi pulsi, energiavoo nooled ja spinneri.
 
 ## Hinnad ja tariifid
 

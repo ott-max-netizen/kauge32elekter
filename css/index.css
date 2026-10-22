@@ -1,9 +1,14 @@
 /* ==========================================================================
-   Kauge 32 · Elektri ja päikese dashboard (index.html) — v2.4.2
+   Kauge 32 · Elektri ja päikese dashboard (index.html)
    Kõik värvid, raadiused ja vahed on defineeritud custom property'tena.
+   Ühised tokenid (pinnad, tekst, hinnakategooriad, --solar/--home/--grid, --solar-line, --avg-line) on
+   samade väärtustega failis css/common.css (energialeht): värvi muutmisel muuda mõlemas failis.
+   Teema: index.html seab <html data-theme="light|dark"> enne esimest joonistamist (ka „auto“ korral
+   süsteemi eelistuse järgi), seega on tume komplekt siin ainult üks kord. Tume komplekt kehtib ainult
+   ekraanil (@media screen): prinditakse alati heledate tokenitega.
    ========================================================================== */
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
 
   --bg: #f1f4f7;
   --surface: #ffffff;
@@ -26,39 +31,50 @@
   --shadow: 0 2px 8px rgba(27, 36, 51, 0.05), 0 1px 2px rgba(27, 36, 51, 0.04);
   --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 
-  /* Hinnakategooriad: tulba/aktsendi värv, sildi taust, sildi tekst */
+  /* Hinnakategooriad: tulba/aktsendi värv, sildi taust, sildi tekst. Heledas langeb heledus hinnaga
+     (L* 57/56/45/36), tulbavärvid on heledatel pindadel vähemalt 3:1 (WCAG 1.4.11); kollane ja oranž
+     eristuvad ka deuteranoopias heleduse järgi. Roheline = ainult „Väga odav“ ja olek „korras“. */
   --cat-roheline: #1f9d55;
   --cat-roheline-bg: #dbf3e4;
   --cat-roheline-fg: #0f5a31;
-  --cat-kollane: #c48f00;
+  --cat-kollane: #b07f00;
   --cat-kollane-bg: #fbf0c4;
   --cat-kollane-fg: #614700;
-  --cat-oranz: #e8701a;
+  --cat-oranz: #b54a10;
   --cat-oranz-bg: #fde3cf;
   --cat-oranz-fg: #7a3a08;
-  --cat-punane: #d22f2f;
+  --cat-punane: #a51a1a;
   --cat-punane-bg: #fadcdc;
   --cat-punane-fg: #861c1c;
 
   --avg-line: #1b2433;
-  --bar-primary: #2c5aa0;
-  --bar-prev: color-mix(in srgb, var(--bar-primary) 10%, var(--surface)); /* maja graafiku aasta varem tulp */
+
+  /* Osapooled mõlemal lehel: päike kuldne, maja sinine, võrk terashall (ost võrgust, ka maja üldelekter) */
+  --solar: #c27a12;
+  --home: #2c5aa0;
+  --grid: #4f6a8a;
+  /* Mõõdetud päikesetoodangu joon graafikutel: hinnakategooria toonidest eristuv (tulbad on kollased/oranžid) */
+  --solar-line: #92400e;
+
+  --bar-prev: color-mix(in srgb, var(--grid) 30%, var(--surface)); /* maja graafiku aasta varem tulp */
+  /* Lõpphinna osakaalud: börs, võrgutasu, marginaal, taastuvenergia tasu ja aktsiis, käibemaks */
   --share-1: #2c5aa0;
-  --share-2: #3f8f5e;
+  --share-2: #5b7a9a;
   --share-3: #a0692a;
   --share-4: #7a5e9a;
+  --share-5: #8a8f98;
 
-  /* Päikeseenergia palett */
-  --solar-gold: #d97706;
-  --solar-gold-glow: rgba(217, 119, 6, 0.18);
+  /* Päikesekaart (index.html) */
+  --solar-gold: var(--solar);
+  --solar-gold-glow: rgba(194, 122, 18, 0.18);
   --solar-gold-bg: #fef3c7;
   --solar-gold-fg: #92400e;
-  --solar-line: #d97706;
-  --solar-area-fill: rgba(245, 158, 11, 0.15);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
+@media screen {
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+
     --bg: #0b1119;
     --surface: #131c27;
     --surface-2: #1b2736;
@@ -68,112 +84,37 @@
     --focus: #8ab4f8;
     --shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
 
-    --cat-roheline: #3fcb79;
+    /* Tumedas kasvab kontrast hinnaga: kallis on kontrastseim (L* 57/60/70/69), odav ei helenda */
+    --cat-roheline: #2d9b5a;
     --cat-roheline-bg: #16402a;
     --cat-roheline-fg: #bff2d2;
-    --cat-kollane: #f0c531;
+    --cat-kollane: #b08c18;
     --cat-kollane-bg: #4a3b08;
     --cat-kollane-fg: #fbe7a3;
-    --cat-oranz: #f5924a;
+    --cat-oranz: #f09549;
     --cat-oranz-bg: #4f2a0e;
     --cat-oranz-fg: #ffd2b0;
-    --cat-punane: #f26565;
+    --cat-punane: #ff8585;
     --cat-punane-bg: #4e1a1a;
     --cat-punane-fg: #ffc7c7;
 
     --avg-line: #edf1f6;
-    --bar-primary: #7faae8;
-    --bar-prev: color-mix(in srgb, var(--bar-primary) 10%, var(--surface));
+
+    --solar: #e5a91f;
+    --home: #5a8ad0;
+    --grid: #8fa3bd;
+    --solar-line: #fde68a;
+
     --share-1: #7faae8;
-    --share-2: #6fcf97;
+    --share-2: #9db0c6;
     --share-3: #e0a860;
     --share-4: #b79ddb;
+    --share-5: #9aa1ab;
 
-    --solar-gold: #fbbf24;
-    --solar-gold-glow: rgba(251, 191, 36, 0.22);
+    --solar-gold-glow: rgba(229, 169, 31, 0.22);
     --solar-gold-bg: rgba(69, 34, 4, 0.55);
     --solar-gold-fg: #fde68a;
-    --solar-line: #fbbf24;
-    --solar-area-fill: rgba(251, 191, 36, 0.16);
   }
-}
-
-:root[data-theme="dark"] {
-  --bg: #0b1119;
-  --surface: #131c27;
-  --surface-2: #1b2736;
-  --text: #edf1f6;
-  --muted: #b7c1ce;
-  --border: #243245;
-  --focus: #8ab4f8;
-  --shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
-
-  --cat-roheline: #3fcb79;
-  --cat-roheline-bg: #16402a;
-  --cat-roheline-fg: #bff2d2;
-  --cat-kollane: #f0c531;
-  --cat-kollane-bg: #4a3b08;
-  --cat-kollane-fg: #fbe7a3;
-  --cat-oranz: #f5924a;
-  --cat-oranz-bg: #4f2a0e;
-  --cat-oranz-fg: #ffd2b0;
-  --cat-punane: #f26565;
-  --cat-punane-bg: #4e1a1a;
-  --cat-punane-fg: #ffc7c7;
-
-  --avg-line: #edf1f6;
-  --bar-primary: #7faae8;
-  --bar-prev: color-mix(in srgb, var(--bar-primary) 10%, var(--surface));
-  --share-1: #7faae8;
-  --share-2: #6fcf97;
-  --share-3: #e0a860;
-  --share-4: #b79ddb;
-
-  --solar-gold: #fbbf24;
-  --solar-gold-glow: rgba(251, 191, 36, 0.22);
-  --solar-gold-bg: rgba(69, 34, 4, 0.55);
-  --solar-gold-fg: #fde68a;
-  --solar-line: #fbbf24;
-  --solar-area-fill: rgba(251, 191, 36, 0.16);
-}
-
-:root[data-theme="light"] {
-  --bg: #f3f6f9;
-  --surface: #ffffff;
-  --surface-2: #eef2f6;
-  --text: #1b2433;
-  --muted: #4a5566;
-  --border: #d4dce6;
-  --focus: #1f5fbf;
-  --shadow: 0 4px 16px rgba(15, 23, 42, 0.05), 0 1px 3px rgba(15, 23, 42, 0.04);
-
-  --cat-roheline: #1f9d55;
-  --cat-roheline-bg: #dbf3e4;
-  --cat-roheline-fg: #0f5a31;
-  --cat-kollane: #c48f00;
-  --cat-kollane-bg: #fbf0c4;
-  --cat-kollane-fg: #614700;
-  --cat-oranz: #e8701a;
-  --cat-oranz-bg: #fde3cf;
-  --cat-oranz-fg: #7a3a08;
-  --cat-punane: #d22f2f;
-  --cat-punane-bg: #fadcdc;
-  --cat-punane-fg: #861c1c;
-
-  --avg-line: #1b2433;
-  --bar-primary: #2c5aa0;
-  --bar-prev: color-mix(in srgb, var(--bar-primary) 10%, var(--surface));
-  --share-1: #2c5aa0;
-  --share-2: #3f8f5e;
-  --share-3: #a0692a;
-  --share-4: #7a5e9a;
-
-  --solar-gold: #d97706;
-  --solar-gold-glow: rgba(217, 119, 6, 0.18);
-  --solar-gold-bg: #fef3c7;
-  --solar-gold-fg: #92400e;
-  --solar-line: #d97706;
-  --solar-area-fill: rgba(245, 158, 11, 0.15);
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -204,7 +145,6 @@ body {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
   gap: var(--s2) var(--s4);
   margin: 0 0 var(--s2);
 }
@@ -237,6 +177,51 @@ body {
   align-items: center;
   gap: 8px;
 }
+@media (min-width: 768px) {
+  .header-actions { margin-left: auto; }
+}
+
+/* Lehtede navigatsioon: sama komponent mis energialehel (css/common.css), aktiivne leht aria-current="page" */
+.site-nav {
+  display: inline-flex;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+}
+.site-nav__link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 999px;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+.site-nav__link[aria-current="page"] {
+  background: var(--text);
+  color: var(--surface);
+}
+
+/* Piktogrammid: 24×24 stroke-SVG sprite index.html-i alguses (<symbol id="i-…">), värv pärib teksti värvi
+   (currentColor); alati aria-hidden, tähendus on kõrval tekstina */
+.icon {
+  flex: none;
+  width: 18px;
+  height: 18px;
+}
+.icon-sprite {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+/* Ikoon SVG-graafiku sees (<use href="#i-…">) */
+.chart-icon { color: var(--muted); }
 
 .live-pill {
   display: inline-flex;
@@ -331,7 +316,6 @@ body {
   border-color: var(--muted);
   background: var(--surface);
 }
-.view-pill--link { text-decoration: none; margin-left: auto; }
 .icon-btn[disabled] { cursor: not-allowed; opacity: 0.5; }
 .icon-btn.is-spinning { cursor: progress; opacity: 1; }
 .btn[disabled] { cursor: not-allowed; opacity: 0.6; }
@@ -667,7 +651,6 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 20px;
   margin-bottom: 6px;
   background: var(--surface-2);
   border: 2px solid var(--border);
@@ -679,13 +662,16 @@ body {
   box-shadow: 0 0 12px var(--solar-gold-glow);
 }
 .flow-node--house .flow-node__icon-wrap {
-  background: var(--cat-roheline-bg);
-  border-color: var(--cat-roheline);
+  background: color-mix(in srgb, var(--home) 12%, var(--surface));
+  border-color: var(--home);
+  color: var(--home);
 }
 .flow-node--grid .flow-node__icon-wrap {
-  background: rgba(44, 90, 160, 0.12);
-  border-color: var(--bar-primary);
+  background: color-mix(in srgb, var(--grid) 12%, var(--surface));
+  border-color: var(--grid);
+  color: var(--grid);
 }
+.flow-node__icon-wrap .icon { width: 22px; height: 22px; }
 .flow-node__title {
   margin: 0;
   font-size: 12px;
@@ -740,7 +726,7 @@ body {
   animation: flowAnim 1s linear infinite;
 }
 .flow-line.is-grid-import {
-  stroke: var(--bar-primary);
+  stroke: var(--grid);
   animation: flowAnimReverse 1s linear infinite;
 }
 @keyframes flowAnim {
@@ -795,16 +781,11 @@ body {
   text-align: center;
 }
 
-/* Päikesekõver graafikul */
-.solar-area {
-  fill: var(--solar-gold);
-  opacity: 0.08;
-  pointer-events: none;
-}
+/* Päikesekõver graafikul: mõõdetud seeria joonena (ala pole, et möödunud tulbad ei tuhmuks teist korda) */
 .solar-line {
   fill: none;
-  stroke: var(--solar-gold);
-  stroke-width: 2.2;
+  stroke: var(--solar-line);
+  stroke-width: 2.5;
   stroke-linecap: round;
   stroke-linejoin: round;
   pointer-events: none;
@@ -813,7 +794,7 @@ body {
 .consumption-halo {
   fill: none;
   stroke: var(--surface);
-  stroke-width: 4.5;
+  stroke-width: 5;
   stroke-linejoin: round;
   stroke-linecap: round;
   stroke-opacity: 0.85;
@@ -825,26 +806,26 @@ body {
   stroke-width: 2;
   pointer-events: none;
 }
-.series-end--consumption { stroke: var(--bar-primary); }
-.series-end--solar { stroke: var(--solar-gold); }
+.series-end--consumption { stroke: var(--grid); }
+.series-end--solar { stroke: var(--solar-line); }
 /* Sildi värv seob selle joonega (päikese tekstitoon on loetavam kui joone kuldne) */
 .series-end-label { pointer-events: none; }
-.series-end-label--consumption { fill: var(--bar-primary); }
+.series-end-label--consumption { fill: var(--grid); }
 .series-end-label--solar { fill: var(--solar-gold-fg); }
 /* Telje ühik graafiku ülanurgas (s/kWh, kWh); sama suurus mis telgede numbrid */
 .axis-unit { font-size: 12px; font-weight: 600; fill: var(--muted); }
 .solar-dot {
-  fill: var(--solar-gold);
+  fill: var(--solar-line);
   stroke: var(--surface);
   stroke-width: 1.5;
   pointer-events: none;
 }
-.legend__swatch.legend__swatch--solar {
-  width: 18px;
-  height: 0;
-  border-radius: 0;
-  background: none;
-  border-top: 2.5px solid var(--solar-gold);
+/* Päeva keskmise punktiiri halo: sama kriipsutusega, et joon eristuks ka tumedas teemas kollastel tulpadel */
+.avg-halo {
+  stroke: var(--surface);
+  stroke-width: 4;
+  stroke-opacity: 0.85;
+  pointer-events: none;
 }
 
 /* ---------- Tabid ja segmentnupud ---------- */
@@ -893,7 +874,7 @@ body {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--cat-roheline);
+  background: var(--focus);
   display: inline-block;
 }
 
@@ -1061,7 +1042,7 @@ body {
 
 .bar { transition: opacity 0.1s ease; }
 /* Möödunud perioodid heledamad, kuid kategooriavärv jääb eristatavaks (legendis „heledam = möödunud“) */
-.bar--past { opacity: 0.58; }
+.bar--past { opacity: 0.6; }
 .bar--active { stroke: var(--text); stroke-width: 2; opacity: 1 !important; }
 .bar-current { animation: pulse 2.4s ease-in-out infinite; }
 @keyframes pulse {
@@ -1112,6 +1093,7 @@ body {
   border-top: 1px solid rgba(128, 128, 128, 0.35);
 }
 .tooltip__diff { margin-top: 2px; }
+/* Joonte värvivõti (legend ja tooltip, sama mis energialehel): 3 px, keskmine 2 px katkendjoon */
 .line-key {
   flex: none;
   width: 18px;
@@ -1119,6 +1101,8 @@ body {
   border-top: 3px solid var(--key, var(--muted));
   border-radius: 2px;
 }
+.line-key--dashed { border-top-style: dashed; }
+.line-key--thin { border-top-width: 2px; }
 /* Tooltipi taust on pööratud (var(--text)): võti saab pinnavärvi ääre nagu joon graafikul (halo) */
 .tooltip .line-key {
   margin-top: 8px;
@@ -1130,20 +1114,20 @@ body {
 }
 /* kWh-alad on tulpade all (index.html buildPriceChartSvg), seega hõredad */
 .consumption-area {
-  fill: var(--bar-primary);
-  opacity: 0.08;
+  fill: var(--grid);
+  opacity: 0.06;
   pointer-events: none;
 }
 .consumption-line {
   fill: none;
-  stroke: var(--bar-primary);
-  stroke-width: 2;
+  stroke: var(--grid);
+  stroke-width: 2.5;
   stroke-linejoin: round;
   stroke-linecap: round;
   pointer-events: none;
 }
 .consumption-dot {
-  fill: var(--bar-primary);
+  fill: var(--grid);
   stroke: var(--surface);
   stroke-width: 1.5;
   pointer-events: none;
@@ -1180,6 +1164,9 @@ body {
   gap: 6px;
   min-width: 0;
 }
+/* Märkused legendi lõpus (maja üldelekter: päikesepark, jooksev kuu, esialgne) */
+.legend__item--note { font-size: 12px; gap: 4px; }
+.legend__item--note .icon { width: 14px; height: 14px; }
 /* Telefonis kaks veergu: 4 hinnaklassi = 2 rida, hinnarühma pealkiri ja päeva keskmine samal real */
 @media (max-width: 767px) {
   .legend__group {
@@ -1207,35 +1194,22 @@ body {
   border-radius: 3px;
   background: var(--swatch, var(--muted));
 }
-.legend__swatch--line {
-  width: 18px;
-  height: 0;
-  border-radius: 0;
-  background: none;
-  border-top: 2px dashed var(--avg-line);
-}
-.legend__swatch--kwh {
-  width: 18px;
-  height: 0;
-  border-radius: 0;
-  background: none;
-  border-top: 2.5px solid var(--bar-primary);
-}
 .legend__swatch--current {
   background: none;
   border: 2px solid var(--text);
 }
 .legend__swatch--past {
   background: var(--muted);
-  opacity: 0.58;
+  opacity: 0.6;
 }
+/* Odavaim aken / plaan: valiku aktsent (--focus), mitte hinnakategooria „Väga odav“ roheline */
 .legend__swatch--best {
-  background: var(--cat-roheline-bg);
-  border: 1.5px solid var(--cat-roheline);
+  background: color-mix(in srgb, var(--focus) 10%, var(--surface));
+  border: 1.5px solid var(--focus);
 }
 .legend__swatch--outline {
   background: var(--bar-prev);
-  border: 1.25px dashed var(--bar-primary);
+  border: 1.5px solid var(--grid);
 }
 
 .stats {
@@ -1293,8 +1267,16 @@ body {
   font-weight: 700;
   line-height: 1.15;
 }
-.stat__value--good { color: var(--cat-roheline); }
-.stat__value--bad { color: var(--cat-punane); }
+/* Tekstivärvid -fg toonides (kontrast ka heledal plaadil), nagu energialehel */
+.stat__value--good { color: var(--cat-roheline-fg); }
+.stat__value--bad { color: var(--cat-punane-fg); }
+/* Madalaim/kõrgeim hind: selle hinna kategooria toon (nagu tulp graafikul) */
+.stat__value--cat-roheline { color: var(--cat-roheline-fg); }
+.stat__value--cat-kollane { color: var(--cat-kollane-fg); }
+.stat__value--cat-oranz { color: var(--cat-oranz-fg); }
+.stat__value--cat-punane { color: var(--cat-punane-fg); }
+/* Päikesetoodang: päikese toon, mitte „hea“ roheline */
+.stat__value--solar { color: var(--solar-gold-fg); }
 .stat__time {
   margin: 2px 0 0;
   font-size: 13px;
@@ -1363,7 +1345,7 @@ body {
   padding: var(--s3) var(--s4);
   border-radius: var(--radius-sm);
   background: var(--surface-2);
-  border-left: 4px solid var(--cat-roheline);
+  border-left: 4px solid var(--focus);
 }
 .plan__head {
   display: flex;
@@ -1382,8 +1364,8 @@ body {
   display: inline-block;
   padding: 2px 10px;
   border-radius: 999px;
-  background: var(--cat-roheline-bg);
-  color: var(--cat-roheline-fg);
+  background: color-mix(in srgb, var(--focus) 12%, var(--surface));
+  color: var(--focus);
   font-size: 13px;
   font-weight: 700;
 }
@@ -1535,12 +1517,13 @@ body {
 }
 .shares-bar {
   display: flex;
+  gap: 2px;
   height: 14px;
   margin: var(--s3) 0 0;
   border-radius: 999px;
   overflow: hidden;
 }
-.shares-bar span { display: block; height: 100%; }
+.shares-bar span { display: block; height: 100%; min-width: 2px; }
 .shares {
   list-style: none;
   margin: var(--s2) 0 0;
@@ -1628,10 +1611,6 @@ body {
     display: flex;
     flex-direction: column;
   }
-  #now-body .facts {
-    margin-top: auto;
-    padding-top: var(--s3);
-  }
   #section-planner .ev {
     margin-top: auto;
   }
@@ -1653,6 +1632,38 @@ body {
   .card__title { font-size: 18px; }
 }
 
+/* Puuteekraanil vähemalt 44 px puuteala; hiirega töölaual jäävad kompaktsed kõrgused */
+@media (pointer: coarse) {
+  .view-pill,
+  .site-nav__link,
+  .tab,
+  .segmented label { min-height: 44px; }
+  .icon-btn { width: 44px; height: 44px; }
+}
+
+/* Vähendatud liikumine: ka olekutäpi pulss, voo nooled ja laadimise spinner (suund jääb nooleotsast ja värvist) */
 @media (prefers-reduced-motion: reduce) {
-  .bar-current { animation: none; }
+  .bar-current,
+  .live-dot,
+  .icon-btn.is-spinning svg,
+  .flow-line.is-active,
+  .flow-line.is-grid-import { animation: none; }
+}
+
+/* Printimine: heledad tokenid (tume komplekt on ainult @media screen all), juhtelemendid peidetud,
+   möödunud tulbad loetavamad, kaardid ei murdu lehe vahel */
+@media print {
+  .icon-btn,
+  .site-nav,
+  .view-filter,
+  #resolution-toggle,
+  #refresh-button,
+  .tooltip,
+  .chart-hint,
+  .banner .btn { display: none !important; }
+  .bar { transition: none; }
+  .bar--past { opacity: 0.75; }
+  .bar-current, .live-dot { animation: none; }
+  .card { break-inside: avoid; box-shadow: none; }
+  .solar-advice a { text-decoration: none; }
 }

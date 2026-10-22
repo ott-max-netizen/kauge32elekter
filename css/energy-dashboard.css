@@ -1,8 +1,9 @@
 /* ==========================================================================
    Kauge 32 energia (energy-dashboard.html) — lehepõhine kujundus.
    Ühised tokenid ja komponendid on failis css/common.css. Energia
-   identiteedivärvid (--solar, --home, --battery, --grid) on kontrollitud
-   värvipimeduse ja kontrasti suhtes mõlemas teemas.
+   identiteedivärvid (--solar, --home, --battery, --grid) on kontrastsed pinna suhtes (≥ 3:1).
+   Värvipimedale ei toetu ükski eristus ainult toonile: sõlmedel ja ridadel on sildid, võrk on
+   neutraalne terashall ja graafikul katkendjoon (maja ja võrk eristuvad ka heleduse järgi).
    ========================================================================== */
 
 /* Suured üksikud numbrid näevad proportsionaalsete numbritega parem välja */
@@ -401,15 +402,26 @@
   stroke-opacity: 0.55;
   pointer-events: none;
 }
-.pv-area { fill: var(--solar); fill-opacity: 0.16; pointer-events: none; }
+.pv-area { fill: var(--solar); fill-opacity: 0.1; pointer-events: none; }
 .pv-line, .load-line {
   fill: none;
-  stroke-width: 2;
+  stroke-width: 2.5;
   stroke-linejoin: round;
   stroke-linecap: round;
   pointer-events: none;
 }
-.pv-line { stroke: var(--solar); }
+/* Mõõdetud päikesetoodang: sama joonetoon mis elektriinfo lehel (--solar-line); ala on päikese toon */
+.pv-line { stroke: var(--solar-line); }
+/* Pinnavärvi halo joonte all eraldab kõverad üksteisest ja ruudustikust */
+.line-halo {
+  fill: none;
+  stroke: var(--surface);
+  stroke-width: 5;
+  stroke-opacity: 0.85;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  pointer-events: none;
+}
 .load-line { stroke: var(--home); }
 /* Võrk ja aku: märgiga astmelised 15-min sarjad (+ ost / laeb, − müük / tühjeneb); võrk katkendjoonena */
 .grid-line, .battery-line {
@@ -423,7 +435,7 @@
 .series-end { stroke: var(--surface); stroke-width: 1.5; pointer-events: none; }
 .now-line { stroke: var(--muted); stroke-width: 1; pointer-events: none; }
 .now-label {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   fill: var(--muted);
   stroke: var(--surface);
@@ -447,13 +459,14 @@
 
 .legend__swatch--area {
   background: color-mix(in srgb, var(--solar) 22%, var(--surface));
-  border-top: 2px solid var(--solar);
+  border-top: 3px solid var(--solar-line);
   border-radius: 2px;
 }
-.legend__swatch--past { background: var(--muted); opacity: 0.58; }
+.legend__swatch--past { background: var(--muted); opacity: 0.6; }
+/* Odavaim aken: valiku aktsent (--focus), mitte hinnakategooria „Väga odav“ roheline */
 .legend__swatch--best {
-  background: var(--cat-roheline-bg);
-  border: 1.5px solid var(--cat-roheline);
+  background: color-mix(in srgb, var(--focus) 10%, var(--surface));
+  border: 1.5px solid var(--focus);
 }
 .line-key--dashed { border-top-style: dashed; }
 .line-key--thin { border-top-width: 2px; }
@@ -653,6 +666,13 @@
   }
   .flow-layout { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); }
   .advice-title { font-size: 21px; }
+}
+
+@media print {
+  #refresh-button,
+  #direct-open,
+  .table-view { display: none !important; }
+  .flow-dots { animation: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
