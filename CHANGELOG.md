@@ -4,40 +4,55 @@ See fail kirjeldab rakenduse `index.html` versioonimuudatusi, arhitektuurilisi k
 
 ---
 
-## Kujundus: mõlemad lehed — 2026-10-22
+## [2.5.0] ja energy-dashboard.html [1.2.0] — 2026-10-22
 
-Graafikute ülevaate (21.10.2026) punkti 5 kujunduse, siltide ja ligipääsetavuse soovitused (`index.html`, `energy-dashboard.html`, `css/*`). Numbrid ja arvutused ei muutunud, muutusid värvid, sildid, täpsus ja paigutus.
+Graafikute ülevaate (21.10.2026) punkti 5 kõik soovitused („Kohe“, „Järgmisena“ ja „Hiljem“) mõlemal lehel ja mõlemas töövoos. Leiu tunnused (`L-…`, `K-…`) on ülevaate omad. `APP_VERSION` on `index.html`-is `2.5.0` ja `energy-dashboard.html`-is `1.2.0`, CSS-i lingid `?v=20261022`. Kõik numbrid on endiselt mõõtmised (Estfeed, inverter) või ≈-ga märgitud hinnangud; muutusid tõlgendus, allikasildid, graafikud ja kujundus. Viimased read igas punktis („Lõppkontroll“) on sõltumatu kontrolli järel tehtud parandused.
 
-### 1. Ühised tokenid ja värvide tähendus
-- **Üks tokenikomplekt kahes failis:** `css/index.css` ja `css/common.css` kasutavad samu väärtusi (pinnad, tekst, hinnaklassid, `--solar`/`--home`/`--grid`, `--solar-line`, `--avg-line`); varem erinesid `--cat-kollane` (`#c48f00` vs `#b58500`), tumedad pinnad (`#131c27` vs `#1a2230`) ja nupuga valitud hele teema süsteemi heledast (`--surface-2 #eef2f6`). Energialehe kasutamata `--bar-primary`/`--share-*` on eemaldatud.
-- **Tume teema üks kord:** elektriinfo leht seab `<html data-theme>` alati („auto“ = süsteemi eelistus, ka süsteemi teema vahetusel), juba `<head>`-is enne esimest joonistamist; `css/index.css`-is on hele `:root` ja tume `:root[data-theme="dark"]` (varem kolm koopiat). Tume komplekt on `@media screen` all, seega **prinditakse heledana**.
-- **Hinnaklassid:** heledas `--cat-kollane #b07f00` (≥ 3:1 ka `#f5f7fa` plaadil), `--cat-oranz #b54a10`, `--cat-punane #a51a1a` – heledus langeb hinnaga ja kollane/oranž eristuvad ka deuteranoopias; tumedas `#2d9b5a`/`#b08c18`/`#f09549`/`#ff8585` – kallis on kontrastseim, odav ei helenda. Hinnagraafikutel on lävedel 10 ja 20 s/kWh siltideta ruudustiku joon, kui teljejaotus seda ei anna.
-- **Osapooled mõlemal lehel:** maja = sinine `--home`, võrk ja ost võrgust = terashall `--grid` (`#4f6a8a`, varem lilla energialehel ja sinine `--bar-primary` elektriinfo lehel), päike = `--solar` (`#c27a12`; elektriinfo `--solar-gold` on sellele viide). Elektriinfo lehel kasutavad `--grid`-i ostu joon, voo nool, Elektrivõrgu sõlm ja maja üldelektri tulbad; Maja sõlm on sinine (oli roheline).
-- **Mõõdetud päikesetoodangu joon** on mõlemal lehel `--solar-line` (`#92400e` / tumedas `#fde68a`), mitte kollase/oranži tulbaga sama toon; elektriinfo hinnagraafikul päikese ala pole, ostu ala 0,06.
-- **Roheline ainult hinnale ja olekule:** odavaim aken, planeerija plaan, legendi ruut ja „Homme“ täpp on sinise aktsendiga `--focus`; madalaim/kõrgeim hind on selle hinna klassi tooniga (2,53 roheline, 23,40 punane), „Täna toodetud“ päikese tooniga; `.stat__value--good/--bad` on mõlemal lehel `-fg` toonides (punane/roheline ainult võrdlusplaatidel). Lõpphinna osakaalude „Võrgutasu“ on hallsinine (`--share-2 #5b7a9a`, oli roheline).
-- **Märgid:** jooned 2,5 px pinnavärvi haloga (ka energialehe päikese ja maja joon), päeva keskmise punktiiri all sama kriipsutusega halo (tumedas teemas oli joon kollastel tulpadel 1,45:1), möödunud tulbad 0,6. Legendis on joonte võti mõlemal lehel `.line-key` (ka keskmine). Maja üldelektri graafiku tekst 12 px, aasta varem tulp hele täide + pidev kontuur.
+### 1. Töövood ja andmefailid (`uuenda-hinnad.yml`, `uuenda-paike.yml`)
+- **Tasude ajalugu (L-087, L-077, L-036):** `TASUDE_AJALUGU` `KM_AJALUGU` kõrval: taastuvenergia tasu 1,05 (2024) / 0,84, varustuskindluse tasu 0,758 alates 01.01.2026, aktsiis 0,145 enne 01.05.2025 (allikad kommentaarides). Kuutasu on kuupäevapõhise ajalooga mehhanism (summad 0, vt p 9); jooksval kuul ja `eurToDate`-is lisatakse möödunud osa.
+- **Ümberarvutus (L-022):** `CALC_VERSION` 3 ja kuu kirje tasude sõrmejälg `cfg`: CONFIG-i tasu või ajaloo muutusel arvutatakse vahemälus olevad kuud järgmisel käivitusel perioodikohaste tasudega uuesti. Kuu kirjel `updatedAt` (muutub ainult sisu muutusel).
+- **kWh kaitsed (K-003, K-004, L-081, L-082):** tunnine Eleringi rida saab nelja veerandi summa ainult täistunni korral; tunnine Estfeed jagatakse 15-min ridadele märkega `kwhRes: "hour"`; puuduvat hinnaperioodi ei sillutata (hoiatus); osaline Estfeedi vastus ei kustuta varem avaldatud kWh-d; EIC-varuvariant võtab vastusest ainult `ELERING_EIC` mõõtepunkti.
+- **JSON-lepingud (L-083, L-084, L-056, L-085, L-057):** `hinnad.json` tipptasemel `meta` (`pricesOk`, `pricesUntil`, `estfeedOk`, `estfeedUntil`, `tariffs`, `warnings`); tariifid loetakse ainult `index.html`-i CONFIG-plokist (`meta.tariffs.source`). `paike.json`: ka eilsed kaadrid (vanad ja uued ühendatakse, lühem vastus ei kustuta päeva algust), `frameSeconds`, `data.meta` (`framesUntil`, `warnings`); Solarmani ~10× vale `data.day` on eemaldatud. Lehed toetavad ka vana kuju.
+- **Ajastus ja märgid (L-075, L-047, L-044):** väline ajastaja iga 30 min (GitHubi `schedule` on varu); pargi võimsus `installedCapacityKw` kord päevas; logihoiatus, kui `gridPower` > 50 W või `wirePower` ≠ `purchasePower` (müügi märk on seni kontrollimata).
+- **Lõppkontroll (L-022, L-081):** tühi Estfeedi vastus (HTTP 200 `[]`) täieliku ümberarvutuse ajal ei muuda enam varem mõõdetud kuid „andmed puuduvad“ kirjeks (kuu jääb alles, üks koondhoiatus „Estfeed ei andnud mõõteandmeid N kuu kohta …“; `noData` tehakse ainult kuule, millel mõõdetud kirjet pole). Jooksva kuu kWh ei kahane sama kuu jooksul: tühi või ainult viimaseid päevi kattev vastus jätab kirje varasemaks (hoiatus „Estfeedi vastus oli puudulik …“).
 
-### 2. Sildid ja täpsus
-- **Täpsus:** kW ja kWh ühe komakohaga mõlemal lehel (energialeht: `formatKw`/`formatKwh` ja suur päikesenumber „6,6 kW“, varem „6,59“/„137 kWh“; elektriinfo tooltip ja inspektor „1,8 kWh“, varem „1,83“).
-- **Allikad:** energialehe võrgusõlm „Elektrivõrk“ / „ost võrgust“ (nagu elektriinfo lehel); jaluses failinimede asemel „inverter (Solarman)“, „Börsihinnad: Elering“, „Tariifid: elektriinfo lehe seaded“ (varukoopia korral „sisemine koopia“). „SoC“ → „laetuse tase“.
-- **Hinnangud ≈-ga:** päeva ostukulu, perioodi maksumus tooltipis, päikeseenergia väärtus; „sh börsiosa“ → „sellest börsihind“.
-- **Maja üldelekter:** vaate pill „Maja üldelekter“ (oli „Maja 12 k“), märk „92 000 kWh“ (oli „92,0 MWh“), märkus „Eurod on hinnang (≈) …“; varuandmed „haldaja sisestatud arved“.
-- **Lõpphinna osakaalud** samal baasil kui tabel: „Börsihind (ilma KM-ta)“, võrgutasu, marginaal, „Taastuvenergia tasu ja aktsiis“ ja eraldi „Käibemaks 24%“ (39/25/4/13/19 %); segmentide vahel on pinnavärvi vahe.
+### 2. Päikesekaart (`index.html`; L-074, L-044, L-045, L-046, L-047, L-048, L-051, L-055, L-058, L-085, L-133, L-078, L-083, L-075, L-056)
+- **Aku märk:** `batteryKw = |chargePower| − |dischargePower|` (realTime'is on laadimine negatiivne, leht näitas laadivat akut tühjenevana); hoidevool (< 0,2 kW, laetus ei muutu) on „ootel“. **Müük** ainult ostuta ja kadude varu (0,3 kW / 3 %) ületava ülejäägiga.
+- **„Päikesest kaetud 32 %“** (toodang − müük) / tarbimine, alltekst „täna · 43,5 kWh 136,5-st“ – sama mõõdik mis energialehel; korduv kWh-lause eemaldatud.
+- **Allikad ja lõikeajad:** Estfeed legendis, tooltipis, inspektoris ja plaadil („Estfeed · kuni 14:15 · arve alus“), inverteri ost „(inverter)“ koos lõikeajaga, võrgusõlm „Elektrivõrk · ost võrgust · inverter“; lause inverteri ja Estfeedi erinevusest samades perioodides (arve ja inverteri arve ei liideta).
+- **Aegumine ja kesköö:** lävi 45 min (`CONFIG.paike.aegunudMinutites`, sama energialehel), märgil „Mõõdetud 14:59 · 23 min tagasi“; pärast keskööd „Uus päev algas …“, mitte „vananenud“. Kohatäide ilma arvudeta, laadimise ajal „Laadin…“.
+- **Laadimine võrgust:** sõlmedes „sellest akusse 18,8 kW“, lause „Akut laeti täna … (võrgust …, päikesest …)“ üle 1 kWh korral. Pargi võimsus `installedCapacityKw`-st („41% võimsusest“).
+- **Mobiil:** ≤ 480 px lühikesed sõlmesildid, „tipp 11,2 kW · 12:15“, olekumärk oma real. Andmete seis (`meta`) päise vihjes ja jaluses; „Eile“ vaates päikesejoon, kui failis on eilsed kaadrid.
+- **Lõppkontroll:** aku lausel on allikas ja lõikeaeg („Akut laeti täna (inverter, kuni 15:00) 31,8 kWh …“, lepe 6); jaluses kaadri pikkus failist („inverteri 5-min kaadrid“, L-056); ≤ 380 px väiksem sõlmekiri, kitsamad noolte vahed ja „Päikese-park“ poolitub (320–375 px ulatus tekst üle sõlme serva, L-058). `meta.pricesOk: false` tähendab auku või tunnist sammu (ebaõnnestunud päring faili ei kirjuta): jaluses ei väideta enam „börsihindade viimane päring ebaõnnestus“, märk on „OSA ANDMEID PUUDU“, mitte „VANANENUD“.
 
-### 3. Piktogrammid, navigatsioon ja ligipääsetavus
-- **Üks ikoonisüsteem:** emojid (vaatepillid ⚡ ☀️ ⏱️ 🏢 🔋, voosõlmed ☀️/🌙 🏢 ⚡, maja graafiku ☀) on asendatud 24×24 stroke-SVG-ga (`<symbol id="i-…">` sprite `index.html`-i alguses, `iconEl()`), kujundid samad mis energialehe `flowIcon`-is. Välk = elekter, mast = elektrivõrk (⚡ ei tähista enam kaht asja). Ikoonid on `aria-hidden`, ekraanilugeja loeb pillist ainult teksti.
-- **Navigatsioon:** elektriinfo lehe päises on sama `nav.site-nav` mis energialehel („Elektriinfo“ / „Energia“); vaadete ribal on ainult vaated (telefonis oli link 6. pillina vaatest väljas).
-- **Odavaim 2 h aken** on hinnakaardi faktides ka soodsa hinna ajal („Odavaim 2 h aken: Homme 04:15–06:15 (koos tasudega 7,34 s/kWh)“); soovitus „Võimalusel oota“ ei korda seda. Faktid järgnevad nõuandele (töölaual ei jää kaardi keskele tühja ala).
-- **Puuteala:** puuteekraanil (`pointer: coarse`) on vaadete pillid, lehtede navigatsioon, vahelehed, lülitid ja ikoonnupud ≥ 44 px; `.site-nav__link` on alati ≥ 40 px.
-- **Liikumine ja printimine:** `prefers-reduced-motion` peatab ka olekutäpi pulsi, voo nooled ja spinneri. `@media print`: heledad tokenid, nupud/vaated/navigatsioon peidetud, möödunud tulbad 0,75, kaardid ei murdu.
+### 3. Hinnagraafik, tooltip ja päeva kokkuvõte (`index.html`; L-001–L-010, L-012–L-017, L-019, K-002–K-004, K-006, L-054, L-089, L-102, L-104, L-119, L-126, L-128, L-129, L-139, L-140, L-142, L-144, L-147)
+- **Telefonis (< 768 px) on vaikimisi 1 h vaade (L-003)** – see muudab 2.2.0 otsust „Vaikimisi 15-minutiline vaade“: 15 min tulbad olid 390 px laiusel ~2,7 px. Ilma kasutaja valikuta vahetub samm ka akna suuruse muutmisel; lüliti „1 h / 15 min“ valik jääb kehtima. Kitsal plotil 15 min tulbad ilma vahe ja ümardusteta.
+- **Päikesejoon (L-001):** pooleli perioodi joonele ei kanta (tooltipis „pooleli, kuni HH:MM“); puuduv periood katkestab ostu- ja päikesejoone (L-009). Mõõtmiste lõpus rõngas ja silt „kuni HH:MM“ (L-006).
+- **kWh-telg (L-089, L-010, L-002):** kWh null on hinna nulljoonel, skaala kasutab poolt hinnaala kõrgusest, alad tulpade all; sildid paremale joondatud ilma kriipsuta (ei paista miinusmärgina), ühik „kWh / 15 min“ või „kWh / 1 h“.
+- **Odavaim aken (L-012, L-104, L-147, L-007):** servad punktiirina, silt „odavaim 2 h · 04:15–06:15“, legendis kriteerium (koos võrgutasuga, keskm.); aken uuendatakse paigas, minutitiks ei joonista graafikut ümber ega peida tooltipi.
+- **Päeva keskmine (L-014):** silt vabale küljele; kui see kataks tulpi või kWh-joont, on väärtus legendis („päeva keskmine 8,29“). SVG-tekst 12 px (L-102).
+- **Legend (L-128, L-016, L-019):** kaks rühma „Hind, s/kWh“ ja „Energia, kWh / … (parem telg)“, telefonis kahes veerus; tühjal päeval peidetud. Möödunud tulbad heledamad, legendis „heledam = möödunud“ (L-008).
+- **Kellakeeramine (K-002, L-017):** 25.10 perioodi lõpp alguse nihkes ja „(suveaeg)“/„(talveaeg)“, x-teljel „03“ ja „03*“.
+- **Tooltip ja inspektor (L-142, L-013, L-119, L-005, L-054, L-126, L-144):** aeg, hind ja hinnaklass, „koos tasudega“, kogused värvivõtmega (ost võrgust (Estfeed) koos maksumusega, päike ja maja (inverter), aku laadimine võrgust/päikesest), keskmine kW ja võrdlus päeva keskmisega. Puutel tooltipi ei kuvata (info fikseeritud kõrgusega inspektoris, graafik ei nihku); ekraanilugejale teatab ainult klaviatuur (`#chart-announcer`).
+- **Päeva kokkuvõte (L-129, L-015, L-140, L-004, K-003, L-139):** rühmad „Hind, s/kWh“, „Ost võrgust sel päeval“ ja „Käesolev kuu · ost võrgust“; inverteri duplikaatplaadid on päikesekaardil. Eile-võrdlus neutraalne; „Homme“ täpi tähendus tekstina, enne avaldamist „(alates 15:00)“. Puuduv hinnaperiood jääb auguks, osaliste homsete hindade teade (K-004); „−0,00 €“ asemel „0,00 €“ (K-006).
+- **Lõppkontroll:** puuteekraaniga tahvlis (768–1024 px, `pointer: coarse`) on inspektor samuti kaherealine paneel – üherealises lõigati päikese, maja ja aku väärtus „…“-ga ära ja tooltipi puutel pole (L-126); paneel katab päeva sildi tervenisti. Aku laadimise allikas omistatud energia järgi: „(võrgust 0,0, päikesest 0,5)“ asemel „(päikesest)“, alla 0,05 kWh osa ei nimetata (L-005). Legendis ei murdu „Mõõdukas 10–“ / „20“ (L-128). „Eile“ vaates on tulbad heledamad, kui graafikul on eilne päikesejoon – heledas teemas sulandus tume `--solar-line` muidu oranžide ja punaste tulpadega (L-088).
 
----
+### 4. Maja üldelekter (`index.html`; L-023, L-024, L-026–L-030, L-032, L-034, L-035, L-037–L-040, L-121, L-136)
+- **Kuud:** jooksev kuu (`isOngoing`, „*“, punktiir) ja esialgne eelmine kuu (`isPreliminary`, 1.–3. kuupäeval, „°“) on eraldi; märk „N täiskuu ost (okt 25 – sept 26): …“; `noData` kuu = „andmed puuduvad“ (graafikus „—“). Jooksva kuu võrdlus ainult sama ajani, inforeal ka terve eelmise aasta kuu.
+- **Graafik:** tulbad kuni 26 px, aasta varem tulp täidetud tooniga, y-telg 4–6 jaotust ühikuga, EKI kuulühendid (kitsal 4-täheline variant 10 px, väga kitsal iga teine kuu), aastasilt eraldusjoone järel, päikesepargi algus punktiirjoonena (`CONFIG.paike.kasutuselAlates`).
+- **Allikas:** Estfeedi € on hinnang („≈“), CONFIG-i varuandmetel oma legend „haldaja sisestatud kuud (arved)“ ja märkus, € ilma „≈“-ta. Graafik on klaviatuuriga kasutatav (nooled, Home/End), inforida `aria-live`, peidetud andmetabel; surnud `.building-bar` CSS eemaldatud.
+- **Lõppkontroll:** valitud kuu väärtussilt arvestab kõiki tulpi, mille kohale see kitsal ekraanil ulatub, ega kata naaberkuu tulpi (L-027); kui aken algab detsembris, jäetakse kitsal ekraanil esimene aastasilt ära (oli „'25'26“, L-030); peidetud sildiga esialgsel kuul on alles „°“, et legendi „° esialgne“ vastaks graafikule (L-023); „≈“ ja „€“ on summaga mittekatkeva tühikuga (`formatEur`, L-035); legendis pole enam sõna „CONFIG“ (L-031).
 
-## energy-dashboard.html [1.2.0] — 2026-10-22
+### 5. Energialehe lõppkontroll
+- „Homme“ vahelehel, kesköö järel ja päikeseandmeteta ei ilmu hinnaplaatide alla enam sõna „null“ (`setChildren` filtreerib puuduva „Suurim tarbimine“ plaadi, L-063).
+- Kellakeeramise päeval ei jookse „03:00 (suveaeg) · käimas“ „Järgmiste tundide“ tulba peale: esimene veerg laieneb kõigil ridadel ühtmoodi (`subgrid`, K-002).
+- `meta.pricesOk: false` ei anna enam bännerit „Töövoog ei saanud … börsihindu uuendada“: hinnad on värsked, auk või tunnine samm on jaluse töövoo hoiatustes.
+
+### 6. Energialeht (`energy-dashboard.html` 1.2.0)
 
 Energialehe parandused graafikute ülevaate (21.10.2026) punkti 5 järgi. Kõik numbrid on endiselt mõõtmised (`paike.json`, `hinnad.json`); muutusid tõlgendus, sildid ja graafik.
 
-### 1. Andmete tõlgendus
+#### 6.1 Andmete tõlgendus
 - **Aku märk:** `batteryKw = |chargePower| − |dischargePower|` (nagu elektriinfo lehel). `batteryPower`-i märki kasutatakse ainult nende väljade puudumisel ja see kalibreeritakse kaadritest (enamus, varuks laetuse muutus); vaikimisi `batteryPower` < 0 = laeb. Varem jäi märk viiki ja vaikeväärtus oli andmetega vastuolus.
 - **Ost ja müük:** ost = `purchasePower`; `gridPower`-it ei loeta enam ostuks. Müük tuletatakse bilansist ainult siis, kui ostu pole ja ülejääk ületab kadude varu (0,3 kW / 3 % toodangust); muidu 0, ja kui päike või tarbimine puudub, „—“ ja „müüki ei mõõdeta“. `CONFIG.solarman.vorguMark` on eemaldatud.
 - **Hoidevool:** alla 0,2 kW muutumatu laetusega on aku „Ootel · hoiab +0,1 kW“; aku vood ei animeeru. kW ja päevakogused jäävad mõõtmisteks.
@@ -46,23 +61,68 @@ Energialehe parandused graafikute ülevaate (21.10.2026) punkti 5 järgi. Kõik 
 - **Aegumislävi** 30 → 45 min, loetakse `index.html`-i `CONFIG.paike.aegunudMinutites`-ist. Aegunud mõõtmisel: pealkiri „Energiavoog kell 14:59“, „mõõdetud 14:59“, „Laeb (14:59)“, voog tuhm ja liikumatu; märgil „Mõõdetud 14:59 · 23 min tagasi“.
 - **Puuduv hinnaperiood** jääb auguks (eelmist perioodi ei pikendata); homme on siis „(osaline)“ ja teade „Homsed hinnad on osalised (puudub HH:MM)“.
 
-### 2. Sildid ja kooskõla elektriinfo lehega
+#### 6.2 Sildid ja kooskõla elektriinfo lehega
 - „Isevarustatus 7 %“ → **„Päikesest kaetud 32 %“** (toodang − müük) / tarbimine, alltekst „täna · 43,5 kWh 136,5-st“ – sama mõõdik mis elektriinfo lehel.
-- Ost võrgust: „täna 126 kWh · ≈ 15,28 € (inverter, hinnang)“, plaatide kohal „Täna kuni 15:00 (inverter)“; jaluses, et arve alus (Estfeed) on elektriinfo lehel. „graafikust kuni 14:59“ → „kuni 15:00“ (viimase arvestatud kaadri lõpp).
+- Ost võrgust: „täna 126,5 kWh · ≈ 15,28 € (inverter, hinnang)“, plaatide kohal „Täna kuni 15:00 (inverter)“; jaluses, et arve alus (Estfeed) on elektriinfo lehel. „graafikust kuni 14:59“ → „kuni 15:00“ (viimase arvestatud kaadri lõpp).
 - **Odavaim 2 h aken** valitakse lõpphinna järgi (`avgFinal`): „koos tasudega 7,34 s/kWh (börsihind 1,88 s/kWh)“.
 - „Järgmised tunnid“: esimene rida „15:00 · käimas“ (terve tunni keskmine), mitte „praegu“.
 - Võrgusõlme rõngas on võrgu osa maja tarbimisest („23% tarbimisest“), mitte täisring. Voo diagramm on kompaktsem (392 → 324).
 - **Kellakeeramine:** `formatTimeRange` kuvab lõpu alguse nihkes ja 25.10 korduvale tunnile lisandub „(suveaeg)“/„(talveaeg)“ („03:45–04:00 (suveaeg)“, tabelis „03:00 (suveaeg)“ ja „03:00 (talveaeg)“).
 - Andmete seis (`meta`: hinnad kuni, kaadrid kuni, töövoo hoiatused) jaluses ja päise oleku vihjes; tariifide varukoopia ja `meta.tariffs`-i erinevus bänneris; jaluses „Tariifid: sisemine koopia“.
 
-### 3. Päeva graafik ja tabel
+#### 6.3 Päeva graafik ja tabel
 - kW-paneelil lisaks **ost võrgust** (katkendjoon) ja **aku** (+ laeb / − tühjeneb) astmeliste 15-min sarjadena; telg ulatub alla nulli ainult negatiivsete väärtuste korral. Tooltipis „ost võrgust 28,1 kW“, „aku laeb 18,8 kW“, „laetus 59%“ (kW ühe komakohaga).
 - „Praegu“ joon legendis ja kellaajaga, pv/maja joone lõpus täpp (viimane mõõtmine, ka aria-label'is).
 - Odavaim 2 h aken hinnapaneelil (ka „Homme“ vahelehel, kui aken sinna jääb) koos legendikirjega.
 - Keskmise silt pannakse vabale küljele; kui see kataks tulpi, on väärtus legendis („päeva keskmine 8,29“).
-- Möödunud tulbad `opacity` 0,38 → 0,58, legendis „heledam = möödunud“. „Täna“ vahelehel lisaks „Suurim tarbimine“.
+- Möödunud tulbad `opacity` 0,38 → 0,6, legendis „heledam = möödunud“. „Täna“ vahelehel lisaks „Suurim tarbimine“.
 - Tabel: veerud „Võrk kW“ ja „Aku kW“ märgiga numbritena (+27,4 / −0,1), selgitus tabeli kohal, kleepuv kellaaja veerg ja kerimisvihje kitsal ekraanil.
 - Ligipääsetavus: nähtaval inspektoril pole `aria-live`; ekraanilugejale loetakse ette ainult klaviatuuriga valitud periood (`#chart-announcer`); „Homme“ täpi tähendus on tekstina, enne avaldamist „(alates 15:00)“.
+
+### 7. Kujundus: mõlemad lehed (L-068, L-088, L-090, L-091, L-094, L-097, L-098, L-106, L-138, L-049, K-005, L-145, L-134, L-130, L-146, L-112, L-011, L-120, L-115, L-031, L-035)
+
+Graafikute ülevaate (21.10.2026) punkti 5 kujunduse, siltide ja ligipääsetavuse soovitused (`index.html`, `energy-dashboard.html`, `css/*`). Numbrid ja arvutused ei muutunud, muutusid värvid, sildid, täpsus ja paigutus.
+
+#### 7.1 Ühised tokenid ja värvide tähendus
+- **Üks tokenikomplekt kahes failis:** `css/index.css` ja `css/common.css` kasutavad samu väärtusi (pinnad, tekst, hinnaklassid, `--solar`/`--home`/`--grid`, `--solar-line`, `--avg-line`); varem erinesid `--cat-kollane` (`#c48f00` vs `#b58500`), tumedad pinnad (`#131c27` vs `#1a2230`) ja nupuga valitud hele teema süsteemi heledast (`--surface-2 #eef2f6`). Energialehe kasutamata `--bar-primary`/`--share-*` on eemaldatud.
+- **Tume teema üks kord:** elektriinfo leht seab `<html data-theme>` alati („auto“ = süsteemi eelistus, ka süsteemi teema vahetusel), juba `<head>`-is enne esimest joonistamist; `css/index.css`-is on hele `:root` ja tume `:root[data-theme="dark"]` (varem kolm koopiat). Tume komplekt on `@media screen` all, seega **prinditakse heledana**.
+- **Hinnaklassid:** heledas `--cat-kollane #b07f00` (≥ 3:1 ka `#f5f7fa` plaadil), `--cat-oranz #b54a10`, `--cat-punane #a51a1a` – heledus langeb hinnaga ja kollane/oranž eristuvad ka deuteranoopias; tumedas `#2d9b5a`/`#b08c18`/`#f09549`/`#ff8585` – kallis on kontrastseim, odav ei helenda. Hinnagraafikutel on lävedel 10 ja 20 s/kWh siltideta ruudustiku joon, kui teljejaotus seda ei anna.
+- **Osapooled mõlemal lehel:** maja = sinine `--home`, võrk ja ost võrgust = terashall `--grid` (`#4f6a8a`, varem lilla energialehel ja sinine `--bar-primary` elektriinfo lehel), päike = `--solar` (`#c27a12`; elektriinfo `--solar-gold` on sellele viide). Elektriinfo lehel kasutavad `--grid`-i ostu joon, voo nool, Elektrivõrgu sõlm ja maja üldelektri tulbad; Maja sõlm on sinine (oli roheline).
+- **Mõõdetud päikesetoodangu joon** on mõlemal lehel `--solar-line` (`#92400e` / tumedas `#fde68a`), mitte kollase/oranži tulbaga sama toon; elektriinfo hinnagraafikul päikese ala pole, ostu ala 0,06.
+- **Roheline ainult hinnale, olekule ja soodsale muutusele:** odavaim aken, planeerija plaan, legendi ruut ja „Homme“ täpp on sinise aktsendiga `--focus`; madalaim/kõrgeim hind on selle hinna klassi tooniga (2,53 roheline, 23,40 punane), „Täna toodetud“ päikese tooniga; `.stat__value--good/--bad` on mõlemal lehel `-fg` toonides (punane/roheline ainult võrdlusplaatidel). Lõpphinna osakaalude „Võrgutasu“ on hallsinine (`--share-2 #5b7a9a`, oli roheline).
+- **Märgid:** jooned 2,5 px pinnavärvi haloga (ka energialehe päikese ja maja joon), päeva keskmise punktiiri all sama kriipsutusega halo (tumedas teemas oli joon kollastel tulpadel 1,45:1), möödunud tulbad 0,6. Legendis on joonte võti mõlemal lehel `.line-key` (ka keskmine). Maja üldelektri graafiku tekst 12 px, aasta varem tulp hele täide + pidev kontuur.
+
+#### 7.2 Sildid ja täpsus
+- **Täpsus:** kW ja kWh ühe komakohaga mõlemal lehel (energialeht: `formatKw`/`formatKwh` ja suur päikesenumber „6,6 kW“, varem „6,59“/„137 kWh“; elektriinfo tooltip ja inspektor „1,8 kWh“, varem „1,83“).
+- **Allikad:** energialehe võrgusõlm „Elektrivõrk“ / „ost võrgust“ (nagu elektriinfo lehel); jaluses failinimede asemel „inverter (Solarman)“, „Börsihinnad: Elering“, „Tariifid: elektriinfo lehe seaded“ (varukoopia korral „sisemine koopia“). „SoC“ → „laetuse tase“.
+- **Hinnangud ≈-ga:** päeva ostukulu, perioodi maksumus tooltipis, päikeseenergia väärtus; „sh börsiosa“ → „sellest börsihind“.
+- **Maja üldelekter:** vaate pill „Maja üldelekter“ (oli „Maja 12 k“), märk „91 961 kWh“ (oli „92,0 MWh“), märkus „Eurod on hinnang (≈) …“; varuandmed „haldaja sisestatud arved“.
+- **Lõpphinna osakaalud** samal baasil kui tabel: „Börsihind (ilma KM-ta)“, võrgutasu, marginaal, „Taastuvenergia tasu ja aktsiis“ ja eraldi „Käibemaks 24%“ (39/25/4/13/19 %); segmentide vahel on pinnavärvi vahe.
+
+#### 7.3 Piktogrammid, navigatsioon ja ligipääsetavus
+- **Üks ikoonisüsteem:** emojid (vaatepillid ⚡ ☀️ ⏱️ 🏢 🔋, voosõlmed ☀️/🌙 🏢 ⚡, maja graafiku ☀) on asendatud 24×24 stroke-SVG-ga (`<symbol id="i-…">` sprite `index.html`-i alguses, `iconEl()`), kujundid samad mis energialehe `flowIcon`-is. Välk = elekter, mast = elektrivõrk (⚡ ei tähista enam kaht asja). Ikoonid on `aria-hidden`, ekraanilugeja loeb pillist ainult teksti.
+- **Navigatsioon:** elektriinfo lehe päises on sama `nav.site-nav` mis energialehel („Elektriinfo“ / „Energia“); vaadete ribal on ainult vaated (telefonis oli link 6. pillina vaatest väljas).
+- **Odavaim 2 h aken** on hinnakaardi faktides ka soodsa hinna ajal („Odavaim 2 h aken: Homme 04:15–06:15 (koos tasudega 7,34 s/kWh)“); soovitus „Võimalusel oota“ ei korda seda. Faktid järgnevad nõuandele (töölaual ei jää kaardi keskele tühja ala).
+- **Puuteala:** puuteekraanil (`pointer: coarse`) on vaadete pillid, lehtede navigatsioon, vahelehed, lülitid ja ikoonnupud ≥ 44 px; `.site-nav__link` on alati ≥ 40 px.
+- **Liikumine ja printimine:** `prefers-reduced-motion` peatab ka olekutäpi pulsi, voo nooled ja spinneri. `@media print`: heledad tokenid, nupud/vaated/navigatsioon peidetud, möödunud tulbad 0,75, kaardid ei murdu.
+
+#### 7.4 Lõppkontroll
+- Puuteekraanil on ka planeerija „Elektriauto laadimine …“ kokkuvõtte rida ≥ 44 px (L-145).
+- Reegel 11, README ja tokenite kommentaarid vastavad koodile: roheline on „Väga odav“, olek „korras“ ja soodne muutus (võrdlusplaatide vahe, planeerija sääst), energialehel ka aku (L-091, L-094).
+
+### 8. Teadlikult tegemata
+- **Eraldi kWh-paneel hinnagraafiku all** (L-089 „hiljem“): teeks graafiku telefonis kõrgemaks; kWh-jooned kasutavad praegu poolt graafiku kõrgust ja hinna nulljoont. Omaniku otsus (p 9).
+- **Energialehe eraldi Estfeedi plaat** (L-078 valikuline osa) ja **eraldi laetuse (SoC) paneel** (L-059 alternatiiv): laetus on tooltipis, tabelis ja akukaardil, Estfeedi arve alus elektriinfo lehel; omaniku otsus.
+- **Müügi märk** (L-044): andmetes pole müüki kunagi esinenud, seega märki ei saa kontrollida. Lehed tuletavad müüki ainult kitsalt bilansist, töövoog hoiatab esimese `gridPower` > 50 W korral – siis tuleb märk andmetest kontrollida.
+- **Tasude summad, mida ei leitud ametlikest allikatest** (kuutasu, tasakaalustamisvõimsuse tasu, võrgutasu kWh-hindade ja marginaali ajalugu): mehhanism on olemas, väärtused jäid 0 või muutmata – ära arva, vt p 9.
+- **Aku mahutavus** (energialehe `CONFIG.aku.mahtKwh = 0`): laadimise/tühjenemise ajahinnangut ja „Salvestatud kWh“ plaati ei kuvata, kuni mahutavus on teada.
+
+### 9. Omanik peab veel andma või otsustama
+- **Kuutasu (L-077/L-036):** üks arve igast perioodist (enne 08/2025, 08/2025–05/2026, alates 06/2026): fikseeritud kuutasud kokku koos KM-ga (võrgu kuu- ja läbilaskevõimetasu, müüja kuutasu). Need lähevad `CONFIG.hinnad.kuutasu`-sse ja töövoo `TASUDE_AJALUGU["kuutasu"]`-sse (praegu 0).
+- **Tasakaalustamisvõimsuse tasu** (01.01.2026 alates 3,73 €/MWh, 2027 2,97 €/MWh müüja arvel): kas see on arvel eraldi rida või marginaali sees? Kui eraldi, lisada (nt `taastuvenergiaTasu`-sse alates 2026, ajalugu 0).
+- **Võrgupakett ja marginaal:** kas maja on Elektrilevi „Võrk 4“ paketil ja kas kWh-hinnad 3,49/1,99 ning marginaal 0,6 s/kWh on kehtinud 11/2024-st muutumatult (ajalugu puudub).
+- **Päikesepargi kasutuselevõtu kuu** (`CONFIG.paike.kasutuselAlates`, kujul `"AAAA-KK"`) ja **aku kasutatav mahutavus** (energialehe `CONFIG.aku.mahtKwh`).
+- **Otsused:** 45 min aegumislävi (või 60/75 min); telefonis vaikimisi 1 h; keskmise silt legendis, kui see kataks tulpi; eraldi kWh-paneel; inverteri plaadid päeva kokkuvõttest eemaldatud; telefonis ainult kaherealine inspektor (320 px laiusel võib viimane väärtus „…“-ga lõppeda); maja graafiku 10 px kuusildid kitsal ekraanil; kas CONFIG-i `majaElekter` summad on täpsed arvesummad; uued hinnaklasside toonid; telefoni kolmerealine päis.
 
 ---
 
@@ -245,7 +305,7 @@ Versioon `2.2.0` (defineeritud konstandina `APP_VERSION = '2.2.0'` failis `index
   - Jooksva (pooliku) kuu jaoks arvutatakse eelmise aasta vastava kuu juurde ka `kwhToDate` ja `eurToDate` (tarbimine ja kulu täpselt sama kuupäeva ja kellaajani aasta varem), et võrdlus oleks õiglane. Möödunud täiskuud puhverdatakse (`"complete": true`), et vältida korduvaid API päringuid.
 
 ### 2. Graafiku täiendused (`#section-chart` / `buildPriceChartSvg` / `showTooltip`)
-- **Vaikimisi 15-minutiline vaade (`state.chartResolution = 15`):** Graafik avaneb vaikimisi `15 min` resolutsioonis.
+- **Vaikimisi 15-minutiline vaade (`state.chartResolution = 15`):** Graafik avaneb vaikimisi `15 min` resolutsioonis. (Alates 2.5.0 ainult arvutis; telefonis < 768 px vaikimisi 1 h, vt [2.5.0].)
 - **Tarbimise (`kWh`) joon ja pindala graafikul:** Kui valitud päeval („Eile" või „Täna") on Estfeedi tarbimisandmed olemas, joonistatakse hinnatulpade peale violetne tarbimisjoon (`.consumption-line`, `.consumption-area`, `.consumption-dot`) koos parempoolse `kWh` skaalaga.
 - **15-minutiline tarbimine ja maksumus tööriistavihjes (`showTooltip` & `#chart-inspector`):** Iga 15-minutilise (või 1h) tulba juures kuvatakse lisaks börsihinnale ja lõpphinnale ka täpne tarbitud kogus ja maksumus: `Tarbitud: X,XXX kWh · Maksumus: X,XX € (börsihind: X,XX €)`.
 - **Päeva ja kuu kokkuvõttekastid (`renderDaySummary`):** Graafiku all kuvatakse valitud päeva kogutarbimine (`kWh`) ja kogumaksumus (`€` koos võrgutasude ja KM-ga ning sulgudes puhta börsielektri osa) ning käesoleva kuu tarbimine võrrelduna eelneva aasta sama kuuga.
@@ -328,12 +388,13 @@ Versioon `2.0.0` (defineeritud konstandina `APP_VERSION = '2.0.0'` failis `index
 
 1. **Failide jaotus:** `index.html` sisaldab HTML-i ja JS-i, kujundus on failis `css/index.css` (alates 2.4.2). `energy-dashboard.html` kasutab faile `css/common.css` ja `css/energy-dashboard.css`. CSS-i muutmisel suurenda linkides `?v=` väärtust. Väliseid raamistikke ega bundlereid ei kasutata.
 2. **Muuda alati viimast versiooni:** enne muutmist tõmba `main`. Ära asenda faili vanema koopiaga: 2.4.0 kirjutas nii PR #5 parandused üle.
-3. **`CONFIG` puutumatus:** Kõik kasutaja muudetavad parameetrid on skripti alguses objektis `CONFIG`. Võtmeid ei tohi ümber nimetada, sest `index.html`-i `CONFIG`-i loevad regulaaravaldisega ka `energy-dashboard.html` (`loadTariffs`, ka `aegunudMinutites`) ja töövoog `uuenda-hinnad.yml` (`load_tariff_config`). Tariifide varukoopiad on energialehe `CONFIG`-is ja töövoo vaikeväärtustes: tariifi muutmisel uuenda kõik kolm kohta või kontrolli `hinnad.json`-i `meta.tariffs`-i järgi (energialeht hoiatab erinevuse ja varukoopia kasutamise korral bänneris).
+3. **`CONFIG` puutumatus:** Kõik kasutaja muudetavad parameetrid on skripti alguses objektis `CONFIG`. Võtmeid ei tohi ümber nimetada, sest `index.html`-i `CONFIG`-i loevad regulaaravaldisega ka `energy-dashboard.html` (`loadTariffs`, ka `aegunudMinutites`) ja töövoog `uuenda-hinnad.yml` (`load_tariff_config`). Töövoog loeb tariifid ainult `index.html`-i CONFIG-plokist (`meta.tariffs.source`). Tariifide varukoopiad on energialehe `CONFIG`-is ja töövoo vaikeväärtustes (`TARIFF_DEFAULTS`): tariifi muutmisel uuenda kõik kolm kohta või kontrolli `hinnad.json`-i `meta.tariffs`-i järgi (energialeht hoiatab erinevuse ja varukoopia kasutamise korral bänneris). **Tasu muutumisel** lisa vana väärtus koos muutuse kuupäevaga enne töövoo `TASUDE_AJALUGU`-sse (KM: `KM_AJALUGU`) ja muuda alles siis `CONFIG`-it – muidu arvutatakse ka varasemad kuud uue tasuga (`cfg` sõrmejälg käivitab ümberarvutuse).
 4. **Turvaline DOM:** Kasuta elementide loomiseks ainult `el()` / `svgEl()` ja `textContent`-i, mitte `innerHTML`-i. Uue välise hosti lisamisel uuenda `Content-Security-Policy` meta-silti.
 5. **Ajavöönd:** Kõik kuupäevade ja päeva alguste arvutused käivad läbi `getTallinnDateParts` / `getTallinnDayStart` (`Europe/Tallinn`).
-6. **Mõõtmised vs hinnangud:** Näita mõõtmisi (Estfeed, inverter) ainult mõõtmistena. Tulevikku ei summeerita „tänase“ koguse sisse. Mudel või prognoos peab olema selgelt märgistatud, mitte „(inverter)“. Mõõtmise allikas on siltides väiketähega: „(inverter)“, „ost võrgust (Estfeed)“; täisnimi „inverter (Solarman)“ ainult kaardi vihjes ja jaluses. Solarmani päevakoguseid (`data.day`) ei kasutata, sest need on ~10× liiga väikesed: kogused arvutatakse 15-min mõõtmistest.
+6. **Mõõtmised vs hinnangud:** Näita mõõtmisi (Estfeed, inverter) ainult mõõtmistena. Tulevikku ei summeerita „tänase“ koguse sisse. Mudel või prognoos peab olema selgelt märgistatud, mitte „(inverter)“. Mõõtmise allikas on siltides väiketähega: „(inverter)“, „ost võrgust (Estfeed)“ (legend, tooltip, inspektor), Estfeedi plaadil „Estfeed · kuni HH:MM · arve alus“; täisnimi „inverter (Solarman)“ ainult kaardi vihjes ja jaluses. Müüja nimi („Enefit“) ei ole andmeallika silt. Iga „täna“ kogusega käib allikas ja lõikeaeg („kuni HH:MM“); eri allikate arve (Estfeed ja inverter) ei liideta. Solarmani päevakoguseid (`data.day`) ei kasutata, sest need on ~10× liiga väikesed: kogused arvutatakse 15-min mõõtmistest.
 7. **Hinnad:** Tariif ja KM rakenduvad nii lehtedel (`calculateFinalPrice`) kui ka töövoos (`calc_final_cents_kwh`); hoia need samad. Odavaima aja otsing kasutab hinda koos tasudega (`avgFinal`).
 8. **Päringute sagedus:** Kasutaja algatatud värskendus arvestab ooteaega ja nupp on laadimise ajal keelatud.
 9. **Navigatsioon:** Mõlemal lehel peab olema link teisele lehele.
 10. **Ekraanilugeja teated:** Live-region (`aria-live`) uueneb ainult klaviatuuri ja fookuse rajalt (graafikul püsiv peidetud `#chart-announcer`). Hiire ja sõrme liigutus uuendab ainult nähtavat inspektorit, muidu tekiks iga liigutusega teadete tulv.
-11. **Kujundus:** värvid ainult tokenitena; ühised tokenid on samade väärtustega failides `css/index.css` ja `css/common.css` (muuda mõlemas). Roheline = ainult „Väga odav“ ja olek „korras“; valik/aktsent = `--focus`; mõõdetud seeria joon ei kasuta hinnaklassi tooni. Piktogrammid on 24×24 stroke-SVG (`currentColor`, `aria-hidden`), mitte emojid. kW ja kWh ühe komakohaga, € kahega, € hinnangud „≈“-ga.
+11. **Kujundus:** värvid ainult tokenitena; ühised tokenid on samade väärtustega failides `css/index.css` ja `css/common.css` (muuda mõlemas). Roheline = „Väga odav“, olek „korras“ ja soodne muutus (võrdlusplaatide vahe, planeerija sääst), energialehel ka aku – mitte valik ega aktsent; valik/aktsent = `--focus`; mõõdetud seeria joon ei kasuta hinnaklassi tooni. Piktogrammid on 24×24 stroke-SVG (`currentColor`, `aria-hidden`), mitte emojid. kW ja kWh ühe komakohaga, € kahega, € hinnangud „≈“-ga (märk ja „€“ summaga mittekatkeva tühikuga).
+12. **Andmefailide lepingud:** `hinnad.json` `meta` ja `paike.json` `data.meta`/`frameSeconds`/eilsed kaadrid on kirjeldatud README-s; lehed peavad toimima ka vanema failiga (väli puudub → käitu nagu varem). `meta.pricesOk: false` = hinnaridades on auk või tunnine samm (hinnad ise on värsked; ebaõnnestunud päring faili ei kirjuta), `estfeedOk: false` = Estfeedi päring ebaõnnestus. Töövoog ei kirjuta kunagi varem mõõdetud kWh-d ega kuukirjet tühja või osalise vastuse põhjal väiksemaks.

@@ -1789,9 +1789,11 @@ function describeDataState(now) {
   if (solar) {
     const last = solar.series.length ? solar.series[solar.series.length - 1] : null;
     const framesUntil = (solar.meta && metaDate(solar.meta.framesUntil)) || (last ? new Date(Math.min(last.t + solar.frameSeconds * 1000, now.getTime())) : null);
-    if (framesUntil) parts.push(`inverteri 15-min kaadrid ${describeUntil(framesUntil, now)}`);
+    if (framesUntil) parts.push(`inverteri ${Math.round(solar.frameSeconds / 60)}-min kaadrid ${describeUntil(framesUntil, now)}`);
   }
-  if (pm && pm.pricesOk === false) warnings.push('börsihindade viimane päring ebaõnnestus, kuvatakse varasemaid hindu');
+  // pricesOk === false: hinnaread on värsked, kuid neis on auk või tunnine samm (ebaõnnestunud päring faili ei kirjuta).
+  // Täpne põhjus on töövoo hoiatustes; üldlause ainult siis, kui hoiatust pole.
+  if (pm && pm.pricesOk === false && !pm.warnings.length) warnings.push('börsihindades on auk või tunnine samm');
   if (pm) warnings.push(...pm.warnings);
   if (solar && solar.meta) warnings.push(...solar.meta.warnings);
   return { parts, warnings };
@@ -1830,9 +1832,6 @@ function renderStatus() {
       if (state.solar.refreshFailed) lines.push(`Päikeseandmete uuendamine ebaõnnestus, kuvatakse kell ${formatTime(state.solar.lastUpdated)} laaditud andmeid.`);
       if (state.solar.note) lines.push(state.solar.note);
       if (d && d.solar && !d.solarFresh) lines.push(`Solarmani viimane mõõtmine on ${formatAgo(d.solarAgeMin)} (${formatTime(d.solar.updated)}). Soovitus ei arvesta päikese ja aku hetkeseisu.`);
-      if (state.prices.meta && state.prices.meta.pricesOk === false && !state.prices.refreshFailed) {
-        lines.push('Töövoog ei saanud viimasel käivitusel börsihindu uuendada, kuvatakse varasemaid hindu.');
-      }
       if (TARIFFS.fallback) lines.push('Tariifid loeti energialehe varukoopiast (index.html-i ei õnnestunud lugeda), lõpphind võib erineda elektriinfo lehe omast.');
       const mismatch = tariffMismatches(state.prices.meta);
       if (mismatch.length) lines.push(`Lehe tariifid erinevad hinnad.json-i töövoo omadest (${mismatch.join(', ')}): kontrolli index.html-i CONFIG-i.`);
@@ -2719,7 +2718,7 @@ function renderChartStats(d, isToday) {
   const peakLoad = isToday && d.totals ? d.totals.peakLoad : null;
   host.classList.toggle('stats--4', Boolean(peakLoad));
   host.setAttribute('aria-label', `${isToday ? 'Tänane' : 'Homne'} madalaim, keskmine ja kõrgeim börsihind, s/kWh${peakLoad ? ', ning tänane suurim tarbimine' : ''}`);
-  host.replaceChildren(
+  setChildren(host,
     // Väärtuse toon = selle hinna kategooria (nagu tulp graafikul)
     statTile('Madalaim', numberFormat.d2.format(min.spotIncVatCentsKwh), `kell ${formatTime(min.start)}`, `stat__value--cat-${getPriceCategory(min.spotIncVatCentsKwh)}`),
     statTile('Keskmine', numberFormat.d2.format(avg), isToday ? 'täna' : 'homme'),

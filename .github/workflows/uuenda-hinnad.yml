@@ -719,6 +719,12 @@ jobs:
               for r in ee:
                   cur_price_map[r["timestamp"]] = r["price"]
               cur_rec = compute_month_record(cur_y, cur_m, now, cur_kwh_map, cur_price_map, tariff_cfg, complete_flag=False)
+              # Jooksva kuu kWh ei saa sama kuu jooksul kahaneda. Tühi või ainult viimaseid päevi kattev vastus
+              # (varem avaldatud väärtused katavad ainult eilsest alates) jätab varasema kirje alles.
+              prev_cur = cached_months.get(f"{cur_y:04d}-{cur_m:02d}") or {}
+              if cur_rec and (not recent_kwh or cur_rec["kwh"] < (prev_cur.get("kwh") or 0) - 0.01):
+                  note("Estfeedi vastus oli puudulik; jooksva kuu kirje jäi varasemaks")
+                  cur_rec = None
               if cur_rec:
                   store_month(cur_rec)
                   print(f"Käesolev kuu {cur_rec['kuu']}: {cur_rec['kwh']} kWh, {cur_rec['eur']} €")
@@ -731,6 +737,7 @@ jobs:
 
               # Koosta sihtkuude nimekiri: käesolev kuu (offset 0) + kuni 11 eelnevat kuud
               backfilled_pairs = 0
+              empty_kept = []  # kuud, mille kohta Estfeed andis tühja vastuse, kuid varasem mõõdetud kirje jäi alles
               for offset in range(0, 12):
                   ty, tm = shift_month(cur_y, cur_m, -offset)
                   py, pm = ty - 1, tm
@@ -771,6 +778,13 @@ jobs:
                           note(f"Kuu {y:04d}-{m:02d}: Estfeedi päring ebaõnnestus; kuu kirje jäi varasemaks")
                           continue
                       if not m_kwh:
+                          # Tühi vastus ei kustuta varem mõõdetud kuud (nt ajutine tõrge täieliku ümberarvutuse ajal):
+                          # „andmed puuduvad“ kirje tehakse ainult kuule, millel pärisandmeid pole olnud.
+                          prev_m = cached_months.get(f"{y:04d}-{m:02d}") or {}
+                          if not prev_m.get("noData") and (prev_m.get("kwh") or 0) > 0:
+                              print(f"Kuu {y:04d}-{m:02d}: Estfeed ei andnud mõõteandmeid; varasem kirje jäi alles.")
+                              empty_kept.append(f"{y:04d}-{m:02d}")
+                              continue
                           print(f"Kuu {y:04d}-{m:02d} kohta mõõteandmed puuduvad.")
                           if is_comp:
                               store_month({"kuu": f"{y:04d}-{m:02d}", "kwh": 0.0, "eur": 0.0, "complete": True, "noData": True, "v": CALC_VERSION, "cfg": CFG_HASH})
@@ -782,6 +796,9 @@ jobs:
                           store_month(rec)
                           print(f"Kuu {rec['kuu']}: {rec['kwh']} kWh, {rec['eur']} € (complete={rec['complete']})")
 
+              if empty_kept:
+                  ks = sorted(empty_kept)
+                  note(f"Estfeed ei andnud mõõteandmeid {len(ks)} kuu kohta ({ks[0]}" + (f" … {ks[-1]}" if len(ks) > 1 else "") + "); varasemad kirjed jäid alles")
               maja_elekter = [cached_months[k] for k in sorted(cached_months.keys())]
 
           # 6. Faili olekuinfo: lehed saavad eristada värsket ja eelmisest failist säilitatud andmestikku

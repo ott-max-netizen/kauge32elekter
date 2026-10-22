@@ -34,7 +34,8 @@
 
   /* Hinnakategooriad: tulba/aktsendi värv, sildi taust, sildi tekst. Heledas langeb heledus hinnaga
      (L* 57/56/45/36), tulbavärvid on heledatel pindadel vähemalt 3:1 (WCAG 1.4.11); kollane ja oranž
-     eristuvad ka deuteranoopias heleduse järgi. Roheline = ainult „Väga odav“ ja olek „korras“. */
+     eristuvad ka deuteranoopias heleduse järgi. Roheline = „Väga odav“, olek „korras“ ja soodne muutus
+     (võrdlusplaatide vahe, planeerija sääst), energialehel ka aku; mitte valik ega aktsent (see on --focus). */
   --cat-roheline: #1f9d55;
   --cat-roheline-bg: #dbf3e4;
   --cat-roheline-fg: #0f5a31;

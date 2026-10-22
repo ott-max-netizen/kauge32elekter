@@ -352,20 +352,24 @@
   font-size: 14px;
   font-weight: 600;
 }
+/* Esimene veerg mahutab ka „homme 00:00“ ja „15:00 · käimas“, et read ei murduks. Kellakeeramise päeval
+   („03:00 (suveaeg) · käimas“) laieneb veerg kõigil ridadel ühtmoodi (subgrid), tekst ei jookse tulba peale. */
 .upcoming {
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 5px;
+  grid-template-columns: minmax(8.5em, max-content) minmax(0, 1fr) 3.5em;
+  gap: 5px var(--s2);
+  font-size: 14px;
 }
-/* Esimene veerg mahutab ka „homme 00:00“ ja „15:00 · käimas“, et read ei murduks */
 .upcoming li {
   display: grid;
-  grid-template-columns: 8.5em minmax(0, 1fr) 3.5em;
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(8.5em, max-content) minmax(0, 1fr) 3.5em;   /* subgrid'ita brauser */
+  grid-template-columns: subgrid;
   align-items: center;
   gap: var(--s2);
-  font-size: 14px;
   white-space: nowrap;
 }
 .upcoming li.is-now { font-weight: 700; }
