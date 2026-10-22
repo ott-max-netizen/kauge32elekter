@@ -149,7 +149,7 @@ Solarmani välja nimed ja märgid on failis muutmata; lehed tõlgendavad neid ni
 | `dischargePower` | aku tühjenemine, W (≥ 0) |
 | `batteryPower` | aku võimsus, **< 0 = laeb** |
 | `batterySoc` | aku laetuse tase, % |
-| `gridPower` | selle jaama puhul peaaegu alati 0 (harva paar vatti); lehed seda ei kasuta |
+| `gridPower` | selle jaama puhul peaaegu alati 0 (harva paar kümmet vatti); lehed seda ei kasuta |
 | `wirePower` | selle jaama puhul (peaaegu) võrdne `purchasePower`-iga |
 
 - **Aku:** `batteryKw = |chargePower| − |dischargePower|` (kW; + = laeb, − = tühjeneb), sama valem nii
@@ -159,7 +159,7 @@ Solarmani välja nimed ja märgid on failis muutmata; lehed tõlgendavad neid ni
 - **Müük võrku:** müüki pole mõõtmistes seni esinenud, seega on selle märgikokkulepe kontrollimata.
   Lehed näitavad müüki ainult siis, kui ost ≤ 0,05 kW **ja** ülejääk (päike + aku tühjenemine − tarbimine −
   aku laadimine) on üle max(0,3 kW; 3 % toodangust); bilansi jäägist müüki ei tuletata. Töövoog kirjutab
-  logisse hoiatuse, kui `gridPower ≠ 0` või `wirePower ≠ purchasePower` – siis tuleb märgikokkulepe üle kontrollida.
+  logisse hoiatuse, kui `gridPower` või `wirePower − purchasePower` on üle 50 W – siis tuleb märgikokkulepe üle kontrollida.
 
 ## Päikeseenergia (elektriinfo lehe päikesekaart)
 
@@ -304,7 +304,7 @@ ootab 15 s.
   üheselt kirjeldatud. Müüki võrku pole mõõtmistes seni esinenud ja selle tuletis on kontrollimata
   (vt „Märgid ja väljad“); esimesel müügipäeval tuleb märgikokkulepe andmetest üle kontrollida.
 - Selle jaama `gridPower` näib olevat müügi (feed-in) väli: see on peaaegu alati 0 ja harva ostu ajal paar
-  vatti (`wirePower` = `purchasePower` − `gridPower`), seega ei loe kumbki leht seda ostuks ega müügiks. Müük
+  kümmet vatti (`wirePower` = `purchasePower` − `gridPower`), seega ei loe kumbki leht seda ostuks ega müügiks. Müük
   tuletatakse mõlemal lehel energiabilansist (ainult ostuta ja kadude varu ületava ülejäägiga); kui päike või
   maja tarbimine puudub, näitab energialeht „müüki ei mõõdeta“.
 - Aku märk Solarmani andmetes (kontrollitud selle jaama failidest): `realTime.chargePower` < 0 = laeb,
