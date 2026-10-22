@@ -457,6 +457,8 @@ function buildApiRange(now) {
 const timeFormatter = new Intl.DateTimeFormat('et-EE', { timeZone: TIME_ZONE, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
 const dateLongFormatter = new Intl.DateTimeFormat('et-EE', { timeZone: TIME_ZONE, weekday: 'long', day: 'numeric', month: 'long' });
 const monthNameFormatter = new Intl.DateTimeFormat('et-EE', { timeZone: 'UTC', month: 'long' });
+// Kuu nimi seestütlevas käändes („alates juunist 2026“)
+const MONTH_ELATIVE = ['jaanuarist', 'veebruarist', 'märtsist', 'aprillist', 'maist', 'juunist', 'juulist', 'augustist', 'septembrist', 'oktoobrist', 'novembrist', 'detsembrist'];
 // Kuude lühendid EKI järgi (juunit ja juulit ei lühendata); kitsal graafikul 4-täheline variant
 const MONTH_ABBR = ['jaan', 'veebr', 'märts', 'apr', 'mai', 'juuni', 'juuli', 'aug', 'sept', 'okt', 'nov', 'dets'];
 const MONTH_ABBR_NARROW = ['jaan', 'veeb', 'märt', 'apr', 'mai', 'juun', 'juul', 'aug', 'sept', 'okt', 'nov', 'dets'];
@@ -3326,7 +3328,7 @@ function renderBuildingElectricity() {
         el('span', { class: 'legend__swatch legend__swatch--outline', 'aria-hidden': 'true' }),
         'aasta varem'
       ]),
-      solarGroup ? legendNote(`päikesepark kasutusel alates ${monthNameFormatter.format(new Date(Date.UTC(solarGroup.current.year, solarGroup.current.month - 1, 15)))} ${solarGroup.current.year}`, 'sun') : null,
+      solarGroup ? legendNote(`päikesepark kasutusel alates ${MONTH_ELATIVE[solarGroup.current.month - 1]} ${solarGroup.current.year}`, 'sun') : null,
       ongoingGroup ? legendNote(`* jooksev kuu (pooleli; ${ongoingToDate ? 'aasta varem sama ajani' : 'sama ajani võrdlus puudub'})`) : null,
       data.groups.some(g => g.isPreliminary) ? legendNote('° esialgne – Estfeedi andmed täpsustuvad') : null
     ]),
