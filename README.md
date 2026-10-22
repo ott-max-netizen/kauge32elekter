@@ -114,6 +114,19 @@ seetõttu arvutatakse kõik päeva kogused 15-min mõõtmistest.
   telg). kWh-telje null on hinna nulljoonel ja kWh-skaala kasutab poolt hinnaala kõrgusest, et öine ostutipp
   (aku laadimine võrgust) ei paistaks hinnatipuna. Puuduv periood katkestab joone; pooleli olevat perioodi
   joonele ei kanta (tooltipis „pooleli, kuni HH:MM“). Tooltipis on ka keskmine võimsus (kW) ja aku laadimine.
+- Kui ost (Estfeed) või inverteri kaadrid lõpevad enne päeva lõppu, on joone lõpus rõngas ja silt „kuni HH:MM“
+  (perioodi lõpp; allikad jõuavad eri viitega, nt Estfeed kuni 14:15 ja inverter kuni 15:00).
+- Tooltip on tulba kõrval (nagu energialehel): aeg, börsihind ja hinnaklass, hind koos tasudega, kogused
+  värvivõtmega (ost võrgust (Estfeed) koos maksumusega, päike ja maja (inverter), aku laadimine) ning võrdlus
+  päeva keskmisega. Puutel tooltipi ei kuvata: info on graafiku kohal fikseeritud kõrgusega inspektoris, nii et
+  graafik ei nihku sõrme all. Ekraanilugeja teade (`#chart-announcer`) tuleb ainult klaviatuuriga liikudes.
+- Puuduvat hinnaperioodi ei täideta eelmise hinnaga: graafikul jääb tühi koht, praeguse hetke puudumisel on
+  hinnakaart ütleb, et praeguse hetke hinnaperiood puudub, ja osaliste homsete hindade korral on teade „Homsed börsihinnad on osalised (puudub …)“.
+- Graafiku all on valitud päeva kokkuvõte kahes rühmas: „Hind, s/kWh“ (madalaim, keskmine, kõrgeim, võrdlus;
+  tunnivaates märkega „15 min“, sest need on päeva tegelikud veerandtunni hinnad) ja „Ost võrgust sel päeval“
+  (Estfeed: kogus allika ja lõikeajaga, kulu koos tasudega, sh börsiosa koos KM-ga). Inverteri kogused on
+  päikesekaardil. Kuu ost ja aasta tagune võrdlus on omaette rühmas „Käesolev kuu · ost võrgust“. Eile-vaates
+  on päevade võrdlus neutraalse värviga lausena („eile oli … kallim kui täna“).
 - Roheline kast on planeerijas valitud kestusega odavaim aken (lõpphinna järgi koos võrgutasuga), sildiga
   „odavaim 2 h · 04:15–06:15“. Päeva keskmise silt pannakse vabale küljele; kui see kataks tulpi või kWh-joont,
   on väärtus legendis.
