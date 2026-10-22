@@ -12,12 +12,16 @@
 name: Uuenda elektrihinnad
 
 on:
+  # Põhiline käivitaja on väline ajastaja (nt cron-job.org), mis käivitab selle töövoo iga 30 min järel
+  # (:00 ja :30, workflow_dispatch) ja see omakorda töövoo „Uuenda päikeseandmed“ (töö `paike`).
+  # GitHubi schedule on ainult lisavaru: GitHub lükkab ajastatud käivitusi edasi või jätab need vahele
+  # (tegelikult ~5–6 käivitust ööpäevas), seega ei saa sellele andmete värskust rajada.
   schedule:
     # Homsed hinnad avaldatakse kell 15:00 Eesti aja järgi = 12:00 UTC suveajal, 13:00 UTC talveajal.
     # Cron on UTC-s, seega katab 11:02–14:57 UTC mõlemad aastaajad. Käivitus, mis algab
     # 14:50–16:30 Eesti aja järgi, jääb ise hindu ootama; ülejäänud teevad ühe kiire päringu.
     - cron: "2-57/5 11-14 * * *"
-    # Igatunnine uuendus: laadib värsked 15-min tarbimisandmed (kWh), arvutab kuu kWh/maksumuse
+    # Lisavaru: laadib värsked 15-min tarbimisandmed (kWh), arvutab kuu kWh/maksumuse
     # ning kontrollib ka börsihindade parandusi.
     - cron: "12 * * * *"
   workflow_dispatch:
@@ -32,7 +36,7 @@ permissions: {}
 jobs:
   # Käsitsi käivitamisel (Run workflow või väline ajastaja) käivitatakse kohe ka töövoog
   # „Uuenda päikeseandmed“ (uuenda-paike.yml), paralleelselt hindade uuendusega.
-  # Ajastatud käivitustel mitte: päikeseandmed uuenevad niigi iga 10 min järel ja lisakäivitused
+  # Ajastatud käivitustel mitte: väline ajastaja käivitab ahela niigi iga 30 min järel ja lisakäivitused
   # ületaksid GitHub Pagesi avaldamise piirangu (~10 korda tunnis).
   # GITHUB_TOKEN-iga käivitatud workflow_dispatch loob GitHubi reeglite järgi uue käivituse.
   # Järjekorralukk (concurrency) on ainult tööl `uuenda`, et see töö käivituks kohe ka siis,
@@ -68,7 +72,7 @@ jobs:
           ELERING_EIC: ${{ secrets.ELERING_EIC }}
         run: |
           python3 - <<'PY'
-          import json, math, os, re, sys, time, urllib.error, urllib.parse, urllib.request
+          import hashlib, json, math, os, re, sys, time, urllib.error, urllib.parse, urllib.request
           from datetime import datetime, timedelta, timezone
           from zoneinfo import ZoneInfo
 
@@ -89,8 +93,63 @@ jobs:
           MAX_BACKFILL_PAIRS = 12  # laeb ühe käivitusega kõik puuduvad kuud viimase 12 kuu aknas
           # Kuu kWh/€ arvutusreeglite versioon. Suurenda, kui reeglid muutuvad: vahemälus olevad
           # teise versiooniga kuud arvutatakse uuesti. 2 = riigipühade öötariif, KM 22% enne 01.07.2025.
-          CALC_VERSION = 2
+          # 3 = tasude ajalugu (TASUDE_AJALUGU), kuutasu pooliku kuu korral osa kaupa, kirje sõrmejälg cfg.
+          CALC_VERSION = 3
           KM_AJALUGU = ((datetime(2025, 7, 1, tzinfo=TZ), 22.0),)  # (kuni, määr %): enne 01.07.2025 oli KM 22%
+
+          # Tasude ajalugu: CONFIG.hinnad võti -> ((kuni, väärtus), ...) kasvavas järjekorras, nagu KM_AJALUGU.
+          # Väärtus kehtib perioodidel enne kuupäeva „kuni“ (ja eelmise kirje „kuni“ ajast alates); pärast
+          # viimast kirjet kehtib index.html CONFIG.hinnad praegune väärtus. Ühikud nagu CONFIG-is: s/kWh
+          # ilma KM-ta, kuutasu €/kuu koos KM-ga. Tasu muutumisel lisa VANA väärtus siia (kuni muutuse
+          # kuupäevani) ja muuda alles siis CONFIG-it – muidu arvutatakse ka varasemad kuud uue tasuga.
+          # Kirje sõrmejälg (cfg) muutub ja vahemälus olevad kuud arvutatakse järgmisel käivitusel uuesti.
+          # Kuuandmed algavad 2024-11, varasemaid väärtusi pole vaja.
+          TASUDE_AJALUGU = {
+              # CONFIG.hinnad.taastuvenergiaTasu = taastuvenergia tasu 0,84 + varustuskindluse tasu 0,758 (alates 01.01.2026).
+              "taastuvenergiaTasu": (
+                  # 2024: taastuvenergia tasu 1,05 s/kWh (2025. aastast 0,84; Elering):
+                  # https://elektrilevi.ee/et/uudised/taastuvenergia-tasu-alaneb-uuest-aastast-20-protsenti
+                  (datetime(2025, 1, 1, tzinfo=TZ), 1.05),
+                  # 2025: taastuvenergia tasu 0,84, varustuskindluse tasu veel puudus. 2026: taastuvenergia tasu
+                  # jääb 0,84, võrguarvele lisandub varustuskindluse tasu 0,758 s/kWh (01.01.2026):
+                  # https://www.elering.ee/artikkel/taastuvenergia-tasu-jargmisel-aastal-ei-muutu
+                  # https://elektrilevi.ee/en/uudised/ulevaade-2026-aasta-vorguteenuse-arvest-lisandub-varustuskindluse-tasu-taastuvenergia-tasu-ei-muutu
+                  (datetime(2026, 1, 1, tzinfo=TZ), 0.84),
+              ),
+              "aktsiis": (
+                  # Elektriaktsiis 1,45 €/MWh (01.05.2024–30.04.2025), alates 01.05.2025 2,10 €/MWh (ATKEAS § 66 lg 12):
+                  # https://www.riigiteataja.ee/akt/114122021001
+                  # https://www.emta.ee/en/business-client/taxes-and-payment/excise-duties/fuel-and-electricity
+                  # 01.05.2026 kavandatud tõus (3,07 €/MWh) jäeti ära, kehtib 2,10 (= CONFIG 0,21):
+                  # https://www.err.ee/1609965290/valitsus-otsustas-maiks-plaanitud-aktsiisitousud-ara-jatta
+                  (datetime(2025, 5, 1, tzinfo=TZ), 0.145),
+              ),
+              # Võrgutasu kWh-hinnad (vorgutasuPaev/vorgutasuOo): Elektrilevi 01.08.2025 ja 01.06.2026 hinnakirja
+              # muudatustes kWh-põhised hinnad ei muutunud (muutusid kuu- ja läbilaskevõimetasud), seega ajalugu pole:
+              # https://elektrilevi.ee/en/uudised/vorgutasu-muutub-alates-1-augustist
+              # https://elektrilevi.ee/en/uudised/vorgutasu-keskmine-hind-muutub-alates-juunikuust-kolm-koma-neli-protsenti
+              # Fikseeritud kuutasu (võrgu kuu- ja läbilaskevõimetasu + müüja kuutasu), €/kuu koos KM-ga. Elektrilevi
+              # kuu- ja läbilaskevõimetasu muutus 01.08.2025 ja 01.06.2026 (allikad ülal). Summad TÄIDA arvete järgi;
+              # 0 = selle perioodi kuudele kuutasu ei lisata.
+              "kuutasu": (
+                  (datetime(2025, 8, 1, tzinfo=TZ), 0.0),  # kuni 31.07.2025 – TÄIDA arvelt
+                  (datetime(2026, 6, 1, tzinfo=TZ), 0.0),  # 01.08.2025–31.05.2026 – TÄIDA arvelt
+              ),
+          }
+          TARIFF_DEFAULTS = {  # kasutatakse ainult siis, kui index.html CONFIG-ist võtit ei leita
+              "marginaal": 0.6,
+              "vorgutasuPaev": 3.49,
+              "vorgutasuOo": 1.99,
+              "taastuvenergiaTasu": 1.598,
+              "aktsiis": 0.21,
+              "kuutasu": 0.0,
+              "kaibemaks": 24.0,
+              "algus": 22.0,
+              "lopp": 7.0,
+              "nadalavahetusOnOo": True,
+              "riigipuhadOnOo": True,
+          }
+          HOIATUSED = []  # lehele nähtavad hoiatused (hinnad.json meta.warnings)
 
           def tallinn_now():
               return datetime.now(TZ)
@@ -101,6 +160,13 @@ jobs:
 
           def warn(msg):
               print(f"::warning::{msg}")
+
+          def note(msg, detail=""):
+              """Hoiatus logisse ja faili meta.warnings-isse. Lehed näitavad meta.warnings-i elanikele (olekumärgi vihje,
+              jalus), seega msg on tavakeeles; tehniline täpsustus (sisemised nimed) ainult logisse (detail)."""
+              warn(f"{msg} ({detail})" if detail else msg)
+              if msg not in HOIATUSED:
+                  HOIATUSED.append(msg)
 
           def midnight(dt, days):
               return (dt + timedelta(days=days)).replace(hour=0, minute=0, second=0, microsecond=0)
@@ -118,38 +184,57 @@ jobs:
           def fmt_utc(dt):
               return dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
 
+          def iso_utc(ts):
+              return datetime.fromtimestamp(ts, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
           def reject_constant(name):  # Python lubaks NaN/Infinity, brauseri JSON.parse mitte
               raise ValueError(f"lubamatu JSON väärtus {name}")
 
           def load_tariff_config():
-              """Loeb index.html CONFIG objektist maja elektripaketi tariifid ja tasud."""
-              cfg = {
-                  "marginaal": 0.6,
-                  "vorgutasuPaev": 3.49,
-                  "vorgutasuOo": 1.99,
-                  "taastuvenergiaTasu": 1.598,
-                  "aktsiis": 0.21,
-                  "kuutasu": 0.0,
-                  "kaibemaks": 24.0,
-                  "algus": 22.0,
-                  "lopp": 7.0,
-                  "nadalavahetusOnOo": True,
-                  "riigipuhadOnOo": True,
-              }
+              """Loeb index.html CONFIG-plokist (sama regex mis energy-dashboard.html loadTariffs) maja
+              elektripaketi tariifid ja tasud. Tagastab (cfg, allikas), allikas = "index.html" või "default"."""
+              cfg = dict(TARIFF_DEFAULTS)
               try:
                   with open("index.html", encoding="utf-8") as f:
                       html = f.read()
-                  for key in ("marginaal", "vorgutasuPaev", "vorgutasuOo", "taastuvenergiaTasu", "aktsiis", "kuutasu", "kaibemaks", "algus", "lopp"):
-                      m = re.search(rf"\b{key}\s*:\s*(-?\d+(?:\.\d+)?)", html)
-                      if m:
-                          cfg[key] = float(m.group(1))
-                  for key in ("nadalavahetusOnOo", "riigipuhadOnOo"):
-                      m_bool = re.search(rf"\b{key}\s*:\s*(true|false)", html)
-                      if m_bool:
-                          cfg[key] = (m_bool.group(1) == "true")
               except OSError:
-                  pass
-              return cfg
+                  note("Tasude seadeid ei saanud lugeda; lõpphinnad on arvutatud vaiketasudega", "index.html-i ei saanud lugeda")
+                  return cfg, "default"
+              block = re.search(r"const\s+CONFIG\s*=\s*\{([\s\S]*?)\n\};", html)
+              if not block:
+                  note("Tasude seadeid ei saanud lugeda; lõpphinnad on arvutatud vaiketasudega", "index.html-ist ei leitud CONFIG-plokki")
+                  return cfg, "default"
+              src = block.group(1)
+              missing = []
+              for key in ("marginaal", "vorgutasuPaev", "vorgutasuOo", "taastuvenergiaTasu", "aktsiis", "kuutasu", "kaibemaks", "algus", "lopp"):
+                  m = re.search(rf"\b{key}\s*:\s*(-?\d+(?:\.\d+)?)", src)
+                  if m:
+                      cfg[key] = float(m.group(1))
+                  else:
+                      missing.append(key)
+              for key in ("nadalavahetusOnOo", "riigipuhadOnOo"):
+                  m_bool = re.search(rf"\b{key}\s*:\s*(true|false)", src)
+                  if m_bool:
+                      cfg[key] = (m_bool.group(1) == "true")
+                  else:
+                      missing.append(key)
+              if missing:
+                  note("Osa tasude seadeid puudub; nende asemel on kasutatud vaikeväärtusi", f"index.html CONFIG-is puudub {', '.join(missing)}")
+              return cfg, "index.html"
+
+          def tariff_at(cfg, key, dt_tl):
+              """Hetkel dt_tl kehtinud tasu: TASUDE_AJALUGU kirje või CONFIG-i praegune väärtus."""
+              for until, value in TASUDE_AJALUGU.get(key, ()):
+                  if dt_tl < until:
+                      return value
+              return cfg[key]
+
+          def cfg_fingerprint(cfg):
+              """Kuu kirje sõrmejälg: arvutusversioon, KM ja tasude ajalugu ning CONFIG-i tasud. Muutusel arvutatakse
+              vahemälus olevad kuud uuesti (perioodikohaste tasudega, mitte tänastega)."""
+              payload = {"v": CALC_VERSION, "km": KM_AJALUGU, "tasud": TASUDE_AJALUGU,
+                         "cfg": {k: cfg[k] for k in sorted(TARIFF_DEFAULTS)}}
+              return hashlib.sha1(json.dumps(payload, sort_keys=True, default=str).encode("utf-8")).hexdigest()[:12]
 
           def easter_sunday(year):
               """Lihavõttepüha (1. püha) kuupäev, anonüümne Gregoriuse algoritm (sama mis index.html-is)."""
@@ -170,7 +255,8 @@ jobs:
               return (day - easter_sunday(day.year)).days in (-2, 0, 49)
 
           def calc_final_cents_kwh(spot_eur_mwh, dt_tl, cfg):
-              """Arvutab maja lõpphinna (s/kWh koos võrgutasu, aktsiisi, marginaali ja KM-ga) antud hetkel."""
+              """Arvutab maja lõpphinna (s/kWh koos võrgutasu, aktsiisi, marginaali ja KM-ga) antud hetkel
+              sel hetkel kehtinud tasudega (TASUDE_AJALUGU, KM_AJALUGU)."""
               spot_s = spot_eur_mwh / 10.0
               is_weekend = dt_tl.weekday() in (5, 6)  # 5=L, 6=P
               hour = dt_tl.hour + dt_tl.minute / 60.0
@@ -178,8 +264,9 @@ jobs:
               is_night_hour = (hour >= algus or hour < lopp) if algus > lopp else (algus <= hour < lopp)
               is_holiday = cfg["riigipuhadOnOo"] and is_public_holiday(dt_tl.date())
               is_night = (cfg["nadalavahetusOnOo"] and is_weekend) or is_holiday or is_night_hour
-              network = cfg["vorgutasuOo"] if is_night else cfg["vorgutasuPaev"]
-              subtotal = spot_s + cfg["marginaal"] + network + cfg["taastuvenergiaTasu"] + cfg["aktsiis"]
+              network = tariff_at(cfg, "vorgutasuOo" if is_night else "vorgutasuPaev", dt_tl)
+              subtotal = (spot_s + tariff_at(cfg, "marginaal", dt_tl) + network
+                          + tariff_at(cfg, "taastuvenergiaTasu", dt_tl) + tariff_at(cfg, "aktsiis", dt_tl))
               vat = cfg["kaibemaks"]
               for until, rate in KM_AJALUGU:
                   if dt_tl < until:
@@ -241,6 +328,27 @@ jobs:
                   return False
               step = ts[1] - ts[0]  # 900 (15 min) või 3600 (1 h)
               return all(b - a == step for a, b in zip(ts, ts[1:])) and ts[-1] + step == t1
+
+          def row_steps(rows):
+              """Iga hinnarea kestus sekundites: 900 (15 min) või 3600 (tunnine rida). Puuduva rea korral eelmist
+              rida ei pikendata (augu ees olev rida saab oma sammu naaberridade järgi, tunnine rida algab täistunnil)."""
+              ts = [r["timestamp"] for r in rows]
+              diffs = [b - a for a, b in zip(ts, ts[1:])]
+              valid = [d for d in diffs if d in (900, 3600)]
+              dominant = max((900, 3600), key=valid.count) if valid else 900
+              steps = []
+              for i, t in enumerate(ts):
+                  after = diffs[i] if i < len(diffs) else None
+                  before = diffs[i - 1] if i > 0 else dominant
+                  cands = [d for d in (after, before) if d in (900, 3600)]
+                  step = min(cands) if cands else dominant
+                  steps.append(900 if t % 3600 else step)
+              return steps
+
+          def price_gaps(rows, steps):
+              """Puuduvad hinnaperioodid: [(algus, lõpp), ...] Unix sekundites."""
+              return [(a["timestamp"] + s, b["timestamp"]) for a, b, s in zip(rows, rows[1:], steps)
+                      if b["timestamp"] > a["timestamp"] + s]
 
           # --- Estfeed OAuth2 ja mõõteandmete päringud ---
           last_estfeed_ts = 0.0
@@ -327,20 +435,38 @@ jobs:
                           time.sleep(6 * attempt)
                   return None, 0
 
+              eic_set = {x.strip() for x in re.split(r"[,;\s]+", eic or "") if x.strip()}
               data, status = do_request(use_eic=bool(eic))
-              # Kui EIC-koodiga päring tagastas vea või tühja vastuse, proovi varuvariandina ilma EIC-filtrita
-              if eic and (status in (400, 403, 404, 422) or (isinstance(data, list) and not data)):
-                  print(f"EIC-filtriga päring tagastas oleku {status}, proovin ilma meteringPointEics parameetrita...")
+              # Kui EIC-koodiga päring tagastas vea või tühja vastuse, proovi varuvariandina ilma EIC-filtrita.
+              # Varuvastusest võetakse ainult ELERING_EIC mõõtepunkt(id): konto teiste punktide (tootmine, teine
+              # objekt) kogused ei tohi liituda maja ostuga.
+              fallback = bool(eic) and (status in (400, 403, 404, 422) or (isinstance(data, list) and not data))
+              first_empty = status == 200 and isinstance(data, list) and not data
+              if fallback:
+                  print(f"EIC-filtriga päring tagastas oleku {status}{' (tühi)' if first_empty else ''}, proovin ilma meteringPointEics parameetrita...")
                   data, status = do_request(use_eic=False)
 
               if status != 200 or not isinstance(data, list):
                   warn(f"Estfeed päring ({fmt_utc(start_dt)} .. {fmt_utc(end_dt)}) ebaõnnestus (HTTP {status}): {data}")
                   return None
 
+              points = [mp for mp in data if isinstance(mp, dict)]
+              if fallback:
+                  matching = [mp for mp in points if str(mp.get("meteringPointEic") or "").strip() in eic_set]
+                  print(f"Filtrita vastuses {len(points)} mõõtepunkti, neist ELERING_EIC-le vastab {len(matching)}.")
+                  if not matching:
+                      if first_empty:
+                          return {}  # ka filtrita vastuses pole selle mõõtepunkti andmeid: perioodil andmed puuduvad
+                      warn(f"Estfeed ({fmt_utc(start_dt)} .. {fmt_utc(end_dt)}): filtrita vastuses pole ELERING_EIC mõõtepunkti; kWh jääb uuendamata")
+                      return None
+                  points = matching
+              elif len(points) > 1:
+                  print(f"Vastuses {len(points)} mõõtepunkti" + ("" if eic else "; ELERING_EIC puudub, summeerin kõik") + ".")
+                  if not eic:
+                      warn(f"ELERING_EIC puudub ja Estfeedi vastuses on {len(points)} mõõtepunkti; maja ost on nende summa")
+
               kwh_by_ts = {}
-              for mp in data:
-                  if not isinstance(mp, dict):
-                      continue
+              for mp in points:
                   if mp.get("error"):
                       err = mp["error"]
                       warn(f"Estfeed mõõtepunkti viga: {err.get('code')} - {err.get('message')}")
@@ -394,7 +520,7 @@ jobs:
               known = [v for v in spots.values() if v is not None]
               missing = len(spots) - len(known)
               if periods and missing > 0.01 * len(periods):
-                  warn(f"Kuu {year:04d}-{month:02d}: börsihind puudub {missing}/{len(periods)} perioodil; kuu kirjet ei uuendata")
+                  note(f"Kuu {year:04d}-{month:02d}: börsihind puudub {missing}/{len(periods)} perioodil; kuu kirje jäi varasemaks")
                   return None
               avg_spot = sum(known) / len(known) if known else 0.0
 
@@ -413,8 +539,14 @@ jobs:
               if count == 0:
                   return None
 
-              if total_kwh > 0 and tariff_cfg["kuutasu"] > 0:
-                  total_eur += tariff_cfg["kuutasu"]
+              # Fikseeritud kuutasu (kuu alguses kehtinud) lisatakse möödunud osa kaupa: terve kuu korral täies
+              # ulatuses, jooksval kuul ja „sama ajani“ summas sama osa kuust, et võrdlus oleks kooskõlaline.
+              kuutasu = tariff_at(tariff_cfg, "kuutasu", m_start)
+              month_s = next_month_start(year, month).timestamp() - m_start.timestamp()
+              if total_kwh > 0 and kuutasu > 0:
+                  total_eur += kuutasu * min(1.0, (t1 - t0) / month_s)
+              if cutoff_ts is not None and todate_kwh > 0 and kuutasu > 0:
+                  todate_eur += kuutasu * min(1.0, max(0, cutoff_ts - t0) / month_s)
 
               rec = {
                   "kuu": f"{year:04d}-{month:02d}",
@@ -422,6 +554,7 @@ jobs:
                   "eur": round(total_eur, 2),
                   "complete": bool(complete_flag),
                   "v": CALC_VERSION,
+                  "cfg": CFG_HASH,
               }
               if cutoff_ts is not None and todate_kwh > 0:
                   rec["kwhToDate"] = round(todate_kwh, 2)
@@ -436,18 +569,30 @@ jobs:
           except (OSError, ValueError):
               pass
           old_data = (old or {}).get("data") or {}
-          old_ee = old_data.get("ee") or []
+          old_meta = (old or {}).get("meta")
+          old_ee = [r for r in (old_data.get("ee") or []) if isinstance(r, dict) and isinstance(r.get("timestamp"), int)]
           old_maja = old_data.get("majaElekter") or []
-          old_kwh_by_ts = {
-              r["timestamp"]: r["kwh"]
-              for r in old_ee
-              if isinstance(r, dict) and isinstance(r.get("timestamp"), int) and isinstance(r.get("kwh"), (int, float))
+          # Varem avaldatud kWh rea kaupa koos rea sammuga (tunnise ja 15-min rea väärtusi omavahel ei segata)
+          old_kwh_rows = {
+              r["timestamp"]: (r, step)
+              for r, step in zip(old_ee, row_steps(old_ee))
+              if isinstance(r.get("kwh"), (int, float)) and not isinstance(r.get("kwh"), bool)
           }
           cached_months = {
               m["kuu"]: m
               for m in old_maja
               if isinstance(m, dict) and isinstance(m.get("kuu"), str) and isinstance(m.get("kwh"), (int, float)) and isinstance(m.get("eur"), (int, float))
           }
+
+          def utc_now_iso():
+              return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+          def store_month(rec):
+              """Salvestab kuu kirje; updatedAt muutub ainult siis, kui kirje sisu muutus (muidu tekiks igal käivitusel commit)."""
+              prev = cached_months.get(rec["kuu"]) or {}
+              same = {k: v for k, v in prev.items() if k != "updatedAt"} == rec
+              rec["updatedAt"] = prev["updatedAt"] if same and prev.get("updatedAt") else utc_now_iso()
+              cached_months[rec["kuu"]] = rec
 
           # 2. Lae börsihinnad (eile 00:00 ... ülehomme 00:00)
           now = tallinn_now()
@@ -470,121 +615,224 @@ jobs:
           if not any(r["timestamp"] <= now_ts < r["timestamp"] + 3600 for r in ee):
               fail("Vastus ei kata praegust hetke")
 
-          if old_ee and old_ee[-1]["timestamp"] > ee[-1]["timestamp"] and old_ee[-1]["timestamp"] > now_ts:
-              fail("Uus vastus ulatub vähem tulevikku kui olemasolev fail; jätan vana faili alles")
+          # Rea kestus (15 min või tunnine) ja puuduvad hinnaperioodid. Auku ei sillutata: leht näitab seda
+          # perioodi hinnata ja homne päev ei ole täielik (vt tomorrow_complete).
+          steps = row_steps(ee)
 
-          # 3. Lae Estfeedi 15-min tarbimisandmed ja arvuta kuude kokkuvõtted
+          # Võrreldakse viimase rea lõppu, mitte algust: tunnine vastus (viimane rida 23:00–24:00) katab sama aja
+          # kui 15-min fail (viimane rida 23:45–24:00)
+          if old_ee and old_ee[-1]["timestamp"] + row_steps(old_ee)[-1] > ee[-1]["timestamp"] + steps[-1] and old_ee[-1]["timestamp"] > now_ts:
+              fail("Uus vastus ulatub vähem tulevikku kui olemasolev fail; jätan vana faili alles")
+          hourly_rows = sum(1 for s in steps if s != 900)
+          if hourly_rows:
+              note(f"Eleringi samm ei ole 15 min ({hourly_rows} tunnist rida); tunnirida saab kWh ainult siis, kui kõik selle veerandid on mõõdetud")
+          gaps = price_gaps(ee, steps)
+          for g0, g1 in gaps:
+              note(f"Eleringi hindades on auk {datetime.fromtimestamp(g0, TZ):%d.%m %H:%M}–{datetime.fromtimestamp(g1, TZ):%H:%M}")
+          prices_ok = not hourly_rows and not gaps
+
+          # 3. Lae Estfeedi 15-min tarbimisandmed
           client_id = os.environ.get("ELERING_CLIENT_ID", "").strip().strip('"').strip("'")
           client_secret = os.environ.get("ELERING_CLIENT_SECRET", "").strip().strip('"').strip("'")
           eic = os.environ.get("ELERING_EIC", "").strip().strip('"').strip("'")
-          tariff_cfg = load_tariff_config()
+          tariff_cfg, tariff_source = load_tariff_config()
+          CFG_HASH = cfg_fingerprint(tariff_cfg)
+          if tariff_cfg["kuutasu"] > 0 and any(v == 0 for _, v in TASUDE_AJALUGU["kuutasu"]):
+              note("Kuutasu on seadetes olemas, kuid varasemate kuude kuutasu pole sisestatud; varasemad kuud on ilma kuutasuta",
+                   "CONFIG.hinnad.kuutasu > 0, töövoo TASUDE_AJALUGU['kuutasu'] täitmata")
 
           maja_elekter = list(old_maja)
           estfeed_ok = False
+          token = None
+          recent_kwh = {}
+          only_hourly = False
+          cur_y, cur_m = now.year, now.month
+          cur_m_start = month_start(cur_y, cur_m)
 
           if client_id and client_secret:
               print("Autendin Estfeed API-ga...")
               token = get_estfeed_token(client_id, client_secret)
               if token:
-                  cur_y, cur_m = now.year, now.month
-                  cur_m_start = month_start(cur_y, cur_m)
                   recent_start = min(start, cur_m_start)
                   print(f"Pärin 15-min tarbimisandmed ({fmt_utc(recent_start)} .. {fmt_utc(now)})...")
-                  recent_kwh = fetch_estfeed_range(token, eic, recent_start, now, resolution="fifteen_minutes")
-
-                  if recent_kwh is not None:
+                  fetched = fetch_estfeed_range(token, eic, recent_start, now, resolution="fifteen_minutes")
+                  if fetched is not None:
                       estfeed_ok = True
-                      print(f"Saadi {len(recent_kwh)} 15-min tarbimisperioodi.")
+                      recent_kwh = fetched
+                      print(f"Saadi {len(recent_kwh)} tarbimisperioodi.")
                       # Kontrolli, kas arvesti tagastas tunnised või 15-minutilised intervallid
                       only_hourly = len(recent_kwh) > 2 and all(ts % 3600 == 0 for ts in recent_kwh)
-                      ee_step = (ee[1]["timestamp"] - ee[0]["timestamp"]) if len(ee) > 1 else 900
-                      for row in ee:
-                          ts = row["timestamp"]
-                          if ts in recent_kwh:
-                              row["kwh"] = round(recent_kwh[ts], 4)
-                          elif only_hourly and ee_step == 900 and (ts - (ts % 3600)) in recent_kwh:
-                              row["kwh"] = round(recent_kwh[ts - (ts % 3600)] / 4.0, 4)
-
-                      # Arvuta käesoleva kuu (cur_y, cur_m) kWh ja maksumus
-                      cur_m_prices = fetch_nps_prices(cur_m_start, now, strict=False)
-                      cur_price_map = {r["timestamp"]: r["price"] for r in cur_m_prices}
-                      for r in ee:
-                          cur_price_map[r["timestamp"]] = r["price"]
-                      cur_rec = compute_month_record(cur_y, cur_m, now, recent_kwh, cur_price_map, tariff_cfg, complete_flag=False)
-                      if cur_rec:
-                          cached_months[cur_rec["kuu"]] = cur_rec
-                          print(f"Käesolev kuu {cur_rec['kuu']}: {cur_rec['kwh']} kWh, {cur_rec['eur']} €")
-
-                      # Arvuta eelneva aasta vastav kuu (cur_y - 1, cur_m) + vajadusel eelmised kuud (kuni 12 kuud)
-                      try:
-                          same_time_prev_year = now.replace(year=cur_y - 1)
-                      except ValueError:
-                          same_time_prev_year = now.replace(year=cur_y - 1, day=28)
-
-                      # Koosta sihtkuude nimekiri: käesolev kuu (offset 0) + kuni 11 eelnevat kuud
-                      backfilled_pairs = 0
-                      for offset in range(0, 12):
-                          ty, tm = shift_month(cur_y, cur_m, -offset)
-                          py, pm = ty - 1, tm
-                          months_to_check = []
-                          if offset == 0:
-                              # Käesolev kuu on juba arvutatud; kontrolli alati eelneva aasta vastavat kuud
-                              months_to_check.append((py, pm, True, same_time_prev_year))
-                          else:
-                              # Kui oleme kuu esimeses 3 päevas, värskenda ka eelmise kuu lõplikku seisu
-                              force_refresh_prev = (offset == 1 and now.day <= 3)
-                              months_to_check.append((ty, tm, not force_refresh_prev, None))
-                              months_to_check.append((py, pm, True, None))
-
-                          # Vahelejätmine ainult siis, kui kuu on lõplik ja sama arvutusversiooniga. Eelmise aasta
-                          # sama kuu „sama ajani“ (cutoff) arvutatakse igal käivitusel uuesti, sest lõpphetk liigub
-                          # (varem jäi kwhToDate esimese arvutuse hetke külge ja võrdlus muutus päev-päevalt valemaks).
-                          need_fetch = [
-                              (y, m, comp, cutoff)
-                              for (y, m, comp, cutoff) in months_to_check
-                              if cutoff is not None
-                              or not (cached_months.get(f"{y:04d}-{m:02d}", {}).get("complete") is True
-                                      and cached_months.get(f"{y:04d}-{m:02d}", {}).get("v") == CALC_VERSION)
-                          ]
-                          if not need_fetch:
-                              continue
-                          if offset > 0 and backfilled_pairs >= MAX_BACKFILL_PAIRS:
-                              continue
-                          if offset > 0:
-                              backfilled_pairs += 1
-
-                          for (y, m, is_comp, cutoff) in need_fetch:
-                              ms = month_start(y, m)
-                              me = min(now, next_month_start(y, m))
-                              print(f"Arvutan kuu {y:04d}-{m:02d} tarbimist ja hinda...")
-                              m_kwh = fetch_estfeed_range(token, eic, ms, me, resolution="fifteen_minutes")
-                              if m_kwh is None:
-                                  continue
-                              if not m_kwh:
-                                  print(f"Kuu {y:04d}-{m:02d} kohta mõõteandmed puuduvad.")
-                                  if is_comp:
-                                      cached_months[f"{y:04d}-{m:02d}"] = {"kuu": f"{y:04d}-{m:02d}", "kwh": 0.0, "eur": 0.0, "complete": True, "noData": True, "v": CALC_VERSION}
-                                  continue
-                              m_prices = fetch_nps_prices(ms, me, strict=False)
-                              m_price_map = {r["timestamp"]: r["price"] for r in m_prices}
-                              rec = compute_month_record(y, m, now, m_kwh, m_price_map, tariff_cfg, complete_flag=is_comp, prev_year_cutoff_dt=cutoff)
-                              if rec:
-                                  cached_months[rec["kuu"]] = rec
-                                  print(f"Kuu {rec['kuu']}: {rec['kwh']} kWh, {rec['eur']} € (complete={rec['complete']})")
-
-                      maja_elekter = [cached_months[k] for k in sorted(cached_months.keys())]
+                      if only_hourly:
+                          note("Estfeed andis ainult tunnised kogused; 15-min jaotus on tunni keskmine", "kwhRes: hour")
+                  else:
+                      note("Estfeedi tarbimisandmeid ei saadud; kWh on eelmisest failist")
+              else:
+                  note("Estfeedi autentimine ebaõnnestus; kWh on eelmisest failist")
           else:
-              warn("ELERING_CLIENT_ID / ELERING_CLIENT_SECRET puudub — tarbimisandmeid Estfeedist ei päritud.")
+              note("Estfeedi ligipääs pole seadistatud; tarbimisandmeid ei päritud", "ELERING_CLIENT_ID / ELERING_CLIENT_SECRET puudub")
 
-          # Kui Estfeed ei olnud saadaval, säilita varasemad 15-min kWh väärtused
-          if not estfeed_ok and old_kwh_by_ts:
-              for row in ee:
-                  if row["timestamp"] in old_kwh_by_ts:
-                      row["kwh"] = old_kwh_by_ts[row["timestamp"]]
+          # 4. Seo tarbimine hinnaridadega. 15-min rida saab oma veerandi; tunnine rida nelja veerandi summa ainult
+          # siis, kui kõik veerandid on mõõdetud (poolik tund jääb kWh-ta, et leht ei väidaks „kuni HH:00“).
+          # Tunnise Estfeedi korral jagatakse tund 15-min ridadele neljaks ja rida märgitakse kwhRes: "hour"
+          # (tunni ja päeva summa on mõõtmine, 15-min jaotus mitte). Kui uus vastus perioodi ei kata, jääb varem
+          # avaldatud väärtus alles (osaline vastus ei tohi joont ega „arve alust“ tagasiulatuvalt vähendada).
+          kept = {}
+          for row, step in zip(ee, steps):
+              ts = row["timestamp"]
+              kwh, res = None, None
+              if step == 900:
+                  if only_hourly:
+                      if (ts - ts % 3600) in recent_kwh:
+                          kwh, res = recent_kwh[ts - ts % 3600] / 4.0, "hour"
+                  elif ts in recent_kwh:
+                      kwh = recent_kwh[ts]
+              elif only_hourly:
+                  kwh = recent_kwh.get(ts)
+              elif all(q in recent_kwh for q in range(ts, ts + step, 900)):
+                  kwh = sum(recent_kwh[q] for q in range(ts, ts + step, 900))
+              if kwh is None and ts in old_kwh_rows and old_kwh_rows[ts][1] == step:
+                  old_row = old_kwh_rows[ts][0]
+                  kwh, res = old_row["kwh"], old_row.get("kwhRes")
+                  kept[ts] = (kwh, step)
+              if kwh is not None:
+                  row["kwh"] = round(kwh, 4)
+                  if res == "hour":
+                      row["kwhRes"] = "hour"
+          if estfeed_ok and kept:
+              note(f"Estfeedi vastus ei katnud {len(kept)} varem avaldatud perioodi; nende kWh on eelmisest failist")
+          if recent_kwh:
+              covered = set()
+              for row, step in zip(ee, steps):
+                  covered.update(range(row["timestamp"], row["timestamp"] + step, 900))
+              lo, hi = ee[0]["timestamp"], ee[-1]["timestamp"] + steps[-1]
+              orphans = sorted(ts for ts in recent_kwh if lo <= ts < hi and ts not in covered)
+              if orphans:
+                  note(f"{len(orphans)} mõõdetud perioodil puudub hinnarida (esimene {datetime.fromtimestamp(orphans[0], TZ):%d.%m %H:%M}); see kWh pole päeva summas")
+          kwh_ends = [row["timestamp"] + step for row, step in zip(ee, steps) if "kwh" in row]
+
+          # 5. Kuude kokkuvõtted (ainult õnnestunud Estfeedi päringu korral)
+          if estfeed_ok:
+              # Arvuta käesoleva kuu (cur_y, cur_m) kWh ja maksumus; varem avaldatud 15-min väärtused täidavad augud
+              cur_kwh_map = dict(recent_kwh)
+              if not only_hourly:
+                  for ts, (kwh, step) in kept.items():
+                      if step == 900 and ts >= int(cur_m_start.timestamp()):
+                          cur_kwh_map.setdefault(ts, kwh)
+              cur_m_prices = fetch_nps_prices(cur_m_start, now, strict=False)
+              cur_price_map = {r["timestamp"]: r["price"] for r in cur_m_prices}
+              for r in ee:
+                  cur_price_map[r["timestamp"]] = r["price"]
+              cur_rec = compute_month_record(cur_y, cur_m, now, cur_kwh_map, cur_price_map, tariff_cfg, complete_flag=False)
+              # Jooksva kuu kWh ei saa sama kuu jooksul kahaneda. Tühi või ainult viimaseid päevi kattev vastus
+              # (varem avaldatud väärtused katavad ainult eilsest alates) jätab varasema kirje alles.
+              prev_cur = cached_months.get(f"{cur_y:04d}-{cur_m:02d}") or {}
+              if cur_rec and (not recent_kwh or cur_rec["kwh"] < (prev_cur.get("kwh") or 0) - 0.01):
+                  note("Estfeedi vastus oli puudulik; jooksva kuu kirje jäi varasemaks")
+                  cur_rec = None
+              if cur_rec:
+                  store_month(cur_rec)
+                  print(f"Käesolev kuu {cur_rec['kuu']}: {cur_rec['kwh']} kWh, {cur_rec['eur']} €")
+
+              # Arvuta eelneva aasta vastav kuu (cur_y - 1, cur_m) + vajadusel eelmised kuud (kuni 12 kuud)
+              try:
+                  same_time_prev_year = now.replace(year=cur_y - 1)
+              except ValueError:
+                  same_time_prev_year = now.replace(year=cur_y - 1, day=28)
+
+              # Koosta sihtkuude nimekiri: käesolev kuu (offset 0) + kuni 11 eelnevat kuud
+              backfilled_pairs = 0
+              empty_kept = []  # kuud, mille kohta Estfeed andis tühja vastuse, kuid varasem mõõdetud kirje jäi alles
+              partial_kept = []  # kuud, mille vastus kattis alla 99 % kuust ja andis varasemast vähem kWh
+              for offset in range(0, 12):
+                  ty, tm = shift_month(cur_y, cur_m, -offset)
+                  py, pm = ty - 1, tm
+                  months_to_check = []
+                  if offset == 0:
+                      # Käesolev kuu on juba arvutatud; kontrolli alati eelneva aasta vastavat kuud
+                      months_to_check.append((py, pm, True, same_time_prev_year))
+                  else:
+                      # Kui oleme kuu esimeses 3 päevas, värskenda ka eelmise kuu lõplikku seisu
+                      force_refresh_prev = (offset == 1 and now.day <= 3)
+                      months_to_check.append((ty, tm, not force_refresh_prev, None))
+                      months_to_check.append((py, pm, True, None))
+
+                  # Vahelejätmine ainult siis, kui kuu on lõplik ja sama arvutusversiooni ning tasude sõrmejäljega
+                  # (cfg). Eelmise aasta sama kuu „sama ajani“ (cutoff) arvutatakse igal käivitusel uuesti, sest
+                  # lõpphetk liigub (varem jäi kwhToDate esimese arvutuse hetke külge ja võrdlus muutus valemaks).
+                  need_fetch = [
+                      (y, m, comp, cutoff)
+                      for (y, m, comp, cutoff) in months_to_check
+                      if cutoff is not None
+                      or not (cached_months.get(f"{y:04d}-{m:02d}", {}).get("complete") is True
+                              and cached_months.get(f"{y:04d}-{m:02d}", {}).get("v") == CALC_VERSION
+                              and cached_months.get(f"{y:04d}-{m:02d}", {}).get("cfg") == CFG_HASH)
+                  ]
+                  if not need_fetch:
+                      continue
+                  if offset > 0 and backfilled_pairs >= MAX_BACKFILL_PAIRS:
+                      continue
+                  if offset > 0:
+                      backfilled_pairs += 1
+
+                  for (y, m, is_comp, cutoff) in need_fetch:
+                      ms = month_start(y, m)
+                      me = min(now, next_month_start(y, m))
+                      print(f"Arvutan kuu {y:04d}-{m:02d} tarbimist ja hinda...")
+                      m_kwh = fetch_estfeed_range(token, eic, ms, me, resolution="fifteen_minutes")
+                      if m_kwh is None:
+                          note(f"Kuu {y:04d}-{m:02d}: Estfeedi päring ebaõnnestus; kuu kirje jäi varasemaks")
+                          continue
+                      if not m_kwh:
+                          # Tühi vastus ei kustuta varem mõõdetud kuud (nt ajutine tõrge täieliku ümberarvutuse ajal):
+                          # „andmed puuduvad“ kirje tehakse ainult kuule, millel pärisandmeid pole olnud.
+                          prev_m = cached_months.get(f"{y:04d}-{m:02d}") or {}
+                          if not prev_m.get("noData") and (prev_m.get("kwh") or 0) > 0:
+                              print(f"Kuu {y:04d}-{m:02d}: Estfeed ei andnud mõõteandmeid; varasem kirje jäi alles.")
+                              empty_kept.append(f"{y:04d}-{m:02d}")
+                              continue
+                          print(f"Kuu {y:04d}-{m:02d} kohta mõõteandmed puuduvad.")
+                          if is_comp:
+                              store_month({"kuu": f"{y:04d}-{m:02d}", "kwh": 0.0, "eur": 0.0, "complete": True, "noData": True, "v": CALC_VERSION, "cfg": CFG_HASH})
+                          continue
+                      m_prices = fetch_nps_prices(ms, me, strict=False)
+                      m_price_map = {r["timestamp"]: r["price"] for r in m_prices}
+                      rec = compute_month_record(y, m, now, m_kwh, m_price_map, tariff_cfg, complete_flag=is_comp, prev_year_cutoff_dt=cutoff)
+                      # Osaline vastus (kuu päritakse 30-päevaste lõikudena; üks lõik võib tulla tühjana või auklikuna) ei
+                      # tohi varem mõõdetud kuud vähendada: lõplik kirje uue cfg-ga jääks muidu igaveseks liiga väikeseks.
+                      # Kaetus = vastuse perioodide arv / kuu perioodide arv (tunnise vastuse korral tunnid).
+                      t_ms, t_me = int(ms.timestamp()), int(me.timestamp())
+                      step_s = 3600 if len(m_kwh) > 2 and all(ts % 3600 == 0 for ts in m_kwh) else 900
+                      coverage = sum(1 for ts in m_kwh if t_ms <= ts < t_me) / max(1, (t_me - t_ms) // step_s)
+                      prev_m = cached_months.get(f"{y:04d}-{m:02d}") or {}
+                      if rec and coverage < 0.99 and (prev_m.get("kwh") or 0) > rec["kwh"] + 0.01:
+                          print(f"Kuu {y:04d}-{m:02d}: Estfeedi vastus kattis {coverage:.1%} kuust ({rec['kwh']} kWh, varem {prev_m['kwh']} kWh); varasem kirje jäi alles.")
+                          partial_kept.append(f"{y:04d}-{m:02d}")
+                          continue
+                      if rec:
+                          store_month(rec)
+                          print(f"Kuu {rec['kuu']}: {rec['kwh']} kWh, {rec['eur']} € (complete={rec['complete']})")
+
+              if empty_kept:
+                  ks = sorted(empty_kept)
+                  note(f"Estfeed ei andnud mõõteandmeid {len(ks)} kuu kohta ({ks[0]}" + (f" … {ks[-1]}" if len(ks) > 1 else "") + "); varasemad kirjed jäid alles")
+              if partial_kept:
+                  ks = sorted(set(partial_kept))
+                  note(f"Estfeedi vastus oli {len(ks)} kuu kohta osaline ({ks[0]}" + (f" … {ks[-1]}" if len(ks) > 1 else "") + "); varasemad kirjed jäid alles")
+              maja_elekter = [cached_months[k] for k in sorted(cached_months.keys())]
+
+          # 6. Faili olekuinfo: lehed saavad eristada värsket ja eelmisest failist säilitatud andmestikku
+          meta = {
+              "pricesOk": prices_ok,
+              "pricesUntil": iso_utc(ee[-1]["timestamp"] + steps[-1]),
+              "estfeedOk": estfeed_ok,
+              "estfeedUntil": iso_utc(max(kwh_ends)) if kwh_ends else None,
+              "tariffs": {**{k: tariff_cfg[k] for k in TARIFF_DEFAULTS}, "source": tariff_source},
+              "warnings": HOIATUSED,
+          }
 
           old_trimmed_ee = [r for r in old_ee if r.get("timestamp", 0) >= ee[0]["timestamp"]]
-          if old_trimmed_ee == ee and old_maja == maja_elekter:
-              print("Hinnad ega tarbimisandmed ei muutunud.")
+          if old_trimmed_ee == ee and old_maja == maja_elekter and old_meta == meta:
+              print("Hinnad, tarbimisandmed ega olekuinfo ei muutunud.")
               sys.exit(0)
 
           data_out = {"ee": ee}
@@ -593,15 +841,16 @@ jobs:
 
           out = {
               "success": True,
-              "generatedAt": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+              "generatedAt": utc_now_iso(),
               "source": "Elering (Nord Pool day-ahead, EE + Estfeed)",
+              "meta": meta,
               "data": data_out,
           }
           tmp = OUT + ".tmp"
           with open(tmp, "w", encoding="utf-8") as f:
               json.dump(out, f, separators=(",", ":"), allow_nan=False)
           os.replace(tmp, OUT)  # aatomiline asendus
-          print(f"Korras: {len(ee)} perioodi, {len(maja_elekter)} kuud, viimane {datetime.fromtimestamp(ee[-1]['timestamp'], TZ):%d.%m %H:%M}")
+          print(f"Korras: {len(ee)} perioodi, {len(maja_elekter)} kuud, viimane {datetime.fromtimestamp(ee[-1]['timestamp'], TZ):%d.%m %H:%M}, kWh kuni {meta['estfeedUntil']}")
           PY
 
       - name: Salvesta muudatus

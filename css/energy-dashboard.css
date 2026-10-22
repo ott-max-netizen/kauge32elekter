@@ -1,8 +1,9 @@
 /* ==========================================================================
    Kauge 32 energia (energy-dashboard.html) — lehepõhine kujundus.
    Ühised tokenid ja komponendid on failis css/common.css. Energia
-   identiteedivärvid (--solar, --home, --battery, --grid) on kontrollitud
-   värvipimeduse ja kontrasti suhtes mõlemas teemas.
+   identiteedivärvid (--solar, --home, --battery, --grid) on kontrastsed pinna suhtes (≥ 3:1).
+   Värvipimedale ei toetu ükski eristus ainult toonile: sõlmedel ja ridadel on sildid, võrk on
+   neutraalne terashall ja graafikul katkendjoon (maja ja võrk eristuvad ka heleduse järgi).
    ========================================================================== */
 
 /* Suured üksikud numbrid näevad proportsionaalsete numbritega parem välja */
@@ -242,6 +243,11 @@
   stroke: var(--border);
   stroke-width: 2;
 }
+/* Aegunud mõõtmine: väärtused jäävad nähtavaks tuhmimalt ja vood ei liigu (pealkirjas mõõtmise kellaaeg) */
+.flow-layout.is-stale .flow-svg,
+.flow-layout.is-stale .stats,
+.big-number.is-stale { opacity: 0.7; }
+.flow-layout.is-stale .flow-dots { animation: none; stroke-dasharray: none; stroke-width: 2; stroke-opacity: 0.9; }
 
 .flow-side { min-width: 0; }
 .flow-side__label {
@@ -250,6 +256,8 @@
   font-size: 14px;
   font-weight: 600;
 }
+.flow-side__label--stats { margin: var(--s3) 0 0; }
+.flow-side__label--stats + .stats { margin-top: var(--s2); }
 .flow-list {
   list-style: none;
   margin: 0;
@@ -270,6 +278,12 @@
   margin-left: auto;
   font-weight: 700;
   white-space: nowrap;
+}
+/* Telefonis on voo sektsioon esimese ekraani all: tihedam loend, et hinnakaart jõuaks varem nähtavale */
+@media (max-width: 767px) {
+  .flow-layout { gap: var(--s3); }
+  .flow-list { gap: 4px; }
+  .flow-list li { padding: 5px 10px; font-size: 14px; }
 }
 
 /* ---------- Päike ja aku ---------- */
@@ -327,26 +341,35 @@
 .verdict { font-size: 17px; }
 .stats--price { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .stats--price .stat__value { font-size: 18px; }
+/* Graafiku all „Täna“: kolm hinnaplaati + suurim tarbimine */
+.stats--price.stats--4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (min-width: 640px) {
+  .stats--price.stats--4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
 .upcoming-label {
   margin: var(--s4) 0 var(--s2);
   color: var(--muted);
   font-size: 14px;
   font-weight: 600;
 }
+/* Esimene veerg mahutab ka „homme 00:00“ ja „15:00 · käimas“, et read ei murduks. Kellakeeramise päeval
+   („03:00 (suveaeg) · käimas“) laieneb veerg kõigil ridadel ühtmoodi (subgrid), tekst ei jookse tulba peale. */
 .upcoming {
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 5px;
+  grid-template-columns: minmax(8.5em, max-content) minmax(0, 1fr) 3.5em;
+  gap: 5px var(--s2);
+  font-size: 14px;
 }
-/* Esimene veerg mahutab ka „homme 00:00“, et read ei murduks */
 .upcoming li {
   display: grid;
-  grid-template-columns: 7em minmax(0, 1fr) 3.5em;
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(8.5em, max-content) minmax(0, 1fr) 3.5em;   /* subgrid'ita brauser */
+  grid-template-columns: subgrid;
   align-items: center;
   gap: var(--s2);
-  font-size: 14px;
   white-space: nowrap;
 }
 .upcoming li.is-now { font-weight: 700; }
@@ -383,17 +406,48 @@
   stroke-opacity: 0.55;
   pointer-events: none;
 }
-.pv-area { fill: var(--solar); fill-opacity: 0.16; pointer-events: none; }
+.pv-area { fill: var(--solar); fill-opacity: 0.1; pointer-events: none; }
 .pv-line, .load-line {
   fill: none;
-  stroke-width: 2;
+  stroke-width: 2.5;
   stroke-linejoin: round;
   stroke-linecap: round;
   pointer-events: none;
 }
-.pv-line { stroke: var(--solar); }
+/* Mõõdetud päikesetoodang: sama joonetoon mis elektriinfo lehel (--solar-line); ala on päikese toon */
+.pv-line { stroke: var(--solar-line); }
+/* Pinnavärvi halo joonte all eraldab kõverad üksteisest ja ruudustikust */
+.line-halo {
+  fill: none;
+  stroke: var(--surface);
+  stroke-width: 5;
+  stroke-opacity: 0.85;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  pointer-events: none;
+}
 .load-line { stroke: var(--home); }
+/* Võrk ja aku: märgiga astmelised 15-min sarjad (+ ost / laeb, − müük / tühjeneb); võrk katkendjoonena */
+.grid-line, .battery-line {
+  fill: none;
+  stroke-width: 1.75;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+.grid-line { stroke: var(--grid); stroke-dasharray: 5 3; }
+.battery-line { stroke: var(--battery); }
+.series-end { stroke: var(--surface); stroke-width: 1.5; pointer-events: none; }
 .now-line { stroke: var(--muted); stroke-width: 1; pointer-events: none; }
+.now-label {
+  font-size: 12px;
+  font-weight: 600;
+  fill: var(--muted);
+  stroke: var(--surface);
+  stroke-width: 3;
+  paint-order: stroke;
+  pointer-events: none;
+}
+.best-window { pointer-events: none; }
 
 .tooltip__row {
   display: flex !important;
@@ -409,9 +463,17 @@
 
 .legend__swatch--area {
   background: color-mix(in srgb, var(--solar) 22%, var(--surface));
-  border-top: 2px solid var(--solar);
+  border-top: 3px solid var(--solar-line);
   border-radius: 2px;
 }
+.legend__swatch--past { background: var(--muted); opacity: 0.6; }
+/* Odavaim aken: valiku aktsent (--focus), mitte hinnakategooria „Väga odav“ roheline */
+.legend__swatch--best {
+  background: color-mix(in srgb, var(--focus) 10%, var(--surface));
+  border: 1.5px solid var(--focus);
+}
+.line-key--dashed { border-top-style: dashed; }
+.line-key--thin { border-top-width: 2px; }
 
 .table-view {
   margin: var(--s3) 0 0;
@@ -440,9 +502,23 @@
   margin-top: -2px;
 }
 .table-view[open] summary::after { transform: rotate(-135deg); margin-top: 3px; }
+/* Kerimisvihje kitsal ekraanil (tabel on laiem kui kaart) */
+.table-view__hint { display: none; color: var(--muted); font-size: 13px; font-weight: 600; }
+@media (max-width: 599px) {
+  .table-view[open] .table-view__hint { display: inline; }
+}
+.table-note {
+  margin: 0 0 var(--s2);
+  color: var(--muted);
+  font-size: 13px;
+}
+/* Parema serva vari näitab, et tabel jätkub (kaob, kui on lõpuni keritud) */
 .table-scroll {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+  background:
+    linear-gradient(to left, var(--surface) 30%, transparent) right center / 32px 100% no-repeat local,
+    radial-gradient(farthest-side at 100% 50%, color-mix(in srgb, var(--text) 22%, transparent), transparent) right center / 12px 100% no-repeat scroll;
 }
 .data-table {
   width: 100%;
@@ -457,10 +533,20 @@
   text-align: right;
   font-weight: 400;
 }
-.data-table th { color: var(--muted); font-size: 13px; font-weight: 600; }
+.data-table th { color: var(--muted); font-size: 13px; font-weight: 600; vertical-align: bottom; }
+.data-table tbody th { color: var(--text); font-size: 14px; font-weight: 400; }
+.th-sub { display: block; font-size: 12px; font-weight: 500; }
+/* Kellaaja veerg jääb horisontaalsel kerimisel nähtavale */
 .data-table th:first-child,
-.data-table td:first-child { text-align: left; }
-.data-table tr.is-now td { font-weight: 700; }
+.data-table td:first-child {
+  text-align: left;
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--surface);
+}
+.data-table tr.is-now td,
+.data-table tr.is-now th { font-weight: 700; }
 
 /* ---------- Otseühenduse dialoog ---------- */
 .dialog {
@@ -584,6 +670,13 @@
   }
   .flow-layout { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); }
   .advice-title { font-size: 21px; }
+}
+
+@media print {
+  #refresh-button,
+  #direct-open,
+  .table-view { display: none !important; }
+  .flow-dots { animation: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
