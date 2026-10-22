@@ -619,8 +619,10 @@ body {
 }
 .energy-flow-header {
   display: flex;
+  flex-wrap: wrap;               /* kitsal ekraanil läheb olekumärk oma reale, mitte kahele reale */
   align-items: center;
   justify-content: space-between;
+  gap: var(--s1) var(--s2);
   margin-bottom: var(--s2);
 }
 .energy-flow-title {
@@ -712,6 +714,14 @@ body {
 @media (max-width: 400px) {
   .flow-connector { flex: 0 0 20px; }
 }
+/* Voosõlmede lai/kitsas tekst (responsiveText): ≤ 480 px lühem silt ilma allika-sulgudeta */
+.text--narrow { display: none; }
+@media (max-width: 480px) {
+  .text--wide { display: none; }
+  .text--narrow { display: inline; }
+  .flow-node { padding: 10px 4px; }
+  .flow-node__value { font-size: 15px; white-space: nowrap; } /* „30,6 kW“ ühel real */
+}
 .flow-arrow-svg {
   width: 100%;
   height: 24px;
@@ -784,7 +794,7 @@ body {
 /* Päikesekõver graafikul */
 .solar-area {
   fill: var(--solar-gold);
-  opacity: 0.16;
+  opacity: 0.08;
   pointer-events: none;
 }
 .solar-line {
@@ -805,9 +815,20 @@ body {
   stroke-opacity: 0.85;
   pointer-events: none;
 }
-.tooltip__solar { font-weight: 700; }
-/* Telje ühik graafiku ülanurgas (s/kWh, kWh) */
-.axis-unit { font-size: 11px; font-weight: 600; fill: var(--muted); }
+/* Mõõtmiste lõpp graafikul: rõngas sarja viimases punktis ja silt „kuni HH:MM“ (index.html buildPriceChartSvg) */
+.series-end {
+  fill: var(--surface);
+  stroke-width: 2;
+  pointer-events: none;
+}
+.series-end--consumption { stroke: var(--bar-primary); }
+.series-end--solar { stroke: var(--solar-gold); }
+/* Sildi värv seob selle joonega (päikese tekstitoon on loetavam kui joone kuldne) */
+.series-end-label { pointer-events: none; }
+.series-end-label--consumption { fill: var(--bar-primary); }
+.series-end-label--solar { fill: var(--solar-gold-fg); }
+/* Telje ühik graafiku ülanurgas (s/kWh, kWh); sama suurus mis telgede numbrid */
+.axis-unit { font-size: 12px; font-weight: 600; fill: var(--muted); }
 .solar-dot {
   fill: var(--solar-gold);
   stroke: var(--surface);
@@ -974,6 +995,43 @@ body {
   padding: 2px 10px;
   border-radius: 999px;
 }
+/* Hinnagraafiku infopaneel ei muuda riba kõrgust, seega graafik ei nihku sõrme all (ega hiirega hõljutades):
+   laial ekraanil üks rida päeva sildi kõrval (lõpp „…“, terve info on tooltipis), telefonis kaherealine
+   paneel päeva sildi peal (puutel ainus infoallikas, tooltipi ei kuvata) */
+.chart-status-bar--inspect {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: baseline;
+}
+.chart-status-bar--inspect .chart-inspector {
+  justify-self: end;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@media (max-width: 767px) {
+  .chart-status-bar--inspect {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: center;
+    min-height: 42px;
+  }
+  .chart-status-bar--inspect .chart-inspector {
+    position: absolute;
+    inset: 0;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    max-width: none;
+    white-space: normal;
+    font-size: 13px;
+    line-height: 18px;
+    padding: 3px 10px;
+    border-radius: var(--radius-sm);
+  }
+}
 .chart-wrapper {
   position: relative;
   min-width: 0;
@@ -994,9 +1052,12 @@ body {
   -webkit-user-select: none;
   cursor: crosshair;
 }
+/* Puudutus ja klõps annavad graafikule fookuse; fookusraam ainult klaviatuuriga (:focus-visible) */
+.chart-svg:focus:not(:focus-visible) { outline: none; }
 
 .bar { transition: opacity 0.1s ease; }
-.bar--past { opacity: 0.38; }
+/* Möödunud perioodid heledamad, kuid kategooriavärv jääb eristatavaks (legendis „heledam = möödunud“) */
+.bar--past { opacity: 0.58; }
 .bar--active { stroke: var(--text); stroke-width: 2; opacity: 1 !important; }
 .bar-current { animation: pulse 2.4s ease-in-out infinite; }
 @keyframes pulse {
@@ -1007,7 +1068,7 @@ body {
 .tooltip {
   position: absolute;
   z-index: 2;
-  max-width: 248px;
+  max-width: 272px;
   padding: 8px 10px;
   border-radius: var(--radius-sm);
   background: var(--text);
@@ -1017,8 +1078,8 @@ body {
   pointer-events: none;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
 }
-.tooltip strong,
-.tooltip span {
+.tooltip > strong,
+.tooltip > span {
   display: block;
 }
 .tooltip strong { font-size: 15px; }
@@ -1026,15 +1087,47 @@ body {
   font-size: 17px;
   font-weight: 700;
 }
-.tooltip__consumption {
-  margin-top: 2px;
-  padding-top: 3px;
-  border-top: 1px solid rgba(128, 128, 128, 0.35);
-  font-weight: 600;
+.tooltip__final,
+.tooltip__diff,
+.tooltip__note {
+  font-size: 13px;
+  opacity: 0.85;
 }
+/* Koguse rida nagu energialehel: värvivõti (graafiku joone värv), väärtus, silt; murdunud tekst joondub võtme järel */
+.tooltip > .tooltip__row {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  column-gap: 8px;
+  align-items: start;
+}
+.tooltip__row b { font-weight: 700; }
+.tooltip__note { display: block; }
+.tooltip > .tooltip__sep {
+  margin-top: 3px;
+  padding-top: 4px;
+  border-top: 1px solid rgba(128, 128, 128, 0.35);
+}
+.tooltip__diff { margin-top: 2px; }
+.line-key {
+  flex: none;
+  width: 18px;
+  height: 0;
+  border-top: 3px solid var(--key, var(--muted));
+  border-radius: 2px;
+}
+/* Tooltipi taust on pööratud (var(--text)): võti saab pinnavärvi ääre nagu joon graafikul (halo) */
+.tooltip .line-key {
+  margin-top: 8px;
+  box-shadow: 0 0 0 1.5px var(--surface);
+}
+.tooltip .line-key--none {
+  border-top-color: transparent;
+  box-shadow: none;
+}
+/* kWh-alad on tulpade all (index.html buildPriceChartSvg), seega hõredad */
 .consumption-area {
   fill: var(--bar-primary);
-  opacity: 0.14;
+  opacity: 0.08;
   pointer-events: none;
 }
 .consumption-line {
@@ -1054,16 +1147,48 @@ body {
 
 .legend {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--s1) var(--s3);
+  flex-direction: column;
+  gap: var(--s1);
   margin: var(--s2) 0 0;
   font-size: 13px;
   color: var(--muted);
+}
+/* Rühmad: „Hind, s/kWh“ (vasak telg) ja „Energia, kWh“ (parem telg) */
+.legend__group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s1) var(--s3);
+}
+.legend__title {
+  font-weight: 700;
+  color: var(--text);
 }
 .legend__item {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
+}
+/* Telefonis kaks veergu: 4 hinnaklassi = 2 rida, hinnarühma pealkiri ja päeva keskmine samal real */
+@media (max-width: 767px) {
+  .legend__group {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--s1) var(--s3);
+  }
+  .legend__title,
+  .legend__item--wide {
+    grid-column: 1 / -1;
+  }
+  .legend__group--price .legend__title {
+    grid-column: auto;
+    order: -2;
+  }
+  .legend__item--avg { order: -1; }
+  /* Energia kirjed on pikemad: voolavad reas (kitsal ekraanil kaks rida) ega murdu poolikult */
+  .legend__group--energy { display: flex; }
+  .legend__group--energy .legend__title { flex-basis: 100%; }
 }
 .legend__swatch {
   flex: none;
@@ -1090,6 +1215,10 @@ body {
   background: none;
   border: 2px solid var(--text);
 }
+.legend__swatch--past {
+  background: var(--muted);
+  opacity: 0.58;
+}
 .legend__swatch--best {
   background: var(--cat-roheline-bg);
   border: 1.5px solid var(--cat-roheline);
@@ -1104,6 +1233,30 @@ body {
   grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
   gap: var(--s2);
   margin: var(--s3) 0 0;
+}
+/* Päeva kokkuvõte märgistatud rühmadena: „Hind, s/kWh“, „Ost võrgust sel päeval“; kuu ost omaette rühmas */
+.day-summary {
+  display: grid;
+  gap: var(--s3);
+  margin: var(--s3) 0 0;
+}
+.day-summary:empty { display: none; }
+.stats-group { min-width: 0; }
+.stats-group--month { margin: var(--s3) 0 0; }
+.stats-group__title {
+  margin: 0 0 var(--s1);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+}
+.stats-group .stats { margin: 0; }
+@media (min-width: 900px) {
+  /* Hind (4 plaati) ja ost (2 plaati) ühes reas */
+  .day-summary { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
+  .day-summary > .stats-group:only-child { grid-column: 1 / -1; }
+  .stats-group--price .stats.stats--day { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .stats-group--purchase .stats.stats--day { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .stats-group--month .stats.stats--day { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 .stats--day {
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1402,6 +1555,7 @@ body {
   font-size: 14px;
 }
 .app-footer p { margin: 0 0 var(--s2); }
+.app-footer__data { font-size: 13px; }
 .app-footer__meta {
   display: flex;
   flex-wrap: wrap;
