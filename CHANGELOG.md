@@ -4,6 +4,34 @@ See fail kirjeldab rakenduse `index.html` versioonimuudatusi, arhitektuurilisi k
 
 ---
 
+## energy-dashboard.html [1.3.0] — 2026-10-22
+
+Energialehe täiendused olemasolevate andmetega (uut andmeallikat ega töövoo muudatust pole): päeva tulemus kWh ja eurodes, inverteri režiim, ostu- ja müügihind graafikul, aku laetus graafikul, võrguga vahetuse vaade ja 15 min / 1 h samm. `APP_VERSION` `1.3.0`, CSS-i lingid `?v=20261022b`. Kõik kogused on endiselt inverteri mõõtmised; eurod on ≈-ga hinnangud perioodi hinnaga.
+
+### 1. Seaded (omaniku vastused)
+- `CONFIG.aku.mahtKwh` = **100** (kasutatav mahutavus): laadimis-/tühjenemisaja hinnang, „Salvestatud“ plaat ja aku tulu laetuse muutus.
+- `CONFIG.muuk.tasu` = **1,05** s/kWh (müügilepingu marginaal koos KM-ga): müügihind = börsihind ilma KM-ta − 1,05; müügihinnale KM-i ei lisata.
+
+### 2. Täna kokku (`#section-results`, `renderResults`, `computeDayTotals`)
+- Neli plokki: **Aku** (tulu, laetud/tühjendatud kWh ja €, laetuse muutus), **Võrk** (ost, müük, netokulu), **Päike** (toodang, väärtus, päikesest kaetud), **Tarbimine** (kWh, hind ilma päikese ja akuta, võrgu netokulu).
+- **Maja energiahind täna:** keskmine ostuhind (maja tarbimine lõpphinnaga) → maja maksis (võrgu netokulu / tarbimine), „x % odavam“ ja aku laetuse muutuse selgitus.
+- Arvutusreeglid (`computeDayTotals`): ost, maja tarbimine ja aku tühjendamine lõpphinnaga; müük ja päikesest laetud energia müügihinnaga; päike otse majja lõpphinnaga, akusse/võrku müügihinnaga. Aku tulu = tühjendamise väärtus − laadimise kulu + laetuse muutus × tänane keskmine laadimishind (ilma selleta oli eile laetud energia tühjendamine „tasuta“: näidisandmetel +12,40 € → +9,21 €).
+
+### 3. Päeva graafik
+- **Inverteri režiimi riba** (`buildModeRuns`, `inverterMode`): laeb võrgust / laeb päikesest / aku kasutus / müük võrku / aku ootel iga 15-min kaadri kohta, ka 1 h vaates. Mõõtmistest tuletatud olek, mitte plaan. Riba kohal „Inverter praegu: Aku kasutus · alates 22:00“ (`renderCurrentMode`).
+- **Ostuhind ja müügihind** astmeliste joontena hinnapaneelil (pidev neutraalne / punktiir; mitte hinnaklassi toonid); telg mahutab mõlemad. Tooltipis ka „müügihind“.
+- **Aku laetus** punktiirjoonena võimsuspaneelil, parem telg 0–100 % (ei ole eraldi paneel: graafik ei lähe kõrgemaks).
+- **Võrguga vahetus** (lüliti „Energiavood / Võrguga vahetus“, ainult „Täna“): ost allapoole ja müük ülespoole, kWh perioodi kohta (ainult mõõdetud osa); tooltipis kogus ja ≈ €.
+- **1 h / 15 min** lüliti (nagu elektriinfo lehel; telefonis vaikimisi 1 h): tunnised hinnad on veerandtundide kestusega kaalutud keskmine, võimsused tunni keskmised, laetus tunni viimane. Joon katkeb ainult üle ühe sammu pikkuse augu korral.
+- **Päeva kogusummad** (`renderChartSums`, avatav plokk): päike, maja, ost, müük, aku laetud/tühjendatud – kWh, ≈ € ja keskmine s/kWh.
+- Uued tokenid ainult energialehel (`css/energy-dashboard.css`): `--export` (müük, lilla) ja `--mode-idle` (aku ootel), heledas ja tumedas teemas.
+
+### 4. Teadlikult tegemata
+- Inverteri plaani ja päikese prognoosi ei kuvata (omaniku otsus). Režiimiriba näitab ainult mõõdetud minevikku.
+- Perioodivalik (nädal, kuu) vajab päevakokkuvõtete faili – järgmine samm.
+
+---
+
 ## [2.5.0] ja energy-dashboard.html [1.2.0] — 2026-10-22
 
 Graafikute ülevaate (21.10.2026) punkti 5 kõik soovitused („Kohe“, „Järgmisena“ ja „Hiljem“) mõlemal lehel ja mõlemas töövoos. Leiu tunnused (`L-…`, `K-…`) on ülevaate omad. `APP_VERSION` on `index.html`-is `2.5.0` ja `energy-dashboard.html`-is `1.2.0`, CSS-i lingid `?v=20261022`. Kõik numbrid on endiselt mõõtmised (Estfeed, inverter) või ≈-ga märgitud hinnangud; muutusid tõlgendus, allikasildid, graafikud ja kujundus. Viimased read igas punktis („Lõppkontroll“, „Teine kontroll“) on sõltumatute kontrollide järel tehtud parandused.

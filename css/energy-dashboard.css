@@ -6,6 +6,19 @@
    neutraalne terashall ja graafikul katkendjoon (maja ja võrk eristuvad ka heleduse järgi).
    ========================================================================== */
 
+/* Ainult energialehe tokenid: müük võrku (lilla, ei sarnane hinnaklassi ega osapoolte toonidega) ja
+   inverteri režiimiriba „aku ootel“ (neutraalne). Ühised tokenid on failis css/common.css. */
+:root {
+  --export: #7a4fb0;
+  --mode-idle: #b8c2cf;
+}
+@media screen and (prefers-color-scheme: dark) {
+  :root {
+    --export: #b597e0;
+    --mode-idle: #3a4a5e;
+  }
+}
+
 /* Suured üksikud numbrid näevad proportsionaalsete numbritega parem välja */
 .stat__value,
 .big-number,
@@ -448,6 +461,41 @@
   pointer-events: none;
 }
 .best-window { pointer-events: none; }
+/* Ostuhind (lõpphind koos tasudega) pidev, müügihind punktiir; neutraalsed toonid, et need ei sarnaneks hinnaklassidega */
+.buy-line, .sell-line {
+  fill: none;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+.buy-line { stroke: var(--text); stroke-width: 1.5; }
+.sell-line { stroke: var(--muted); stroke-width: 2; stroke-dasharray: 1.5 3; stroke-linecap: round; }
+.line-halo--thin { stroke-width: 4; }
+/* Aku laetus (%) parema telje järgi: punktiir aku tooniga (aku kW on pidev joon) */
+.soc-line {
+  fill: none;
+  stroke: var(--battery);
+  stroke-width: 2.5;
+  stroke-dasharray: 0.5 4.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+/* Inverteri režiim (mõõdetud): üks riba graafiku kohal */
+.mode-band { pointer-events: none; }
+.mode-label { font-size: 11px; font-weight: 600; fill: var(--muted); }
+/* Võrguga vahetus: ost allapoole (terashall), müük ülespoole (lilla) */
+.exchange-bar { stroke-width: 1; pointer-events: none; }
+.exchange-bar--import { fill: color-mix(in srgb, var(--grid) 40%, transparent); stroke: var(--grid); }
+.exchange-bar--export { fill: color-mix(in srgb, var(--export) 40%, transparent); stroke: var(--export); }
+.exchange-label {
+  font-size: 12px;
+  font-weight: 600;
+  fill: var(--muted);
+  stroke: var(--surface);
+  stroke-width: 3;
+  paint-order: stroke;
+  pointer-events: none;
+}
 
 .tooltip__row {
   display: flex !important;
@@ -472,7 +520,16 @@
   background: color-mix(in srgb, var(--focus) 10%, var(--surface));
   border: 1.5px solid var(--focus);
 }
+.legend__swatch--import {
+  background: color-mix(in srgb, var(--grid) 40%, var(--surface));
+  border: 1px solid var(--grid);
+}
+.legend__swatch--export {
+  background: color-mix(in srgb, var(--export) 40%, var(--surface));
+  border: 1px solid var(--export);
+}
 .line-key--dashed { border-top-style: dashed; }
+.line-key--dotted { border-top-style: dotted; }
 .line-key--thin { border-top-width: 2px; }
 
 .table-view {
@@ -502,6 +559,168 @@
   margin-top: -2px;
 }
 .table-view[open] summary::after { transform: rotate(-135deg); margin-top: 3px; }
+.table-view__sub { color: var(--muted); font-weight: 500; font-size: 14px; }
+.table-view + .table-view { margin-top: 0; }
+.sums-label { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+.data-table--sums td .th-sub { color: var(--muted); }
+.data-table--sums tbody th,
+.data-table--sums td { vertical-align: top; }
+
+/* ---------- Graafiku juhtelemendid ja inverteri režiim ---------- */
+.chart-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2) var(--s3);
+  margin: 0 0 var(--s2);
+}
+.chart-controls:not(:has(fieldset:not([hidden]))) { display: none; }
+#resolution-toggle { margin-left: auto; }
+.segmented {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+.segmented input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.segmented label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  min-width: 48px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: background-color 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+.segmented input:checked + label {
+  background: var(--text);
+  color: var(--surface);
+  border-color: var(--text);
+}
+.segmented input:focus-visible + label {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+@media (pointer: coarse) {
+  .segmented label { min-height: 44px; }
+}
+.chart-mode {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin: 0 0 var(--s2);
+  font-size: 14px;
+  color: var(--muted);
+}
+.chart-mode strong { color: var(--text); }
+
+/* ---------- Täna kokku ---------- */
+.results {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s2);
+}
+@media (min-width: 560px) {
+  .results { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (min-width: 1024px) {
+  .results { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+.result {
+  min-width: 0;
+  padding: var(--s3);
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--accent, var(--muted));
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+}
+.result--battery { --accent: var(--battery); }
+.result--grid { --accent: var(--grid); }
+.result--solar { --accent: var(--solar); }
+.result--load { --accent: var(--home); }
+.result__title { margin: 0; font-size: 15px; font-weight: 700; }
+.result__value {
+  margin: var(--s2) 0 0;
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  font-variant-numeric: proportional-nums;
+}
+.result__caption { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+.result__rows {
+  margin: auto 0 0;
+  padding-top: var(--s2);
+  display: grid;
+  gap: 4px;
+  font-size: 14px;
+}
+.result__rows > div {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s2);
+  border-top: 1px solid var(--border);
+  padding-top: 4px;
+}
+.result__rows dt { color: var(--muted); white-space: nowrap; }
+.result__rows dd { margin: 0 0 0 auto; display: flex; gap: var(--s2); white-space: nowrap; }
+.result__amount { color: var(--muted); }
+
+.energy-price {
+  margin: var(--s3) 0 0;
+  padding: var(--s3);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+.energy-price__title { margin: 0 0 var(--s2); font-weight: 700; font-size: 15px; }
+.energy-price__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2) var(--s4);
+}
+.energy-price__value {
+  margin: 2px 0 0;
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 1.1;
+  font-variant-numeric: proportional-nums;
+}
+.energy-price__arrow { color: var(--muted); font-size: 20px; }
+.energy-price__badge {
+  margin: 0 0 0 auto;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  font-weight: 700;
+  font-size: 14px;
+}
+.energy-price__badge.is-good {
+  background: var(--cat-roheline-bg);
+  color: var(--cat-roheline-fg);
+  border-color: transparent;
+}
+.energy-price .table-note { margin: var(--s2) 0 0; }
 /* Kerimisvihje kitsal ekraanil (tabel on laiem kui kaart) */
 .table-view__hint { display: none; color: var(--muted); font-size: 13px; font-weight: 600; }
 @media (max-width: 599px) {
@@ -624,6 +843,7 @@
 
 @media (hover: hover) {
   .btn--ghost:not([disabled]):hover { border-color: var(--muted); }
+  .segmented input:not(:checked) + label:hover { border-color: var(--muted); background: var(--surface); }
   .table-view summary:hover { color: var(--focus); }
 }
 
@@ -635,6 +855,7 @@
       "advice advice"
       "flow price"
       "solar battery"
+      "results results"
       "chart chart";
   }
   #section-advice { grid-area: advice; }
@@ -642,6 +863,7 @@
   #section-price { grid-area: price; }
   #section-solar { grid-area: solar; }
   #section-battery { grid-area: battery; }
+  #section-results { grid-area: results; }
   #section-chart { grid-area: chart; }
   .card--advice { padding-top: var(--s4); padding-bottom: var(--s4); }
   .card__body {
@@ -666,6 +888,7 @@
       "advice advice advice"
       "flow flow price"
       "solar battery price"
+      "results results results"
       "chart chart chart";
   }
   .flow-layout { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); }
@@ -675,6 +898,7 @@
 @media print {
   #refresh-button,
   #direct-open,
+  .chart-controls,
   .table-view { display: none !important; }
   .flow-dots { animation: none; }
 }
