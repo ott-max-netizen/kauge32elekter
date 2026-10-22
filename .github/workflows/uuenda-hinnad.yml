@@ -1,6 +1,7 @@
 # GitHub Actions töövoog: laadib Eleringist elektri börsihinnad ja Estfeedist
 # maja mõõtepunkti 15-minutilise tarbimise ning kuude kokkuvõtted ja salvestab
-# need faili hinnad.json. Leht loeb neid samast repost, nii et brauser ei tee
+# need faili hinnad.json. Lisaks arvutab see inverteri päevakokkuvõtted (kWh ja €)
+# faili paevad.json (energialehe perioodivalik). Leht loeb neid samast repost, nii et brauser ei tee
 # ühtegi välist päringut, API võtmed jäävad turvaliselt GitHub Secretsisse ja
 # CORS-piirang ei sega.
 #
@@ -8,6 +9,8 @@
 #   ELERING_CLIENT_ID     - Estfeed API võtme Kliendi ID
 #   ELERING_CLIENT_SECRET - Estfeed API võtme salajane võti
 #   ELERING_EIC           - Mõõtepunkti EIC-kood (nt 38ZEE...)
+#   SOLARMAN_*            - samad mis uuenda-paike.yml-is (paevad.json-i varasemate päevade laadimiseks;
+#                           puudumisel arvutatakse ainult eilne päev paike.json-ist)
 
 name: Uuenda elektrihinnad
 
@@ -70,6 +73,12 @@ jobs:
           ELERING_CLIENT_ID: ${{ secrets.ELERING_CLIENT_ID }}
           ELERING_CLIENT_SECRET: ${{ secrets.ELERING_CLIENT_SECRET }}
           ELERING_EIC: ${{ secrets.ELERING_EIC }}
+          # Päevakokkuvõtete (paevad.json) varasemad päevad laaditakse Solarmani history-päringuga
+          SOLARMAN_APP_ID: ${{ secrets.SOLARMAN_APP_ID }}
+          SOLARMAN_APP_SECRET: ${{ secrets.SOLARMAN_APP_SECRET }}
+          SOLARMAN_EMAIL: ${{ secrets.SOLARMAN_EMAIL }}
+          SOLARMAN_PASSWORD: ${{ secrets.SOLARMAN_PASSWORD }}
+          SOLARMAN_STATION_ID: ${{ secrets.SOLARMAN_STATION_ID }}
         run: |
           python3 - <<'PY'
           import hashlib, json, math, os, re, sys, time, urllib.error, urllib.parse, urllib.request
@@ -820,6 +829,323 @@ jobs:
                   note(f"Estfeedi vastus oli {len(ks)} kuu kohta osaline ({ks[0]}" + (f" … {ks[-1]}" if len(ks) > 1 else "") + "); varasemad kirjed jäid alles")
               maja_elekter = [cached_months[k] for k in sorted(cached_months.keys())]
 
+          # 5b. Päevakokkuvõtted (paevad.json): iga lõppenud päeva inverteri kogused ja eurod energialehe perioodivaliku
+          # jaoks. Reeglid on samad mis energy-dashboard.html-i computeDayTotals-is (sampleFromRaw, allocateFlows):
+          # ost, maja tarbimine ja aku tühjendamine lõpphinnaga (calc_final_cents_kwh, perioodikohased tasud), müük ja
+          # päikesest laetud energia müügihinnaga (börsihind ilma KM-ta − müügitasu), päike otse majja lõpphinnaga,
+          # akusse/võrku müügihinnaga. Eilne päev arvutatakse paike.json-i kaadritest (fail sisaldab eilset ja tänast);
+          # varasemad päevad päikesepargi kasutuselevõtust (CONFIG.paike.kasutuselAlates) alates laetakse Solarmani
+          # history-päringuga järk-järgult (MAX_PAEVAD_PARING päeva käivituse kohta, uuemad enne). Tänast päeva ei
+          # salvestata – leht arvutab selle ise paike.json-ist.
+          PAEVAD_OUT = "paevad.json"
+          PAEVAD_VERSION = 1          # päevakirje arvutusreeglite versioon; suurenda reeglite muutumisel (päevad arvutatakse uuesti)
+          MAX_PAEVAD_PARING = 10      # mitu päeva ühe käivitusega Solarmanist laetakse
+          MAX_PAEVAD = 800            # kirjeid failis (vanemad jäetakse välja)
+          SOLAR_FRAME_S = 900
+          SOLARMAN_URL = os.environ.get("SOLARMAN_URL", "https://globalapi.solarmanpv.com").rstrip("/")
+          PAEVAD_HOIATUSED = []       # paevad.json meta.warnings (lehele nähtav, tavakeeles)
+
+          def paevad_note(msg, detail=""):
+              warn(f"{msg} ({detail})" if detail else msg)
+              if msg not in PAEVAD_HOIATUSED:
+                  PAEVAD_HOIATUSED.append(msg)
+
+          def read_sell_fee():
+              """Müügitasu s/kWh energy-dashboard.html CONFIG.muuk.tasu-st (sama väärtus, mida leht kasutab müügihinnaks)."""
+              try:
+                  with open("energy-dashboard.html", encoding="utf-8") as f:
+                      m = re.search(r"\bmuuk\s*:\s*\{[^}]*?\btasu\s*:\s*(-?\d+(?:\.\d+)?)", f.read())
+                  if m:
+                      return float(m.group(1))
+              except OSError:
+                  pass
+              paevad_note("Müügitasu ei saanud lugeda; müügihind on börsihind ilma KM-ta", "energy-dashboard.html CONFIG.muuk.tasu puudub")
+              return 0.0
+
+          def read_solar_start():
+              """Päikesepargi kasutuselevõtu kuu esimene päev index.html CONFIG.paike.kasutuselAlates-ist ("AAAA-KK") või None."""
+              try:
+                  with open("index.html", encoding="utf-8") as f:
+                      m = re.search(r"\bkasutuselAlates\s*:\s*\"(\d{4})-(\d{2})\"", f.read())
+                  if m and 1 <= int(m.group(2)) <= 12:
+                      return datetime(int(m.group(1)), int(m.group(2)), 1).date()
+              except OSError:
+                  pass
+              return None
+
+          def fnum(value):
+              if value is None or isinstance(value, bool) or not isinstance(value, (int, float)):
+                  return None
+              return float(value) if math.isfinite(value) else None
+
+          def frame_sample(f):
+              """Solarmani 15-min kaader -> kW-d (sama tõlgendus mis energialehe sampleFromRaw-s, vt README „Märgid ja väljad“)."""
+              charge, discharge, bat_raw = fnum(f.get("chargePower")), fnum(f.get("dischargePower")), fnum(f.get("batteryPower"))
+              if charge is not None or discharge is not None:
+                  bat = abs(charge or 0) - abs(discharge or 0)
+              else:
+                  bat = -bat_raw if bat_raw is not None else None  # selle jaama puhul batteryPower < 0 = laeb
+              purchase, wire = fnum(f.get("purchasePower")), fnum(f.get("wirePower"))
+              imp = max(0.0, purchase) if purchase is not None else (max(0.0, wire) if wire is not None else None)
+              pv = fnum(f.get("generationPower"))
+              pv = max(0.0, pv) if pv is not None else None
+              load = fnum(f.get("usePower"))
+              load = max(0.0, load) if load is not None else None
+              exp = None
+              if pv is not None and load is not None and imp is not None:
+                  surplus = pv + max(0.0, -(bat or 0)) - load - max(0.0, bat or 0)
+                  exp = surplus if imp <= 50 and surplus > max(300.0, 0.03 * pv) else 0.0
+              if load is None and pv is not None and (bat is not None or imp is not None):
+                  load = max(0.0, pv + (imp or 0) - (bat or 0))
+              grid = (imp or 0) - (exp or 0) if imp is not None or exp is not None else None
+              kw = lambda w: None if w is None else w / 1000.0
+              soc = fnum(f.get("batterySoc"))
+              return {"pv": kw(pv), "load": kw(load), "bat": kw(bat), "imp": kw(imp), "exp": kw(exp), "grid": kw(grid),
+                      "soc": soc if soc is not None and 0 <= soc <= 100 else None}
+
+          def solar_split(s):
+              """Päikese jaotus (kW): otse majja ja akusse – energialehe allocateFlows järjekord (päike majale, siis akule)."""
+              z = lambda v: v if v is not None and v > 0.05 else 0.0
+              pv, load = z(s["pv"]), z(s["load"])
+              charge = z(s["bat"])
+              to_home = min(pv, load)
+              to_battery = min(pv - to_home, charge)
+              return to_home, to_battery
+
+          def compute_day_record(day, frames, price_by_ts, tariff_cfg, sell_fee, cfg_hash, src, until=None):
+              """Ühe Tallinna päeva kirje 15-min kaadritest; None, kui päeval kaadreid pole. until (Unix s): mõõtmiste lõpp
+              (pooleli päeva kontrolliks; lõppenud päeval päeva lõpp)."""
+              d0 = datetime(day.year, day.month, day.day, tzinfo=TZ)
+              t0, t1 = int(d0.timestamp()), int((d0 + timedelta(days=1)).timestamp())
+              t_end = min(t1, until) if until else t1
+              rows = sorted((f for f in frames if isinstance(f.get("dateTime"), int) and t0 <= f["dateTime"] < t1), key=lambda f: f["dateTime"])
+              if not rows:
+                  return None
+              keys = ("pv", "load", "imp", "exp", "charge", "discharge")
+              kwh = {k: 0.0 for k in keys}
+              has = {k: False for k in keys}
+              eur = {k: 0.0 for k in keys}
+              priced = {k: 0.0 for k in keys}
+              hours = 0.0
+              socs = []
+              for i, f in enumerate(rows):
+                  ts = f["dateTime"]
+                  nxt = rows[i + 1]["dateTime"] if i + 1 < len(rows) else t1
+                  h = max(0, min(ts + SOLAR_FRAME_S, nxt, t_end) - ts) / 3600.0
+                  s = frame_sample(f)
+                  if s["soc"] is not None:
+                      socs.append(s["soc"])
+                  if not h:
+                      continue
+                  hours += h
+                  spot = price_by_ts.get(ts - ts % SOLAR_FRAME_S, price_by_ts.get(ts - ts % 3600))
+                  buy = calc_final_cents_kwh(spot, datetime.fromtimestamp(ts, TZ), tariff_cfg) / 100.0 if spot is not None else None
+                  sell = (spot / 10.0 - sell_fee) / 100.0 if spot is not None else None
+                  to_home, to_battery = solar_split(s)
+                  def add(key, value, value_eur):
+                      kwh[key] += value
+                      has[key] = True
+                      if value_eur is not None:
+                          eur[key] += value_eur
+                          priced[key] += value
+                  if s["pv"] is not None:
+                      pv = s["pv"] * h
+                      direct = min(pv, to_home * h)
+                      add("pv", pv, direct * buy + (pv - direct) * sell if buy is not None else None)
+                  if s["load"] is not None:
+                      add("load", s["load"] * h, s["load"] * h * buy if buy is not None else None)
+                  if s["imp"] is not None:
+                      add("imp", s["imp"] * h, s["imp"] * h * buy if buy is not None else None)
+                  if s["exp"] is not None:
+                      add("exp", s["exp"] * h, s["exp"] * h * sell if sell is not None else None)
+                  if s["bat"] is not None:
+                      charge = max(0.0, s["bat"]) * h
+                      discharge = max(0.0, -s["bat"]) * h
+                      from_solar = min(charge, to_battery * h)
+                      add("charge", charge, from_solar * sell + (charge - from_solar) * buy if buy is not None else None)
+                      add("discharge", discharge, discharge * buy if buy is not None else None)
+              names = {"pv": "pv", "load": "load", "imp": "import", "exp": "export", "charge": "charge", "discharge": "discharge"}
+              rec = {"paev": day.isoformat()}
+              for k in keys:
+                  if not has[k]:
+                      continue
+                  rec[f"{names[k]}Kwh"] = round(kwh[k], 2)
+                  # Eurod perioodi hinnaga; puuduva hinnaga perioodid skaleeritakse sama hinnaprofiiliga (nagu lehel),
+                  # alla 90 % hinnastatud koguse korral eurosid ei anta
+                  if kwh[k] < 1e-9:
+                      rec[f"{names[k]}Eur"] = 0.0
+                  elif priced[k] >= 0.9 * kwh[k]:
+                      rec[f"{names[k]}Eur"] = round(eur[k] * kwh[k] / priced[k], 3)
+              if socs:
+                  rec["socStart"] = socs[0]
+                  rec["socEnd"] = socs[-1]
+              rec["kaadrid"] = len(rows)
+              rec["complete"] = hours >= 0.97 * (t1 - t0) / 3600.0
+              rec["src"] = src
+              rec["v"] = PAEVAD_VERSION
+              rec["cfg"] = cfg_hash
+              return rec
+
+          def solarman_call(path, body, token=None, query="language=en"):
+              """POST Solarman OpenAPI-le (nagu uuenda-paike.yml); None vea korral. Võtmeid logisse ei kirjutata."""
+              headers = {"Content-Type": "application/json", "Accept": "application/json", "User-Agent": UA}
+              if token:
+                  headers["Authorization"] = f"Bearer {token}"
+              for attempt in range(1, 4):
+                  try:
+                      req = urllib.request.Request(f"{SOLARMAN_URL}{path}?{query}", data=json.dumps(body).encode("utf-8"), headers=headers, method="POST")
+                      with urllib.request.urlopen(req, timeout=30) as r:
+                          resp = json.loads(r.read(), parse_constant=reject_constant)
+                  except urllib.error.HTTPError as e:
+                      if e.code == 429 or e.code >= 500:
+                          time.sleep(5 * attempt)
+                          continue
+                      warn(f"Solarman {path}: HTTP {e.code}")
+                      return None
+                  except Exception as e:
+                      print(f"Solarman {path}: võrguviga ({attempt}/3): {e}")
+                      time.sleep(5 * attempt)
+                      continue
+                  if not isinstance(resp, dict) or resp.get("success") is not True:
+                      warn(f"Solarman {path}: vastus veaga ({resp.get('code') if isinstance(resp, dict) else '?'})")
+                      return None
+                  return resp
+              return None
+
+          def solarman_login():
+              """(token, jaama id) GitHub Secretsi võtmetega või (None, None), kui võtmeid pole või sisselogimine ebaõnnestus."""
+              sec = lambda n: os.environ.get(n, "").strip().strip('"').strip("'")
+              app_id, app_secret, email_addr, password = sec("SOLARMAN_APP_ID"), sec("SOLARMAN_APP_SECRET"), sec("SOLARMAN_EMAIL"), os.environ.get("SOLARMAN_PASSWORD", "")
+              if not (app_id and app_secret and email_addr and password):
+                  return None, None
+              pass_hash = password.strip().lower() if re.fullmatch(r"\s*[0-9a-fA-F]{64}\s*", password) else hashlib.sha256(password.encode("utf-8")).hexdigest()
+              tok = solarman_call("/account/v1.0/token", {"appSecret": app_secret, "email": email_addr, "password": pass_hash},
+                                  query=f"appId={urllib.parse.quote(app_id)}&language=en")
+              token = (tok or {}).get("access_token")
+              if not token:
+                  return None, None
+              station = sec("SOLARMAN_STATION_ID")
+              if not station:
+                  lst = solarman_call("/station/v1.0/list", {"page": 1, "size": 50}, token)
+                  stations = [s for s in ((lst or {}).get("stationList") or []) if isinstance(s, dict)]
+                  if not stations:
+                      return None, None
+                  station = str(stations[0].get("id"))
+              return token, (int(station) if station.isdigit() else station)
+
+          def solarman_day_frames(token, sid, day):
+              """Päeva 5-min mõõtmised 15-min keskmisteks (nagu uuenda-paike.yml bucket_frames); None päringu vea korral."""
+              resp = solarman_call("/station/v1.0/history", {"stationId": sid, "startTime": day.isoformat(), "endTime": day.isoformat(), "timeType": 1}, token)
+              if resp is None:
+                  return None
+              d0 = datetime(day.year, day.month, day.day, tzinfo=TZ)
+              t0, t1 = int(d0.timestamp()), int((d0 + timedelta(days=1)).timestamp())
+              fields = ("generationPower", "usePower", "gridPower", "purchasePower", "wirePower", "chargePower", "dischargePower", "batteryPower", "batterySoc")
+              buckets = {}
+              for item in resp.get("stationDataItems") or []:
+                  if not isinstance(item, dict):
+                      continue
+                  ts = fnum(item.get("dateTime"))
+                  if ts is None:
+                      continue
+                  ts = int(ts / 1000) if ts > 1e11 else int(ts)
+                  if not t0 <= ts < t1:
+                      continue
+                  acc = buckets.setdefault(ts - ts % SOLAR_FRAME_S, {})
+                  for key in fields:
+                      v = fnum(item.get(key))
+                      if v is not None and (key != "batterySoc" or 0 <= v <= 100):
+                          s_, n_ = acc.get(key, (0.0, 0))
+                          acc[key] = (s_ + v, n_ + 1)
+              return [{"dateTime": ts, **{k: (round(s_ / n_, 1) if k == "batterySoc" else int(round(s_ / n_))) for k, (s_, n_) in buckets[ts].items()}}
+                      for ts in sorted(buckets)]
+
+          def update_daily_summaries(tariff_cfg, now):
+              old_days = {}
+              try:
+                  with open(PAEVAD_OUT, encoding="utf-8") as f:
+                      old_file = json.load(f)
+                  for rec in ((old_file.get("data") or {}).get("days") or []):
+                      if isinstance(rec, dict) and isinstance(rec.get("paev"), str):
+                          old_days[rec["paev"]] = rec
+              except (OSError, ValueError, AttributeError):
+                  old_file = None
+              sell_fee = read_sell_fee()
+              day_hash = hashlib.sha1(json.dumps({"v": PAEVAD_VERSION, "cfg": CFG_HASH, "muuk": sell_fee}, sort_keys=True).encode("utf-8")).hexdigest()[:12]
+              today = now.date()
+              yesterday = today - timedelta(days=1)
+              first = read_solar_start() or yesterday
+              days = dict(old_days)
+
+              def store(rec):
+                  prev = old_days.get(rec["paev"]) or {}
+                  same = {k: v for k, v in prev.items() if k != "updatedAt"} == rec
+                  rec["updatedAt"] = prev["updatedAt"] if same and prev.get("updatedAt") else utc_now_iso()
+                  days[rec["paev"]] = rec
+
+              def is_current(rec):
+                  return rec.get("v") == PAEVAD_VERSION and rec.get("cfg") == day_hash
+
+              # Eilne päev paike.json-i kaadritest (hinnad: ee algab eilsest 00:00-st)
+              try:
+                  with open("paike.json", encoding="utf-8") as f:
+                      paike_frames = [x for x in ((json.load(f).get("data") or {}).get("frames") or []) if isinstance(x, dict)]
+              except (OSError, ValueError, AttributeError):
+                  paike_frames = []
+              price_map = {r["timestamp"]: r["price"] for r in ee}
+              prev_y = days.get(yesterday.isoformat()) or {}
+              if not (is_current(prev_y) and prev_y.get("complete")):
+                  rec = compute_day_record(yesterday, paike_frames, price_map, tariff_cfg, sell_fee, day_hash, "paike")
+                  if rec and (not prev_y or rec["complete"] or not prev_y.get("complete")):
+                      store(rec)
+
+              # Puuduvad, vananenud või ainult osaliselt paike.json-ist arvutatud päevad Solarmanist (uuemad enne). Eilne päev
+              # ainult siis, kui paike.json-is selle kaadreid polnud (osaline eilne täieneb paike.json-ist järgmistel käivitustel).
+              todo = []
+              day = yesterday
+              while day >= first:
+                  rec = days.get(day.isoformat())
+                  if not rec or not is_current(rec) or (day < yesterday and not rec.get("complete") and rec.get("src") == "paike"):
+                      todo.append(day)
+                  day -= timedelta(days=1)
+              if todo:
+                  token, sid = solarman_login()
+                  if not token:
+                      paevad_note("Varasemaid päevakokkuvõtteid ei saanud Solarmanist laadida", "Solarmani võtmed puuduvad või sisselogimine ebaõnnestus")
+                  else:
+                      batch = todo[:MAX_PAEVAD_PARING]
+                      prices = fetch_nps_prices(datetime(batch[-1].year, batch[-1].month, batch[-1].day, tzinfo=TZ),
+                                                datetime(batch[0].year, batch[0].month, batch[0].day, tzinfo=TZ) + timedelta(days=1), strict=False)
+                      batch_prices = {r["timestamp"]: r["price"] for r in prices}
+                      for day in batch:
+                          frames = solarman_day_frames(token, sid, day)
+                          if frames is None:
+                              paevad_note("Solarmani päevapäring ebaõnnestus; osa varasemaid päevakokkuvõtteid puudub")
+                              break
+                          rec = compute_day_record(day, frames, batch_prices, tariff_cfg, sell_fee, day_hash, "solarman")
+                          store(rec or {"paev": day.isoformat(), "noData": True, "src": "solarman", "v": PAEVAD_VERSION, "cfg": day_hash})
+                      print(f"Päevakokkuvõtted: Solarmanist laaditi {len(batch)} päeva, ootel veel {max(0, len(todo) - len(batch))}.")
+
+              out_days = [days[k] for k in sorted(days) if k < today.isoformat()][-MAX_PAEVAD:]
+              missing = sum(1 for d in todo if d.isoformat() not in days or not is_current(days[d.isoformat()]))
+              meta = {"from": first.isoformat(), "pending": missing, "sellFee": sell_fee, "warnings": PAEVAD_HOIATUSED}
+              old_out = (old_file or {}).get("data") if isinstance(old_file, dict) else None
+              if old_out == {"days": out_days, "meta": meta}:
+                  print("Päevakokkuvõtted ei muutunud.")
+                  return
+              out = {"success": True, "generatedAt": utc_now_iso(), "source": "Solarman (inverter, 15-min) + Elering (börsihind)",
+                     "data": {"days": out_days, "meta": meta}}
+              tmp = PAEVAD_OUT + ".tmp"
+              with open(tmp, "w", encoding="utf-8") as f:
+                  json.dump(out, f, separators=(",", ":"), allow_nan=False)
+              os.replace(tmp, PAEVAD_OUT)
+              print(f"Päevakokkuvõtted: {len(out_days)} päeva ({out_days[0]['paev'] if out_days else '—'} … {out_days[-1]['paev'] if out_days else '—'}), ootel {missing}.")
+
+          try:
+              update_daily_summaries(tariff_cfg, now)
+          except Exception as e:  # päevakokkuvõtte viga ei tohi takistada hinnad.json-i uuendamist
+              warn(f"Päevakokkuvõtteid ei õnnestunud uuendada: {e}")
+
           # 6. Faili olekuinfo: lehed saavad eristada värsket ja eelmisest failist säilitatud andmestikku
           meta = {
               "pricesOk": prices_ok,
@@ -857,6 +1183,7 @@ jobs:
         run: |
           set -euo pipefail
           git add hinnad.json
+          if [ -f paevad.json ]; then git add paevad.json; fi
           if git diff --staged --quiet; then
             echo "Hinnad ega tarbimisandmed ei muutunud, uut commit'i ei tehta."
             exit 0
