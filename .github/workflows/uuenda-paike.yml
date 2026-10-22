@@ -1,8 +1,9 @@
 # GitHub Actions töövoog: laadib Solarman OpenAPI-st päikesepargi ja akupanga
-# reaalaja andmed ning tänase päeva toodangu ja salvestab need faili paike.json.
-# energy-dashboard.html loeb faili samast repost, nii et Solarmani võtmed jäävad
-# GitHub Secretsisse ega jõua kunagi brauserisse ning CORS-piirang ei sega
-# (sama arhitektuur, mis hinnad.json-il ja uuenda-hinnad.yml-il).
+# reaalaja andmed ning tänase ja eilse päeva 15-min mõõtmised (kaadrid) ja salvestab
+# need faili paike.json. Faili loevad samast repost index.html (päikesekaart, graafik)
+# ja energy-dashboard.html, nii et Solarmani võtmed jäävad GitHub Secretsisse ega jõua
+# kunagi brauserisse ning CORS-piirang ei sega (sama arhitektuur, mis hinnad.json-il
+# ja uuenda-hinnad.yml-il).
 #
 # Vajalikud GitHub Actions Repository Secrets (Settings -> Secrets and variables -> Actions):
 #   SOLARMAN_APP_ID      - Solarman OpenAPI App ID (appId)
@@ -17,10 +18,11 @@
 name: Uuenda päikeseandmed
 
 on:
+  # Põhiline käivitaja on töövoog „Uuenda elektrihinnad“ (töö `paike`), mille väline ajastaja käivitab
+  # iga 30 min järel (:00 ja :30) – paike.json uueneb seega ~30-min sammuga. GitHubi schedule on ainult
+  # lisavaru: GitHub lükkab ajastatud käivitusi edasi või jätab need vahele (tegelikult ~5–6 käivitust
+  # ööpäevas, mitte iga 10 min). GitHub Pagesi pehme piirang on 10 avaldamist tunnis (koos hinnad.json-iga).
   schedule:
-    # Solarman uuendab andmeid umbes iga 5 minuti järel. GitHub Pagesi pehme piirang on
-    # 10 avaldamist tunnis (koos hinnad.json-i uuendustega), seega on samm 10 minutit.
-    # GitHub võib ajastatud käivitusi koormuse korral edasi lükata.
     - cron: "*/10 * * * *"
   workflow_dispatch:
   push:
@@ -45,7 +47,7 @@ jobs:
       - name: Võta repositoorium
         uses: actions/checkout@v5
 
-      - name: Lae Solarmani reaalaja ja tänase päeva andmed
+      - name: Lae Solarmani reaalaja andmed ja 15-min kaadrid
         env:
           SOLARMAN_APP_ID: ${{ secrets.SOLARMAN_APP_ID }}
           SOLARMAN_APP_SECRET: ${{ secrets.SOLARMAN_APP_SECRET }}
@@ -55,19 +57,22 @@ jobs:
         run: |
           python3 - <<'PY'
           import hashlib, json, math, os, re, sys, time, urllib.error, urllib.parse, urllib.request
-          from datetime import datetime, timezone
+          from datetime import datetime, timedelta, timezone
           from zoneinfo import ZoneInfo
 
           TZ = ZoneInfo("Europe/Tallinn")
           BASE = os.environ.get("SOLARMAN_URL", "https://globalapi.solarmanpv.com").rstrip("/")
           OUT = "paike.json"
           UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
-          FRAME_S = 900  # 5-min kaadrid koondatakse 15-min keskmisteks (sama samm, mis börsihindadel)
+          FRAME_S = 900  # 5-min kaadrid koondatakse 15-min keskmisteks (sama samm, mis börsihindadel); failis frameSeconds
 
-          # Solarmani välja nimed jäetakse muutmata; märgikokkuleppe tõlgendab energy-dashboard.html.
+          # Solarmani välja nimed ja märgid jäetakse muutmata; tõlgendavad lehed (README „Märgid“). Selle jaama andmetes:
+          # realTime.chargePower on laadimisel negatiivne, kaadrite chargePower positiivne, dischargePower >= 0,
+          # batteryPower < 0 = laeb (lehed: batteryKw = |chargePower| − |dischargePower|); gridPower on alati 0 ja
+          # wirePower == purchasePower (ost võrgust). Müüki võrku pole mõõtmistes seni esinenud.
+          # Solarmani päevakogused (history timeType 2) on selle jaama puhul ~10× liiga väikesed – neid ei laeta.
           POWER_FIELDS = ("generationPower", "usePower", "gridPower", "purchasePower", "wirePower",
                           "chargePower", "dischargePower", "batteryPower")
-          DAY_FIELDS = ("generationValue", "useValue", "gridValue", "buyValue", "chargeValue", "dischargeValue")
 
           def fail(msg):
               print(f"::error::{msg}")
@@ -75,6 +80,14 @@ jobs:
 
           def warn(msg):
               print(f"::warning::{msg}")
+
+          HOIATUSED = []  # lehele nähtavad hoiatused (paike.json data.meta.warnings)
+
+          def note(msg):
+              """Hoiatus logisse ja faili data.meta.warnings-isse."""
+              warn(msg)
+              if msg not in HOIATUSED:
+                  HOIATUSED.append(msg)
 
           def secret(name):
               return os.environ.get(name, "").strip().strip('"').strip("'")
@@ -130,7 +143,7 @@ jobs:
               return None
 
           def bucket_frames(items, day_start):
-              """Koondab tänased 5-min kaadrid 15-min keskmisteks; dateTime = perioodi algus (Unix s)."""
+              """Koondab alates day_start 5-min kaadrid 15-min keskmisteks; dateTime = perioodi algus (Unix s)."""
               buckets = {}
               for item in items if isinstance(items, list) else []:
                   if not isinstance(item, dict):
@@ -213,33 +226,51 @@ jobs:
               fail("Solarmani realTime vastuses puuduvad võimsusandmed")
           last_update = unix_seconds(rt.get("lastUpdateTime"))
 
-          # 6. Tänane päev: kogused (timeType 2) ja 5-min kaadrid (timeType 1)
+          # 6. 15-min kaadrid (history timeType 1, tänane päev). Eilsed kaadrid tulevad eelmisest failist (need on
+          # seal öise esimese käivituse ajaks olemas), et lehed saaksid näidata ka eilset päeva ja pärast keskööd
+          # poleks fail tühi. Vanad ja uued kaadrid ühendatakse dateTime'i järgi: uus väärtus asendab sama perioodi,
+          # puuduvad perioodid jäävad alles (lühem või poolik vastus ei kustuta päeva varasemaid kaadreid).
           now = datetime.now(TZ)
           today = now.strftime("%Y-%m-%d")
-          day_start = int(now.replace(hour=0, minute=0, second=0, microsecond=0).timestamp())
-          old_day = old_data.get("day") if isinstance(old_data.get("day"), dict) else {}
-
-          day = {"date": today}
-          hist_day = call("/station/v1.0/history", {"stationId": sid, "startTime": today, "endTime": today, "timeType": 2}, token)
-          items = [i for i in ((hist_day or {}).get("stationDataItems") or []) if isinstance(i, dict)]
-          if items:
-              for key in DAY_FIELDS:
-                  v = num(items[-1].get(key), 0, 1e6)
-                  if v is not None:
-                      day[key] = round(v, 2)
-          elif old_day.get("date") == today:
-              day = old_day  # päring ebaõnnestus: hoia sama päeva varasemad väärtused
+          today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+          day_start = int(today_start.timestamp())
+          keep_from = int((today_start - timedelta(days=1)).timestamp())  # eile 00:00 Tallinna aja järgi (ka DST-päeval)
 
           hist_frames = call("/station/v1.0/history", {"stationId": sid, "startTime": today, "endTime": today, "timeType": 1}, token)
-          frames = bucket_frames((hist_frames or {}).get("stationDataItems"), day_start)
-          if not frames:
-              frames = [f for f in (old_data.get("frames") or []) if isinstance(f, dict) and (unix_seconds(f.get("dateTime")) or 0) >= day_start]
+          new_frames = bucket_frames((hist_frames or {}).get("stationDataItems"), day_start)
+          old_frames = {}
+          for f in old_data.get("frames") or []:
+              ts = unix_seconds(f.get("dateTime")) if isinstance(f, dict) else None
+              if ts is not None and ts >= keep_from:
+                  old_frames[ts - ts % FRAME_S] = dict(f, dateTime=ts - ts % FRAME_S)
+          old_today = [ts for ts in old_frames if ts >= day_start]
+          new_ts = {f["dateTime"] for f in new_frames}
+          lost = [ts for ts in old_today if ts not in new_ts]
+          if hist_frames is None and old_today:
+              note("Solarmani kaadripäring ebaõnnestus; tänased 15-min kaadrid on eelmisest failist")
+          elif lost:
+              note(f"Solarmani vastuses puudus {len(lost)} tänast 15-min kaadrit, mis olid eelmises failis; need säilitati")
+          merged = dict(old_frames)
+          merged.update({f["dateTime"]: f for f in new_frames})
+          frames = [merged[ts] for ts in sorted(merged)]
 
-          data_out = {"realTime": real_time, "day": day, "frames": frames}
+          # Müügi märgikokkulepe on kontrollimata (müüki pole seni esinenud): esimesel müügipäeval peab arendaja
+          # kontrollima, kas gridPower/wirePower näitavad müüki ja kas lehtede tuletus (ost ≈ 0 ja ülejääk) klapib.
+          grid_frames = [f for f in new_frames if abs(f.get("gridPower") or 0) >= 1 or
+                         ("wirePower" in f and "purchasePower" in f and abs(f["wirePower"] - f["purchasePower"]) >= 1)]
+          if grid_frames or abs(real_time.get("gridPower") or 0) >= 1:
+              warn(f"Solarman: gridPower ≠ 0 või wirePower ≠ purchasePower ({len(grid_frames)} kaadris, realTime gridPower "
+                   f"{real_time.get('gridPower')} W) – võimalik müük võrku; kontrolli märgikokkulepet (README „Piirangud“)")
+
+          data_out = {"realTime": real_time, "frames": frames, "frameSeconds": FRAME_S}
           if last_update:
               data_out["lastUpdateTime"] = last_update
           if capacity:
               data_out["installedCapacityKw"] = round(capacity, 2)
+          data_out["meta"] = {
+              "framesUntil": frames[-1]["dateTime"] + FRAME_S if frames else None,  # viimase kaadri lõpp (Unix s)
+              "warnings": HOIATUSED,
+          }
 
           if old_data == data_out:
               print("Päikeseandmed ei muutunud.")
@@ -256,7 +287,7 @@ jobs:
               json.dump(out, f, separators=(",", ":"), allow_nan=False)
           os.replace(tmp, OUT)  # aatomiline asendus
           stamp = datetime.fromtimestamp(last_update, TZ).strftime("%d.%m %H:%M") if last_update else "teadmata"
-          print(f"Korras: {len(frames)} 15-min perioodi, viimane mõõtmine {stamp}")
+          print(f"Korras: {len(frames)} 15-min kaadrit (tänaseid {sum(1 for f in frames if f['dateTime'] >= day_start)}), viimane mõõtmine {stamp}")
           PY
 
       - name: Salvesta muudatus
