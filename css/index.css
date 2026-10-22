@@ -794,7 +794,7 @@ body {
 /* Päikesekõver graafikul */
 .solar-area {
   fill: var(--solar-gold);
-  opacity: 0.16;
+  opacity: 0.08;
   pointer-events: none;
 }
 .solar-line {
@@ -816,8 +816,8 @@ body {
   pointer-events: none;
 }
 .tooltip__solar { font-weight: 700; }
-/* Telje ühik graafiku ülanurgas (s/kWh, kWh) */
-.axis-unit { font-size: 11px; font-weight: 600; fill: var(--muted); }
+/* Telje ühik graafiku ülanurgas (s/kWh, kWh); sama suurus mis telgede numbrid */
+.axis-unit { font-size: 12px; font-weight: 600; fill: var(--muted); }
 .solar-dot {
   fill: var(--solar-gold);
   stroke: var(--surface);
@@ -1006,7 +1006,8 @@ body {
 }
 
 .bar { transition: opacity 0.1s ease; }
-.bar--past { opacity: 0.38; }
+/* Möödunud perioodid heledamad, kuid kategooriavärv jääb eristatavaks (legendis „heledam = möödunud“) */
+.bar--past { opacity: 0.58; }
 .bar--active { stroke: var(--text); stroke-width: 2; opacity: 1 !important; }
 .bar-current { animation: pulse 2.4s ease-in-out infinite; }
 @keyframes pulse {
@@ -1042,9 +1043,10 @@ body {
   border-top: 1px solid rgba(128, 128, 128, 0.35);
   font-weight: 600;
 }
+/* kWh-alad on tulpade all (index.html buildPriceChartSvg), seega hõredad */
 .consumption-area {
   fill: var(--bar-primary);
-  opacity: 0.14;
+  opacity: 0.08;
   pointer-events: none;
 }
 .consumption-line {
@@ -1064,16 +1066,48 @@ body {
 
 .legend {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--s1) var(--s3);
+  flex-direction: column;
+  gap: var(--s1);
   margin: var(--s2) 0 0;
   font-size: 13px;
   color: var(--muted);
+}
+/* Rühmad: „Hind, s/kWh“ (vasak telg) ja „Energia, kWh“ (parem telg) */
+.legend__group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s1) var(--s3);
+}
+.legend__title {
+  font-weight: 700;
+  color: var(--text);
 }
 .legend__item {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
+}
+/* Telefonis kaks veergu: 4 hinnaklassi = 2 rida, hinnarühma pealkiri ja päeva keskmine samal real */
+@media (max-width: 767px) {
+  .legend__group {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--s1) var(--s3);
+  }
+  .legend__title,
+  .legend__item--wide {
+    grid-column: 1 / -1;
+  }
+  .legend__group--price .legend__title {
+    grid-column: auto;
+    order: -2;
+  }
+  .legend__item--avg { order: -1; }
+  /* Energia kirjed on pikemad: voolavad reas (kitsal ekraanil kaks rida) ega murdu poolikult */
+  .legend__group--energy { display: flex; }
+  .legend__group--energy .legend__title { flex-basis: 100%; }
 }
 .legend__swatch {
   flex: none;
@@ -1099,6 +1133,10 @@ body {
 .legend__swatch--current {
   background: none;
   border: 2px solid var(--text);
+}
+.legend__swatch--past {
+  background: var(--muted);
+  opacity: 0.58;
 }
 .legend__swatch--best {
   background: var(--cat-roheline-bg);
