@@ -147,7 +147,7 @@ Energialehe kokkuvõtte perioodivaliku (eile, 7 päeva, kuu) andmed. Faili kirju
  "data":{
    "days":[{"paev":"2026-10-21","pvKwh":46.11,"pvEur":5.351,"loadKwh":235.08,"loadEur":36.455,"importKwh":148.18,
      "importEur":18.919,"exportKwh":0.0,"exportEur":0.0,"chargeKwh":17.43,"chargeEur":1.322,"dischargeKwh":59.59,
-     "dischargeEur":13.722,"socStart":70.0,"socEnd":28.0,"kaadrid":96,"complete":true,"src":"paike","v":1,
+     "dischargeEur":13.722,"socStart":70.0,"socEnd":28.0,"loadH":[8.02,7.08,"… 24 väärtust …",12.67],"kaadrid":96,"complete":true,"src":"paike","v":1,
      "cfg":"aeacd889b482","updatedAt":"2026-10-22T00:31:00Z"}],
    "meta":{"from":"2026-06-01","pending":0,"sellFee":1.05,"warnings":[]}
  }}
@@ -164,6 +164,9 @@ Energialehe kokkuvõtte perioodivaliku (eile, 7 päeva, kuu) andmed. Faili kirju
   `index.html` `CONFIG.paike.kasutuselAlates` kuust laaditakse Solarmani history-päringuga järk-järgult
   (10 päeva käivituse kohta, uuemad enne; vajab samu `SOLARMAN_*` Secrets'eid mis `uuenda-paike.yml`).
   `meta.pending` = veel laadimata päevi; päev, mille kohta Solarman mõõtmisi ei andnud, on `"noData": true`.
+- `loadH` = maja tarbimise tunniprofiil (24 Tallinna kellatundi, kWh tunnis = keskmine kW; alla poole tunni
+  mõõtmisi → `null`, kellakeeramise päeval korduv tund on kahe tunni keskmine). Väli on viimase 14 päeva kirjetel
+  (vanemad kirjed ilma selleta arvutatakse üks kord uuesti) ja sellest arvutab energialeht tarbimise prognoosi.
 - `complete: false` = kaadrid katavad alla 97 % päevast (kogused on mõõdetud osa summa; leht märgib selle).
   `src` = `"paike"` või `"solarman"`; poolik `paike`-kirje laaditakse hiljem üks kord Solarmanist uuesti.
 - `v` = arvutusreeglite versioon (`PAEVAD_VERSION`), `cfg` = sõrmejälg (tasude sõrmejälg + müügitasu). Kui need
@@ -376,6 +379,11 @@ Elering API      → GitHub Actions (uuenda-hinnad.yml) → hinnad.json ┴→ G
   - **Alumine paneel** (lüliti ainult „Täna“): *Energiavood* – päike, maja, ost võrgust (katkendjoon), aku võimsus
     (+ laeb / − tühjeneb) ja **aku laetus** (punktiir, parem telg 0–100 %); *Võrguga vahetus* – ost allapoole
     ja müük ülespoole kWh-des perioodi kohta (mõõdetud osa; tooltipis ka ≈ €).
+  - **Maja tarbimise prognoos** (katkendjoon maja tooniga, ainult *Energiavood* vaates): viimase 7 täieliku päeva
+    (`paevad.json` `loadH`) sama kellatunni keskmine, kui päevi on vähemalt 3. „Täna“ praegusest hetkest päeva lõpuni,
+    „Homme“ terve päev (alumine paneel on siis ainult prognoos) ja plaat „Tarbimise prognoos ≈ … kWh, ≈ … € võrgust ostes“.
+    Graafiku all on selgitus (päevad, kogus, maksumus lõpphinnaga, täna lisaks mõõdetud + prognoos). Nädalapäevi, ilma,
+    päikese ega aku prognoosi ei arvestata; prognoos on märgitud „prognoos“, mitte „(inverter)“.
   - **Päeva kogusummad** (avatav plokk graafiku all): päike, maja, ost, müük, aku laetud ja tühjendatud – kWh,
     ≈ € ja keskmine s/kWh.
 - **Kokkuvõtte periood** (lüliti kaardi ülaosas, nähtav siis, kui `paevad.json` on olemas): *Täna* (`paike.json`,
@@ -438,6 +446,6 @@ ootab 15 s.
 
 ## Versioon ja muudatuste ajalugu
 
-- Praegune versioon: **v2.5.0** (`APP_VERSION` failis `index.html`), energialehel **v1.4.0**
+- Praegune versioon: **v2.5.0** (`APP_VERSION` failis `index.html`), energialehel **v1.5.0**
   (`APP_VERSION` failis `energy-dashboard.html`).
 - Üksikasjalik ülevaade UI/UX muudatustest, komponentide klassidest ja arhitektuurireeglitest (sh juhised Claude AI-le) asub failis [CHANGELOG.md](CHANGELOG.md).
