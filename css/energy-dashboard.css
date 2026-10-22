@@ -677,13 +677,15 @@
 }
 .result__rows > div {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: var(--s2);
+  column-gap: var(--s2);
   border-top: 1px solid var(--border);
   padding-top: 4px;
 }
 .result__rows dt { color: var(--muted); white-space: nowrap; }
-.result__rows dd { margin: 0 0 0 auto; display: flex; gap: var(--s2); white-space: nowrap; }
+.result__rows dd { margin: 0 0 0 auto; display: flex; flex-wrap: wrap; justify-content: flex-end; column-gap: var(--s2); min-width: 0; }
+.result__rows dd > * { white-space: nowrap; }
 .result__amount { color: var(--muted); }
 
 .energy-price {
@@ -721,6 +723,27 @@
   border-color: transparent;
 }
 .energy-price .table-note { margin: var(--s2) 0 0; }
+
+/* ---------- Kokkuvõtte periood ja päevade graafik ---------- */
+.results-period { margin: 0 0 var(--s3); }
+.results-period label[hidden] { display: none; }
+.days-panel {
+  margin: var(--s3) 0 0;
+  padding-top: var(--s3);
+  border-top: 1px solid var(--border);
+}
+.days-inspector {
+  margin: 0 0 var(--s2);
+  min-height: 40px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+}
+.day-bar { pointer-events: none; }
+.day-bar--partial { opacity: 0.55; }
+.day-highlight { fill: color-mix(in srgb, var(--text) 8%, transparent); pointer-events: none; }
+.day-missing { font-size: 12px; fill: var(--muted); }
+.legend__swatch--outline { background: none; border: 1.5px solid var(--swatch); }
 /* Kerimisvihje kitsal ekraanil (tabel on laiem kui kaart) */
 .table-view__hint { display: none; color: var(--muted); font-size: 13px; font-weight: 600; }
 @media (max-width: 599px) {
