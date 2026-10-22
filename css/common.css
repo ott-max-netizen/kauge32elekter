@@ -1,247 +1,237 @@
 /* ==========================================================================
-   Kauge 32 — energialehe (energy-dashboard.html) ühine kujundus
-   Kõik värvid, raadiused ja vahed on defineeritud custom property'tena.
-   Ühised tokenid (pinnad, tekst, hinnakategooriad, --solar/--home/--grid, --solar-line, --avg-line) on
-   samade väärtustega failis css/index.css (elektriinfo leht): värvi muutmisel muuda mõlemas failis.
-   Lehepõhised reeglid on failis css/energy-dashboard.css. Tume komplekt kehtib ainult ekraanil
-   (@media screen): prinditakse alati heledate tokenitega.
-   NB! Pärast CSS-i muutmist suurenda mõlemas HTML-failis linkide ?v= väärtust,
-   et brauserid ei kasutaks vahemälust vana faili.
+   Kauge 32 — ühine disainisüsteem (index.html ja energy-dashboard.html)
+   Bento-ruudustik, klaasikaardid, komponendid ja graafikute raam. Disainispetsifikatsioon p 2–8 ja p 10.
+
+   - Tokenid on AINULT selles failis (README reegel 11). Lehefailid (css/index.css, css/energy-dashboard.css)
+     sisaldavad ainult oma paigutust (grid-template-areas) ja lehepõhiseid komponente.
+   - Tokenid, mida Chart.js loeb (chartTokens), on puhtad #rrggbb väärtused; aliased lahendab getComputedStyle.
+   - Tume komplekt kehtib ainult ekraanil (@media screen): prinditakse alati heledate tokenitega.
+     Mõlemad lehed seavad <head>-is data-theme="light|dark"; meediapäringu plokk on JS-ita varuvariant.
+   - Klaas on ainult pealmise taseme .card-il. Kaardi sees on ainult läbipaistmatud pinnad
+     (plaat --surface-2, graafikukaev ja tooltip --plot, tabelid --surface), seega tekst on alati arvutatud pinnal.
+   - Klassinimed on leping lehtede render-kihiga (spetsifikatsioon p 5).
+   NB! Pärast muutmist suurenda mõlemas HTML-failis linkide ?v= väärtust.
    ========================================================================== */
+
+/* ---------- 1. Tokenid: hele komplekt (vaikimisi, kehtib ka printimisel) ---------- */
 :root {
-  color-scheme: light dark;
-
-  --bg: #f1f4f7;
-  --surface: #ffffff;
-  --surface-2: #f5f7fa;
-  --text: #1b2433;
-  --muted: #4a5566;
-  --border: #d3dae3;
-  --focus: #1f5fbf;
-
-  --radius: 16px;
-  --radius-sm: 10px;
-
-  --s1: 4px;
-  --s2: 8px;
-  --s3: 12px;
-  --s4: 16px;
-  --s5: 24px;
-  --s6: 32px;
-
-  --shadow: 0 2px 8px rgba(27, 36, 51, 0.05), 0 1px 2px rgba(27, 36, 51, 0.04);
+  color-scheme: light;
   --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 
-  /* Hinnakategooriad: tulba/aktsendi värv, sildi taust, sildi tekst. Heledas langeb heledus hinnaga
-     (L* 57/56/45/36), tulbavärvid on heledatel pindadel vähemalt 3:1 (WCAG 1.4.11); kollane ja oranž
-     eristuvad ka deuteranoopias heleduse järgi. Roheline = „Väga odav“, olek „korras“ ja soodne muutus
-     (võrdlusplaatide vahe, planeerija sääst), energialehel ka aku; mitte valik ega aktsent (see on --focus). */
-  --cat-roheline: #1f9d55;
-  --cat-roheline-bg: #dbf3e4;
-  --cat-roheline-fg: #0f5a31;
-  --cat-kollane: #b07f00;
-  --cat-kollane-bg: #fbf0c4;
-  --cat-kollane-fg: #614700;
-  --cat-oranz: #b54a10;
-  --cat-oranz-bg: #fde3cf;
-  --cat-oranz-fg: #7a3a08;
-  --cat-punane: #a51a1a;
-  --cat-punane-bg: #fadcdc;
-  --cat-punane-fg: #861c1c;
+  /* Lehe taust: baas + kolm madala kontrastiga laiku (laik vs baas ≤ 1,19:1) */
+  --bg: #eef2f6;
+  --mesh-a: #f6e5c6;      /* soe (päike), üleval vasakul */
+  --mesh-b: #d2e0f2;      /* külm (maja), üleval paremal – klaasi halvim komposiit */
+  --mesh-c: #d8ebe1;      /* roheline (aku), all keskel */
+  --bg-mesh:
+    radial-gradient(60% 45% at 8% 0%, var(--mesh-a) 0%, transparent 70%),
+    radial-gradient(50% 45% at 100% 18%, var(--mesh-b) 0%, transparent 70%),
+    radial-gradient(60% 45% at 50% 100%, var(--mesh-c) 0%, transparent 70%);
 
-  --avg-line: #1b2433;
+  /* Klaas (ainult .card; klaasi sees klaasi ei ole) */
+  --glass-bg: rgba(255, 255, 255, 0.76);
+  --glass-blur: 16px;
+  --glass-saturate: 1.2;
+  --glass-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  --glass-edge: rgba(27, 36, 51, 0.10);
+  --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+  --glass-shadow: 0 1px 2px rgba(27, 36, 51, 0.05), 0 8px 24px rgba(27, 36, 51, 0.07);
+  --shadow: var(--glass-shadow);                 /* vana nimi */
 
-  /* Osapooled mõlemal lehel: päike kuldne, maja sinine, võrk terashall (neutraalne, eristub majast ja
-     akust ka deuteranoopias heleduse järgi; graafikul lisaks katkendjoon), aku roheline */
+  /* Läbipaistmatud (efektiivsed) pinnad */
+  --surface: #fbfcfd;     /* klaasi nominaalne komposiit: halod, kleepuv tabeliveerg, aku glüüfi veerandijooned, varuvariant */
+  --surface-2: #f0f3f7;   /* plaat (.stat), tabelipea, segmentlüliti, aku glüüfi keha, voo jaotur */
+  --plot: #ffffff;        /* graafikukaev (.chart-well), tooltip, voo sõlmede täide */
+  --hairline: #e3e8ee;    /* ruudustik 1 px (pidev) */
+  --axis: #c3cbd5;        /* telg, lävijooned 5/10/20, voo rada, režiimiriba kontuur */
+  --border: #dfe5ec;      /* plaatide, kaevu, tabelite ja pillide 1 px serv */
+
+  /* Tekst ja aktsent (tekst ei kanna kunagi seeria tooni) */
+  --text: #1b2433;
+  --muted: #4a5566;
+  --focus: #1f5fbf;       /* fookus, valik, odavaim aken, „uus“ */
+  --focus-bg: #e9eff9;    /* --focus 10 % plotil: odavaima akna riba */
+
+  /* Hinnaklassid – semantiline soojusskaala (heledus langeb, kontrast kasvab hinnaga) */
+  --cat-roheline: #249c74; --cat-roheline-bg: #dbf3e4; --cat-roheline-fg: #0f5a31;
+  --cat-kollane:  #a57c13; --cat-kollane-bg:  #fbf0c4; --cat-kollane-fg:  #614700;
+  --cat-oranz:    #b53700; --cat-oranz-bg:    #fde3cf; --cat-oranz-fg:    #7a3a08;
+  --cat-punane:   #791824; --cat-punane-bg:   #fadcdc; --cat-punane-fg:   #861c1c;
+
+  /* Olekud: samad sildipaarid, alati ikoon + sõna */
+  --ok-bg: var(--cat-roheline-bg);  --ok-fg: var(--cat-roheline-fg);
+  --warn-bg: var(--cat-kollane-bg); --warn-fg: var(--cat-kollane-fg);
+  --bad-bg: var(--cat-punane-bg);   --bad-fg: var(--cat-punane-fg);
+
+  /* Osapooled – identiteet, fikseeritud järjekord päike → maja → võrk → müük → aku */
   --solar: #c27a12;
   --home: #2c5aa0;
-  --battery: #3f8f5e;
-  --grid: #4f6a8a;
-  /* Mõõdetud päikesetoodangu joon graafikutel (sama mis elektriinfo lehel) */
-  --solar-line: #92400e;
+  --grid: #b16ec0;        /* võrk = ost võrgust; ka maja üldelektri tulbad */
+  --export: #764be5;      /* müük võrku */
+  --battery: #25784a;
+  --solar-line: var(--solar);   /* vana nimi: üks toon ühele tööle (L-088 lahendab eraldi paneel) */
+  --avg-line: var(--muted);     /* päeva keskmine (katkend), eristub ostuhinnast (--text) */
+  --mode-idle: var(--muted);    /* režiimiriba „aku ootel“: õhuke joon */
+
+  /* Ordinaalne ramp: lõpphinna osakaalud tabeli järjekorras (börs → KM) */
+  --share-1: #1f3a5c; --share-2: #2f527c; --share-3: #4d6d93; --share-4: #7590ae; --share-5: #9cafc5;
 
   --skeleton: #e6ebf1;
   --skeleton-hi: #f5f7fa;
+
+  /* Mõõdud */
+  --radius-card: 20px; --radius-tile: 12px; --radius-plot: 12px; --radius-pill: 999px;
+  --radius: var(--radius-card); --radius-sm: var(--radius-tile);   /* vanad nimed */
+  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px; --s7: 48px;
+  --card-pad: 16px;
+  --bento-gap: 12px;
+  --tap: 40px;
+
+  /* Tüpograafia */
+  --fs-hero: 52px; --fs-big: 32px; --fs-result: 24px; --fs-stat: 20px; --fs-title: 17px;
+  --fs-body: 16px; --fs-secondary: 15px; --fs-small: 14px; --fs-micro: 13px; --fs-chart: 12px;
 }
+@media (min-width: 640px)  { :root { --card-pad: 20px; --bento-gap: 16px; --fs-result: 26px; } }
+@media (min-width: 768px)  { :root { --fs-hero: 60px; --fs-big: 40px; --fs-stat: 22px; } }
+@media (min-width: 1024px) { :root { --card-pad: 24px; --bento-gap: 20px; --fs-title: 18px; } }
+@media (pointer: coarse)   { :root { --tap: 44px; } }
+@media (max-width: 639px)  { :root { --glass-blur: 12px; } }
 
+/* ---------- 2. Tokenid: tume komplekt ----------
+   Kaks plokki, SAMA deklaratsioonide loend (TUME_LOEND): süsteemi eelistus (JS-ita varuvariant, kui data-theme
+   puudub või on "auto") ja lehe teemanupp (data-theme="dark"). Ainult @media screen: print jääb heledaks. */
 @media screen and (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0b1119;
-    --surface: #131c27;
-    --surface-2: #1b2736;
-    --text: #edf1f6;
-    --muted: #b7c1ce;
-    --border: #243245;
-    --focus: #8ab4f8;
-    --shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
-
-    /* Tumedas kasvab kontrast hinnaga: kallis on kontrastseim (L* 57/60/70/69), odav ei helenda */
-    --cat-roheline: #2d9b5a;
-    --cat-roheline-bg: #16402a;
-    --cat-roheline-fg: #bff2d2;
-    --cat-kollane: #b08c18;
-    --cat-kollane-bg: #4a3b08;
-    --cat-kollane-fg: #fbe7a3;
-    --cat-oranz: #f09549;
-    --cat-oranz-bg: #4f2a0e;
-    --cat-oranz-fg: #ffd2b0;
-    --cat-punane: #ff8585;
-    --cat-punane-bg: #4e1a1a;
-    --cat-punane-fg: #ffc7c7;
-
-    --avg-line: #edf1f6;
-
-    --solar: #e5a91f;
-    --home: #5a8ad0;
-    --battery: #38a56a;
-    --grid: #8fa3bd;
-    --solar-line: #fde68a;
-
-    --skeleton: #1b2736;
-    --skeleton-hi: #263548;
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #0a1018;
+    --mesh-a: #13273f;      /* külm, üleval vasakul */
+    --mesh-b: #2b2115;      /* soe, üleval paremal – klaasi halvim (heledaim) komposiit */
+    --mesh-c: #0f2a21;      /* roheline, all keskel */
+    --glass-bg: rgba(21, 30, 43, 0.74);
+    --glass-saturate: 1.15;
+    --glass-edge: rgba(255, 255, 255, 0.10);
+    --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    --glass-shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 12px 32px rgba(0, 0, 0, 0.40);
+    --surface: #121a26; --surface-2: #1b2534; --plot: #0e1520;
+    --hairline: #222e3e; --axis: #3a4a5f; --border: #2a3443;
+    --text: #edf1f6; --muted: #b7c1ce; --focus: #8ab4f8; --focus-bg: #1d283a;
+    --cat-roheline: #008262; --cat-roheline-bg: #16402a; --cat-roheline-fg: #bff2d2;
+    --cat-kollane:  #9c6d1b; --cat-kollane-bg:  #4a3b08; --cat-kollane-fg:  #fbe7a3;
+    --cat-oranz:    #ef8010; --cat-oranz-bg:    #4f2a0e; --cat-oranz-fg:    #ffd2b0;
+    --cat-punane:   #ffa6ac; --cat-punane-bg:   #4e1a1a; --cat-punane-fg:   #ffc7c7;
+    --solar: #c38323; --home: #4c8edf; --grid: #b7569a; --export: #834fe9; --battery: #38a56a;
+    --share-1: #c6d6e8; --share-2: #9fb6d0; --share-3: #7a97b8; --share-4: #5b7a9c; --share-5: #3f5c7c;
+    --skeleton: #1b2736; --skeleton-hi: #263548;
   }
 }
-/* Prinditakse heledana ka tumeda süsteemiteema korral (ülal olev tume komplekt on ainult ekraanil) */
-@media print {
-  :root { color-scheme: light; }
+@media screen {
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #0a1018;
+    --mesh-a: #13273f;      /* külm, üleval vasakul */
+    --mesh-b: #2b2115;      /* soe, üleval paremal – klaasi halvim (heledaim) komposiit */
+    --mesh-c: #0f2a21;      /* roheline, all keskel */
+    --glass-bg: rgba(21, 30, 43, 0.74);
+    --glass-saturate: 1.15;
+    --glass-edge: rgba(255, 255, 255, 0.10);
+    --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    --glass-shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 12px 32px rgba(0, 0, 0, 0.40);
+    --surface: #121a26; --surface-2: #1b2534; --plot: #0e1520;
+    --hairline: #222e3e; --axis: #3a4a5f; --border: #2a3443;
+    --text: #edf1f6; --muted: #b7c1ce; --focus: #8ab4f8; --focus-bg: #1d283a;
+    --cat-roheline: #008262; --cat-roheline-bg: #16402a; --cat-roheline-fg: #bff2d2;
+    --cat-kollane:  #9c6d1b; --cat-kollane-bg:  #4a3b08; --cat-kollane-fg:  #fbe7a3;
+    --cat-oranz:    #ef8010; --cat-oranz-bg:    #4f2a0e; --cat-oranz-fg:    #ffd2b0;
+    --cat-punane:   #ffa6ac; --cat-punane-bg:   #4e1a1a; --cat-punane-fg:   #ffc7c7;
+    --solar: #c38323; --home: #4c8edf; --grid: #b7569a; --export: #834fe9; --battery: #38a56a;
+    --share-1: #c6d6e8; --share-2: #9fb6d0; --share-3: #7a97b8; --share-4: #5b7a9c; --share-5: #3f5c7c;
+    --skeleton: #1b2736; --skeleton-hi: #263548;
+  }
 }
 
+/* ---------- 3. Alus: lehe taust (mesh) ja tüpograafia ---------- */
 *, *::before, *::after { box-sizing: border-box; }
 
 [hidden] { display: none !important; }
 
-html { -webkit-text-size-adjust: 100%; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 
 body {
   margin: 0;
   font-family: var(--font);
-  font-size: 16px;
+  font-size: var(--fs-body);
   line-height: 1.45;
   color: var(--text);
   background: var(--bg);
+  font-variant-numeric: proportional-nums;   /* tabular-nums ainult tabelites, telgedel, tulemusridadel, järgmistes tundides */
   overflow-x: hidden;
-  font-variant-numeric: tabular-nums;
+  overflow-wrap: break-word;
+}
+/* Üks liikumatu taustakiht (mitte background-attachment: fixed): klaas hägustab ainult seda */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: var(--bg-mesh), var(--bg);
 }
 
+a { color: var(--focus); text-underline-offset: 2px; }
+
+/* Kaardi sees annab rütmi kaardi gap; plokkelementide brauserivaikimisi välisvahed nullitakse (spetsiifilisus 0) */
+:where(.card) :where(h2, h3, h4, p, ul, ol, dl, dd, figure, blockquote, fieldset) { margin: 0; }
+
+/* ---------- 4. Bento-alus (p 4.1) ---------- */
 .app {
-  max-width: 1120px;
+  max-width: 1200px;
   margin: 0 auto;
-  padding: max(var(--s3), env(safe-area-inset-top)) max(var(--s3), env(safe-area-inset-right)) max(var(--s4), env(safe-area-inset-bottom)) max(var(--s3), env(safe-area-inset-left));
+  padding: max(12px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+           max(24px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
 }
+@media (min-width: 1024px) { .app { padding-inline: 24px; } }
 
-/* ---------- Päis, lehtede navigatsioon, olek, teated ---------- */
-.app-header {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--s2) var(--s4);
-  margin: 0 0 var(--s3);
-}
-
-.app-title {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-}
-
-/* Päise parempoolne osa (olek, nupud) */
-.app-header__end { margin-left: auto; }
-
-.site-nav {
-  display: inline-flex;
-  padding: 3px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--surface-2);
-}
-.site-nav__link {
-  display: inline-flex;
-  align-items: center;
-  min-height: 40px;
-  padding: 0 14px;
-  border-radius: 999px;
-  color: var(--text);
-  font-size: 15px;
-  font-weight: 600;
-  text-decoration: none;
-  white-space: nowrap;
-  transition: background-color 0.12s ease, color 0.12s ease;
-}
-.site-nav__link[aria-current="page"] {
-  background: var(--text);
-  color: var(--surface);
-}
-
-.status {
-  margin: 0;
-  color: var(--muted);
-  font-size: 14px;
-  font-weight: 500;
-}
-.status:empty { display: none; }
-
-.banner {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--s2) var(--s3);
-  padding: var(--s3) var(--s4);
-  border-radius: var(--radius-sm);
-  margin: 0 0 var(--s3);
-  background: var(--cat-punane-bg);
-  color: var(--cat-punane-fg);
-  border: 1px solid var(--cat-punane);
-}
-.banner--warn {
-  background: var(--cat-kollane-bg);
-  color: var(--cat-kollane-fg);
-  border-color: var(--cat-kollane);
-}
-.banner__text {
-  margin: 0;
-  flex: 1 1 200px;
-  font-weight: 600;
-}
-.banner__text span { display: block; }
-
-.btn {
-  font: inherit;
-  font-weight: 600;
-  min-height: 44px;
-  padding: 0 20px;
-  border-radius: 999px;
-  border: 1px solid var(--text);
-  background: var(--text);
-  color: var(--surface);
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-}
-.btn[disabled] { cursor: not-allowed; opacity: 0.6; }
-.btn.is-loading { cursor: progress; opacity: 0.8; }
-/* Ooteaja loendur nupul (aria-hidden: ekraanilugeja ei loe seda iga sekund ette) */
-.btn__count {
-  font-weight: 500;
-  font-size: 0.9em;
-}
-
-/* ---------- Kaardid ---------- */
 .layout {
   display: grid;
-  gap: var(--s3);
-  grid-template-columns: minmax(0, 1fr);
+  gap: var(--bento-gap);
+  align-items: stretch;
+  grid-template-columns: minmax(0, 1fr);                                  /* < 640 px: üks veerg, DOM-järjekord */
 }
+@media (min-width: 640px)  { .layout { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+@media (min-width: 1024px) { .layout { grid-template-columns: repeat(12, minmax(0, 1fr)); } }
 
+/* Vaadete filter (elektriinfo): applyViewFilter seab .layout[data-view]. Peidetud kaartidest ei jää auke.
+   #layout-variant võidab lehefailide #section-… { grid-area } reeglid (ID-spetsiifilisus). */
+.layout[data-view]:not([data-view="all"]) { grid-template-areas: none; }
+.layout[data-view]:not([data-view="all"]) > .card,
+#layout[data-view]:not([data-view="all"]) > .card { grid-area: auto; grid-column: 1 / -1; }
+
+/* ---------- 5. Klaaskaart (p 3.3) ja kaardi anatoomia (p 5) ---------- */
 .card {
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--radius-card);
+  box-shadow: var(--glass-highlight), var(--glass-shadow);
+  padding: var(--card-pad);
   min-width: 0;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: var(--s4);
-  box-shadow: var(--shadow);
+  contain: paint;
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);                     /* sisu ei veni; vaba ruum jääb kaardi alla */
+  scroll-margin-top: var(--s3);
+}
+.card > .card__foot { margin-top: auto; }   /* allikarida kaardi põhjas */
+
+/* Varuvariandid: läbipaistmatu kaart (kontrastid on arvutatud nii, et need ei halvene) */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .card { background: var(--surface); }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .card { background: var(--surface); -webkit-backdrop-filter: none; backdrop-filter: none; }
+  body::before { background: var(--bg); }
 }
 
 .card__head {
@@ -250,238 +240,597 @@ body {
   align-items: baseline;
   justify-content: space-between;
   gap: var(--s1) var(--s3);
-  margin: 0 0 var(--s3);
+  min-width: 0;
 }
-
 .card__title {
-  margin: 0 0 var(--s3);
-  font-size: 17px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-}
-.card__head .card__title { margin: 0; }
-
-.card__hint {
-  margin: 0;
-  color: var(--muted);
-  font-size: 14px;
-}
-
-.placeholder {
-  margin: 0;
-  color: var(--muted);
-}
-
-.notice {
-  margin: var(--s2) 0 0;
-  padding: var(--s2) var(--s3);
-  border-radius: var(--radius-sm);
-  background: var(--surface-2);
-  font-size: 15px;
-}
-.notice--warn {
-  background: var(--cat-kollane-bg);
-  color: var(--cat-kollane-fg);
-}
-.notice--error {
-  background: var(--cat-punane-bg);
-  color: var(--cat-punane-fg);
-}
-
-.badge-pill {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 3px 9px;
-  font-size: 12px;
-  font-weight: 600;
-  border-radius: 999px;
-  background: var(--surface-2);
+  gap: var(--s2);
+  min-width: 0;
+  margin: 0;
+  font-size: var(--fs-title);
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+.card__title > .icon { width: 18px; height: 18px; color: var(--muted); }
+.card__title-wrap { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); min-width: 0; }
+.card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s1) var(--s2);
+  margin: 0;
+  font-size: var(--fs-small);
   color: var(--muted);
-  border: 1px solid var(--border);
-  line-height: 1.2;
 }
-.badge-pill--warn {
-  background: var(--cat-kollane-bg);
-  color: var(--cat-kollane-fg);
-  border-color: var(--cat-kollane);
-}
+.card__hint { margin: 0; font-size: var(--fs-small); color: var(--muted); }
+.card__body { display: flex; flex-direction: column; gap: var(--s3); min-width: 0; }
+.card__foot { margin: 0; font-size: var(--fs-micro); line-height: 1.4; color: var(--muted); }
 
-/* ---------- Praeguse hinna kaart („Elekter praegu“ / „Elektrihind praegu“) ---------- */
-.card--hero {
-  border-top: 6px solid var(--hero-accent, var(--border));
-}
+/* Hero-kaart (üks vaate kohta): 6 px ülaserv hinnaklassi toonis, data-category jääb */
+.card--hero { border-top: 6px solid var(--hero-accent, var(--border)); }
 .card--hero[data-category="roheline"] { --hero-accent: var(--cat-roheline); --hero-bg: var(--cat-roheline-bg); --hero-fg: var(--cat-roheline-fg); }
 .card--hero[data-category="kollane"]  { --hero-accent: var(--cat-kollane);  --hero-bg: var(--cat-kollane-bg);  --hero-fg: var(--cat-kollane-fg); }
 .card--hero[data-category="oranz"]    { --hero-accent: var(--cat-oranz);    --hero-bg: var(--cat-oranz-bg);    --hero-fg: var(--cat-oranz-fg); }
 .card--hero[data-category="punane"]   { --hero-accent: var(--cat-punane);   --hero-bg: var(--cat-punane-bg);   --hero-fg: var(--cat-punane-fg); }
 
-.hero-top {
+/* ---------- 6. Päis, navigatsioon, olek ja jalus (kaartidest väljas, ilma klaasita) ---------- */
+.app-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2) var(--s4);
+  margin: 0 0 var(--s3);
+}
+.brand { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.app-title { margin: 0; font-size: 20px; font-weight: 800; line-height: 1.2; letter-spacing: -0.02em; }
+@media (min-width: 1024px) { .app-title { font-size: 22px; } }
+.app-subtitle { font-size: var(--fs-micro); font-weight: 600; color: var(--muted); }
+.header-actions,
+.app-header__end { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); margin-left: auto; }
+
+.site-nav {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+}
+.site-nav__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--tap);
+  padding: 0 14px;
+  border-radius: var(--radius-pill);
+  color: var(--text);
+  font-size: var(--fs-secondary);
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+.site-nav__link[aria-current="page"] { background: var(--text); color: var(--plot); font-weight: 700; }
+
+.status { margin: 0; font-size: var(--fs-small); font-weight: 500; color: var(--muted); }
+.status:empty { display: none; }
+.app > .status { margin: 0 0 var(--s3); }
+
+/* Olekupill päises: ikoon (i-check-circle / i-alert-triangle / i-x-circle / i-refresh) + tekst suurtähtedeta */
+.live-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 4px 12px 4px 9px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: var(--fs-micro);
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.live-pill .icon { width: 16px; height: 16px; color: var(--muted); }
+.live-pill[data-state="ok"]    { background: var(--ok-bg);   color: var(--ok-fg);   border-color: transparent; }
+.live-pill[data-state="warn"]  { background: var(--warn-bg); color: var(--warn-fg); border-color: transparent; }
+.live-pill[data-state="bad"],
+.live-pill[data-state="error"] { background: var(--bad-bg);  color: var(--bad-fg);  border-color: transparent; }
+.live-pill[data-state="ok"] .icon,
+.live-pill[data-state="warn"] .icon,
+.live-pill[data-state="bad"] .icon,
+.live-pill[data-state="error"] .icon { color: currentColor; }
+
+.app-footer { margin: var(--s5) 0 var(--s3); font-size: var(--fs-small); color: var(--muted); }
+.app-footer p { margin: 0 0 var(--s2); }
+.app-footer__meta {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: var(--s2);
-  margin: 0 0 var(--s3);
+  gap: 0 var(--s4);
 }
 
+/* ---------- 7. Piktogramm (p 8) ---------- */
+.icon {
+  flex: none;
+  width: 1.15em;
+  height: 1.15em;
+  fill: none;
+  stroke: currentColor;
+  vertical-align: -0.2em;
+  overflow: visible;
+}
+
+/* ---------- 8. Hero ja suured numbrid (mõlemal lehel sama hinnaplokk) ---------- */
+.hero-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s2); }
 .verdict {
   display: inline-flex;
   align-items: center;
   gap: var(--s2);
   margin: 0;
   padding: 5px 14px 5px 11px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--hero-bg, var(--surface-2));
   color: var(--hero-fg, var(--text));
   font-size: 18px;
   font-weight: 700;
+  line-height: 1.25;
 }
-.verdict::before {
+.verdict::before {                       /* olekutäpp: sõna kannab tähendust, täpp on lisavihje */
   content: "";
+  flex: none;
   width: 10px;
   height: 10px;
   border-radius: 50%;
   background: var(--hero-accent, var(--muted));
-  flex: none;
 }
-
 .hero-period {
   margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--muted);
-  background: var(--surface-2);
   padding: 4px 10px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: var(--fs-small);
+  font-weight: 600;
 }
-
-.hero-price-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--s2) var(--s4);
-}
-
-.hero-price {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--s2);
-  margin: 0;
-}
-.hero-price__value {
-  font-size: 52px;
+.hero-price-row { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: var(--s2) var(--s4); }
+.hero-price { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s2); margin: 0; }
+.hero-price__value {                     /* üks hero vaate kohta: 52 px, ≥ 768 px 60 px */
+  font-size: var(--fs-hero);
   font-weight: 800;
   line-height: 1;
   letter-spacing: -0.03em;
+  font-variant-numeric: proportional-nums;
 }
-.hero-price__unit {
-  font-size: 19px;
-  font-weight: 600;
-  color: var(--muted);
-}
-
+.hero-price__unit { font-size: 19px; font-weight: 600; color: var(--muted); }
 .hero-final-pill {
   display: inline-flex;
   flex-direction: column;
   padding: 6px 12px;
-  border-radius: var(--radius-sm);
-  background: var(--surface-2);
+  border-radius: var(--radius-tile);
   border: 1px solid var(--border);
+  background: var(--surface-2);
 }
-.hero-final-pill__label {
-  font-size: 12px;
-  color: var(--muted);
-  line-height: 1.2;
-}
-.hero-final-pill__value {
-  font-size: 18px;
-  font-weight: 700;
-  line-height: 1.25;
-}
-
-.hero-meta {
-  margin: var(--s2) 0 0;
-  color: var(--muted);
-  font-size: 14px;
-}
-
-.compare {
-  margin: var(--s2) 0 0;
-  font-size: 16px;
-  font-weight: 600;
-}
-
-.facts {
-  list-style: none;
-  margin: var(--s3) 0 0;
-  padding: 0;
-  display: grid;
-  gap: var(--s2);
-}
+.hero-final-pill__label { font-size: var(--fs-micro); line-height: 1.2; color: var(--muted); }
+.hero-final-pill__value { font-size: 18px; font-weight: 700; line-height: 1.25; }
+.hero-meta { margin: 0; font-size: var(--fs-small); color: var(--muted); }
+.compare { margin: 0; font-size: var(--fs-body); font-weight: 600; }
+.facts { display: grid; gap: var(--s2); margin: 0; padding: 0; list-style: none; }
 .facts li {
   position: relative;
   padding: 8px 10px 8px 24px;
+  border-radius: var(--radius-tile);
   background: var(--surface-2);
-  border-radius: var(--radius-sm);
-  font-size: 14px;
+  font-size: var(--fs-small);
   line-height: 1.35;
 }
 .facts li::before {
   content: "";
   position: absolute;
   left: 10px;
-  top: 13px;
+  top: 14px;
   width: 6px;
   height: 6px;
   border-radius: 50%;
   background: var(--hero-accent, var(--muted));
 }
+@container (min-width: 560px) { .facts { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
-/* ---------- Tabid ---------- */
-.tabs {
-  display: inline-flex;
-  padding: 3px;
+/* Suur number (lõpphind, päikese kW, aku %): astme võrra väiksem kui hero */
+.big-number {
+  margin: 0;
+  font-size: var(--fs-big);
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  font-variant-numeric: proportional-nums;
+}
+.big-number small,
+.big-number__unit { margin-left: 2px; font-size: 16px; font-weight: 600; letter-spacing: 0; color: var(--muted); }
+.big-number.is-stale { opacity: 0.7; }
+
+/* ---------- 9. Plaadid (stat tile) ---------- */
+.stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s2); min-width: 0; margin: 0; }
+.stats--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@container (min-width: 640px) { .stats--4 { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.stats-group { display: flex; flex-direction: column; gap: var(--s2); min-width: 0; }
+.stats-group__title { margin: 0; font-size: var(--fs-small); font-weight: 700; color: var(--text); }
+.stat {
+  min-width: 0;
+  margin: 0;
+  padding: 10px 12px;
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-tile);
   background: var(--surface-2);
 }
-.tab {
-  appearance: none;
-  border: 0;
-  background: transparent;
-  color: var(--text);
-  font: inherit;
-  font-weight: 600;
-  min-height: 40px;
-  padding: 0 16px;
-  border-radius: 999px;
-  cursor: pointer;
+.stat__label { margin: 0; font-size: var(--fs-micro); font-weight: 600; line-height: 1.3; color: var(--muted); }
+.stat__value { margin: 2px 0 0; font-size: var(--fs-stat); font-weight: 700; line-height: 1.15; color: var(--text); }
+.stat__value small { font-size: 0.7em; font-weight: 600; color: var(--muted); }
+.stat__time { margin: 2px 0 0; font-size: var(--fs-micro); line-height: 1.35; color: var(--muted); }
+/* Väärtuse toon ainult sildipaari -fg (tekst ei kanna seeria tooni) */
+.stat__value--good,
+.stat__value--cat-roheline { color: var(--cat-roheline-fg); }
+.stat__value--cat-kollane  { color: var(--cat-kollane-fg); }
+.stat__value--cat-oranz    { color: var(--cat-oranz-fg); }
+.stat__value--bad,
+.stat__value--cat-punane   { color: var(--cat-punane-fg); }
+
+/* ---------- 10. Märgid, olekupillid ja olekutäpp ---------- */
+.badge,
+.badge-pill {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  transition: background-color 0.12s ease, color 0.12s ease;
-}
-.tab[aria-selected="true"] {
-  background: var(--text);
-  color: var(--surface);
-}
-.tab__badge {
-  font-size: 12px;
+  max-width: 100%;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: var(--fs-micro);
   font-weight: 600;
-  opacity: 0.8;
+  line-height: 1.2;
 }
-.tab__dot {
-  width: 8px;
-  height: 8px;
+.badge .icon,
+.badge-pill .icon { width: 16px; height: 16px; }
+.badge--neutral { border-color: var(--border); background: var(--surface-2); color: var(--muted); }
+.badge--ok { border-color: transparent; background: var(--ok-bg); color: var(--ok-fg); }
+.badge--warn,
+.badge-pill--warn { border-color: transparent; background: var(--warn-bg); color: var(--warn-fg); }
+.badge--bad { border-color: transparent; background: var(--bad-bg); color: var(--bad-fg); }
+
+/* Olekutäpp + sõna (nt aku „Ootel“, päike „Võrgutoitel“); täpi toon --pill-dot / --dot */
+.status-dot { display: inline-block; flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--dot, var(--muted)); }
+.state-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 12px 4px 10px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: var(--fs-small);
+  font-weight: 700;
+  line-height: 1.2;
+}
+.state-pill::before { content: ""; flex: none; width: 9px; height: 9px; border-radius: 50%; background: var(--pill-dot, var(--muted)); }
+
+/* ---------- 11. Nupud ---------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s2);
+  min-height: var(--tap);
+  padding: 0 18px;
+  border: 1px solid var(--text);
+  border-radius: var(--radius-pill);
+  background: var(--text);
+  color: var(--plot);
+  font: inherit;
+  font-size: var(--fs-secondary);
+  font-weight: 600;
+  line-height: 1.2;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.12s ease, border-color 0.12s ease;
+}
+.btn--ghost { padding: 0 16px 0 14px; border-color: var(--border); background: var(--surface); color: var(--text); }
+.btn--danger { border-color: var(--cat-punane); background: var(--surface); color: var(--bad-fg); }
+.btn .icon,
+.btn__icon { flex: none; width: 18px; height: 18px; }
+.btn__icon { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.btn__count { font-size: 0.9em; font-weight: 500; font-variant-numeric: tabular-nums; }
+.btn[disabled],
+.btn[aria-disabled="true"] { cursor: not-allowed; opacity: 0.6; }
+.btn.is-loading { cursor: progress; }
+
+/* Ikoonnupp: 40 × 40 (puutel 44 × 44), ikoon 18 px, nimi aria-label-is */
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: var(--tap);
+  height: var(--tap);
+  padding: 0;
+  border: 1px solid var(--border);
   border-radius: 50%;
-  background: var(--focus);
-  display: inline-block;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
+  transition: background-color 0.12s ease, border-color 0.12s ease;
+}
+.icon-btn .icon { width: 18px; height: 18px; }
+.icon-btn[disabled] { cursor: not-allowed; opacity: 0.5; }
+.icon-btn.is-loading { cursor: progress; }
+.icon-btn.is-loading .icon,
+.btn.is-loading .icon,
+.btn.is-loading .btn__icon,
+.live-pill[data-state="loading"] .icon { animation: k32-spin 1s linear infinite; }
+@keyframes k32-spin { to { transform: rotate(360deg); } }
+
+/* Tekstilink nupu või lingina (puuteala --tap) */
+.link-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--tap);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--focus);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
 }
 
-/* ---------- Graafikud ---------- */
+/* ---------- 12. Vaatepillid, vahelehed ja segmentlüliti ---------- */
+.view-filter { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); margin: 0 0 var(--s3); }   /* murdub, ei keri */
+.view-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--tap);
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--fs-small);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+.view-pill .icon { width: 18px; height: 18px; }
+.view-pill.is-active,
+.view-pill[aria-pressed="true"] { border-color: var(--text); background: var(--text); color: var(--plot); font-weight: 700; }
+
+.tabs {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  max-width: 100%;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--tap) / 2 + 4px);   /* üks rida = pill; murdunud rida = ümar ristkülik */
+  background: var(--surface);
+}
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--tap);
+  padding: 0 16px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--fs-secondary);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+.tab[aria-selected="true"] { background: var(--text); color: var(--plot); font-weight: 700; }
+/* „uus“ (homsed hinnad saadaval): tekstimärk oma pinnal, loetav ka valitud vahelehel (5,27 / 7,03:1) */
+.tab__badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: var(--radius-pill);
+  background: var(--focus-bg);
+  color: var(--focus);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+.tab__note { font-size: var(--fs-micro); font-weight: 500; }   /* „(alates 15:00)“, „(osaline)“ */
+
+.segmented { display: flex; flex-wrap: wrap; gap: var(--s2); min-width: 0; margin: 0; padding: 0; border: 0; }
+.segmented > legend { padding: 0; margin: 0 0 var(--s1); font-size: var(--fs-micro); font-weight: 600; color: var(--muted); }
+.segmented input { position: absolute; width: 1px; height: 1px; margin: 0; opacity: 0; pointer-events: none; }
+.segmented label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: var(--tap);
+  min-width: 48px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--text);
+  font-size: var(--fs-secondary);
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: center;
+  cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
+  transition: background-color 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+.segmented input:checked + label { border-color: var(--text); background: var(--text); color: var(--plot); font-weight: 700; }
+.segmented input:focus-visible + label { outline: 3px solid var(--focus); outline-offset: 2px; }
+.segmented input:disabled + label { cursor: not-allowed; opacity: 0.5; }
+.segmented--small label { min-width: 44px; padding: 0 12px; font-size: var(--fs-small); }
+.segmented--grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@container (min-width: 640px) { .segmented--grid { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+
+/* ---------- 13. Teated ja bännerid (läbipaistmatud; ikoon + tekst) ---------- */
+.notice {
+  position: relative;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-tile);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: var(--fs-secondary);
+  line-height: 1.4;
+}
+.notice:has(> .icon) { padding-left: 38px; }
+.notice > .icon { position: absolute; left: 12px; top: 11px; width: 18px; height: 18px; color: var(--muted); }
+.notice--warn  { border-color: transparent; background: var(--warn-bg); color: var(--warn-fg); }
+.notice--error { border-color: transparent; background: var(--bad-bg);  color: var(--bad-fg); }
+.notice--warn > .icon,
+.notice--error > .icon { color: currentColor; }
+@supports not selector(:has(a)) {
+  .notice > .icon { position: static; float: left; margin: 1px 8px 0 0; }
+}
+
+.banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2) var(--s3);
+  margin: 0 0 var(--s3);
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--cat-punane);
+  border-radius: var(--radius-tile);
+  background: var(--bad-bg);
+  color: var(--bad-fg);
+}
+.banner--warn { border-color: var(--cat-kollane); background: var(--warn-bg); color: var(--warn-fg); }
+.banner > .icon { width: 20px; height: 20px; }
+.banner__text { flex: 1 1 200px; margin: 0; font-weight: 600; }
+.banner__text span { display: block; }
+
+/* ---------- 14. HTML-legend ja joonevõtmed (legend peegeldab märki: ruut tulbale/alale, joon joonele) ---------- */
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px var(--s3);
+  margin: 0;
+  font-size: var(--fs-micro);
+  line-height: 1.35;
+  color: var(--text);
+}
+.legend__group { display: flex; flex: 1 1 100%; flex-wrap: wrap; align-items: center; gap: 6px var(--s3); min-width: 0; }
+.legend__title { font-weight: 700; color: var(--text); }   /* nähtav pealkiri aria-hidden, rühma nimi aria-label-is */
+.legend__item { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.legend__item .icon { width: 14px; height: 14px; color: var(--muted); }
+.legend__swatch {
+  display: inline-block;
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  background: var(--swatch, var(--muted));
+}
+.legend__swatch--area {        /* joon + ala (päike, aku laetus) */
+  border-top: 2px solid var(--swatch, var(--solar));
+  border-radius: 2px 2px 3px 3px;
+  background: color-mix(in srgb, var(--swatch, var(--solar)) 18%, var(--plot));
+}
+.legend__swatch--current { border: 2px solid var(--text); background: transparent; }                     /* praegune periood */
+.legend__swatch--past { background: color-mix(in srgb, var(--swatch, var(--muted)) 60%, var(--plot)); }   /* tuhmim = möödunud */
+.legend__swatch--best {        /* odavaim aken: --focus-bg riba, 2 px ülajoon, punktiirservad */
+  border-top: 2px solid var(--focus);
+  border-inline: 1px dashed var(--focus);
+  border-radius: 2px;
+  background: var(--focus-bg);
+}
+.legend__swatch--outline {     /* „aasta varem“: hele täide + 1,5 px kontuur */
+  border: 1.5px solid var(--swatch, var(--grid));
+  background: color-mix(in srgb, var(--swatch, var(--grid)) 28%, var(--plot));
+}
+.legend__swatch--missing { border: 1.5px dashed var(--muted); background: transparent; }   /* andmed puuduvad */
+.legend__swatch--idle {        /* „aku ootel“: 4 px joon (kuju, mitte värv) */
+  align-self: center;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--mode-idle);
+}
+
+.line-key {
+  display: inline-block;
+  flex: none;
+  width: 18px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--key, var(--muted));
+}
+.line-key--thin { height: 1.5px; }
+.line-key--none { background: transparent; }   /* tooltipi rida ilma sarjata: joondus jääb */
+.line-key--dashed { background: repeating-linear-gradient(90deg, var(--key, var(--muted)) 0 5px, transparent 5px 8px); }
+.line-key--dotted { border-radius: 0; background: repeating-linear-gradient(90deg, var(--key, var(--muted)) 0 2px, transparent 2px 5px); }
+.line-key--stepped {           /* astmeline joon: üleval vasakul, aste keskel, all paremal */
+  height: 8px;
+  border-radius: 0;
+  background:
+    linear-gradient(var(--key, var(--muted)), var(--key, var(--muted))) left top / 50% 2px no-repeat,
+    linear-gradient(var(--key, var(--muted)), var(--key, var(--muted))) 50% 0 / 2px 100% no-repeat,
+    linear-gradient(var(--key, var(--muted)), var(--key, var(--muted))) right bottom / 50% 2px no-repeat;
+}
+
+/* Legendinupp (energia kW-paneel): <button aria-pressed>; vajutamata = sari peidetud */
+.legend__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  margin-inline: -8px -10px;          /* võti joondub tavaliste legendikirjetega */
+  padding: 0 10px 0 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.legend__toggle[aria-pressed="false"] { color: var(--muted); text-decoration: line-through; }
+.legend__toggle[aria-pressed="false"] .line-key,
+.legend__toggle[aria-pressed="false"] .legend__swatch { opacity: 0.35; }
+.legend__toggle[aria-disabled="true"] { cursor: not-allowed; }
+
+/* ---------- 15. Graafiku raam: olekuriba, inspektor, kaev, virn, tooltip (p 6.8) ---------- */
+.chart-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s2) var(--s3); }
 .chart-status-bar {
   display: flex;
   flex-wrap: wrap;
@@ -489,283 +838,321 @@ body {
   justify-content: space-between;
   gap: var(--s1) var(--s3);
   min-height: 26px;
-  margin: 0 0 var(--s2);
-}
-.chart-day {
   margin: 0;
-  color: var(--muted);
-  font-size: 15px;
 }
+.chart-day { margin: 0; font-size: var(--fs-secondary); color: var(--muted); }
 .chart-inspector {
   margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text);
-  background: var(--surface-2);
   padding: 2px 10px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: var(--fs-small);
+  font-weight: 600;
 }
-/* Infopaneel ei muuda riba kõrgust, seega graafik ei nihku sõrme all (sama mis css/index.css-is): laial ekraanil
-   hiirega üks rida päeva sildi kõrval (lõpp „…“, terve info on tooltipis), telefonis ja puuteekraanil kaherealine
-   paneel päeva sildi peal (puutel ainus infoallikas, tooltipi ei kuvata) */
-.chart-status-bar--inspect {
-  position: relative;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: baseline;
-}
+/* Inspektor ei muuda riba kõrgust (graafik ei nihku, L-126): laial ekraanil hiirega üks rida päeva sildi kõrval;
+   telefonis ja puutel kaherealine paneel (44 px) päeva sildi peal (ainus infoallikas, tooltipi ei kuvata) */
+.chart-status-bar--inspect { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: baseline; }
 .chart-status-bar--inspect .chart-inspector {
   justify-self: end;
   max-width: 100%;
-  white-space: nowrap;
   overflow: hidden;
+  white-space: nowrap;
   text-overflow: ellipsis;
 }
 @media (max-width: 767px), (pointer: coarse) {
-  .chart-status-bar--inspect {
-    grid-template-columns: minmax(0, 1fr);
-    align-items: center;
-    min-height: 42px;
-  }
+  .chart-status-bar--inspect { grid-template-columns: minmax(0, 1fr); align-items: center; min-height: 44px; }
   .chart-status-bar--inspect .chart-inspector {
     position: absolute;
     inset: 0;
-    justify-self: stretch;   /* katab päeva sildi tervenisti (lühike tekst ei jäta silti poolikuna nähtavale) */
+    justify-self: stretch;
     display: -webkit-box;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
     line-clamp: 2;
     max-width: none;
-    white-space: normal;
-    font-size: 13px;
-    line-height: 18px;
     padding: 3px 10px;
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-tile);
+    font-size: var(--fs-micro);
+    line-height: 19px;
+    white-space: normal;
   }
 }
-.chart-wrapper {
-  position: relative;
-  min-width: 0;
-}
-.chart-host {
-  width: 100%;
-  min-width: 0;
-}
-.chart-host svg {
-  display: block;
-  width: 100%;
-  height: auto;
-}
 
-.bar { transition: opacity 0.1s ease; }
-/* Möödunud perioodid tuhmimad (heledas teemas heledamad, tumedas tumedamad), kategooriavärv jääb eristatavaks
-   (legendis „tuhmim = möödunud“) */
-.bar--past { opacity: 0.6; }
-.bar--active { stroke: var(--text); stroke-width: 2; opacity: 1 !important; }
-.bar-current { animation: pulse 2.4s ease-in-out infinite; }
-@keyframes pulse {
-  0%, 100% { stroke-opacity: 1; }
-  50% { stroke-opacity: 0.3; }
+.chart-wrapper { position: relative; min-width: 0; }
+.chart-well { position: relative; background: var(--plot); border: 1px solid var(--border); border-radius: var(--radius-plot); padding: 6px 0 2px; }
+.chart-stack { position: relative; border-radius: 10px; touch-action: pan-y; -webkit-tap-highlight-color: transparent; }
+.chart-stack:focus { outline: none; }
+.chart-stack:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.chart-stack__cross { position: absolute; top: 0; bottom: 0; left: 0; width: 1px; background: var(--text); opacity: .55; pointer-events: none; }
+.chart-host { position: relative; width: 100%; }
+.chart-host > canvas { display: block; }
+.chart-host--kwh { height: 110px; }  .chart-host--lower { height: 140px; }  .chart-host--soc { height: 96px; }
+.chart-host--days, .chart-host--building { height: 180px; }  .chart-host--shares { height: 28px; }
+@media (min-width: 640px) {
+  .chart-host--kwh { height: 132px; }  .chart-host--lower { height: 170px; }  .chart-host--soc { height: 104px; }
+  .chart-host--days, .chart-host--building { height: 220px; }
 }
-/* Telje ühik graafiku ülanurgas (s/kWh, kW, kWh) */
-.axis-unit { font-size: 12px; font-weight: 600; fill: var(--muted); }
-
-.tooltip {
-  position: absolute;
-  z-index: 2;
-  max-width: 260px;
-  padding: 8px 10px;
-  border-radius: var(--radius-sm);
-  background: var(--text);
-  color: var(--surface);
-  font-size: 14px;
-  line-height: 1.35;
-  pointer-events: none;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
-}
-.tooltip strong,
-.tooltip > span {
-  display: block;
-}
-.tooltip strong { font-size: 15px; }
-.tooltip__price {
-  font-size: 17px;
-  font-weight: 700;
-}
-
-.legend {
+/* .chart-host--price kõrgus on lehefailis (elektriinfo 200/240, energia 180/220); --hours seab JS (ridu × 28 + 8) */
+.chart-fallback { margin: 0; padding: 32px 16px; text-align: center; color: var(--muted); font-size: var(--fs-small); }
+/* Tühi olek kaevus („Homme“ enne avaldamist): sama kõrgusega plot-pind, keskel ikoon + tekst (p 10) */
+.chart-empty {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--s1) var(--s3);
-  margin: var(--s2) 0 0;
-  font-size: 13px;
-  color: var(--muted);
-}
-.legend__item {
-  display: inline-flex;
+  flex-direction: column;
   align-items: center;
-  gap: 6px;
-}
-.legend__swatch {
-  flex: none;
-  width: 12px;
-  height: 12px;
-  border-radius: 3px;
-  background: var(--swatch, var(--muted));
-}
-.legend__swatch--current {
-  background: none;
-  border: 2px solid var(--text);
-}
-/* Päeva keskmise punktiiri halo: sama kriipsutusega, et joon eristuks ka tumedas teemas kollastel tulpadel */
-.avg-halo {
-  stroke: var(--surface);
-  stroke-width: 4;
-  stroke-opacity: 0.85;
-  pointer-events: none;
-}
-/* Joonte värvivõti (legend, tooltip, nimekirjad; sama mis elektriinfo lehel) */
-.line-key {
-  flex: none;
-  width: 18px;
-  height: 0;
-  border-top: 3px solid var(--key, var(--muted));
-  border-radius: 2px;
-}
-
-/* ---------- Statistikakastid ---------- */
-.stats {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  justify-content: center;
   gap: var(--s2);
-  margin: var(--s3) 0 0;
-}
-.stat {
-  min-width: 0;
-  padding: var(--s2) 12px;
-  border-radius: var(--radius-sm);
-  background: var(--surface-2);
-}
-.stat__label {
+  min-height: var(--chart-empty-h, 240px);
   margin: 0;
-  font-size: 13px;
+  padding: var(--s4);
+  text-align: center;
   color: var(--muted);
+  font-size: var(--fs-secondary);
 }
-.stat__value {
-  margin: 2px 0 0;
-  font-size: 20px;
-  font-weight: 700;
-  line-height: 1.15;
-}
-/* Tekstivärvid -fg toonides, et kontrast oleks piisav ka heledal taustal */
-.stat__value--good { color: var(--cat-roheline-fg); }
-.stat__value--bad { color: var(--cat-punane-fg); }
-/* Madalaim/kõrgeim hind: selle hinna kategooria toon (nagu tulp graafikul) */
-.stat__value--cat-roheline { color: var(--cat-roheline-fg); }
-.stat__value--cat-kollane { color: var(--cat-kollane-fg); }
-.stat__value--cat-oranz { color: var(--cat-oranz-fg); }
-.stat__value--cat-punane { color: var(--cat-punane-fg); }
-.stat__time {
-  margin: 2px 0 0;
-  font-size: 13px;
-  color: var(--muted);
-}
+.chart-empty > .icon { width: 24px; height: 24px; }
 
-.big-number {
-  margin: 0;
-  font-weight: 800;
-  line-height: 1;
-  letter-spacing: -0.02em;
-}
-.big-number small {
-  font-size: 18px;
+.tooltip { position: absolute; z-index: 5; max-width: 280px; padding: 8px 10px; background: var(--plot); color: var(--text);
+           border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 4px 16px rgba(0, 0, 0, .12);
+           font-size: var(--fs-small); line-height: 1.35; pointer-events: none; }
+.tooltip > strong,
+.tooltip > span { display: block; }
+.tooltip strong { font-size: var(--fs-secondary); font-weight: 700; }
+.tooltip__price { font-size: 17px; font-weight: 700; }
+/* Rida: joonevõti + väärtus (700) + silt; väärtus on rõhutatud, silt teisene */
+.tooltip .tooltip__row { display: flex; align-items: flex-start; gap: var(--s2); }
+.tooltip__row b { font-weight: 700; }
+.tooltip__row > .line-key { margin-top: 8.5px; }
+.tooltip__row > .legend__swatch { margin-top: 3.5px; }
+.tooltip .tooltip__sep { margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--border); }
+.tooltip__note { display: block; font-size: var(--fs-micro); color: var(--muted); }
+.tooltip__diff { margin-top: 2px; }
+
+/* ---------- 16. Režiimiriba (HTML/CSS, p 6.7): joondus plot-alaga syncStack-i --plot-left/--plot-right kaudu ---------- */
+.mode-strip { position: relative; margin: 6px var(--plot-right, 12px) 6px var(--plot-left, 40px); }
+.mode-strip__label { position: absolute; right: calc(100% + 6px); top: -1px; font-size: var(--fs-chart); font-weight: 600;
+                     line-height: 14px; color: var(--muted); }
+.mode-strip__track { position: relative; height: 14px; border-radius: 3px; box-shadow: inset 0 0 0 1px var(--axis); } /* tühi = andmed puuduvad */
+.mode-strip__run { position: absolute; top: 0; bottom: 0; border-inline: 1px solid var(--plot); }   /* 2 px pinnavahe naabrite vahel */
+.mode-strip__run[data-mode="grid-charge"] { background: var(--grid); }
+.mode-strip__run[data-mode="solar-charge"] { background: var(--solar); }
+.mode-strip__run[data-mode="discharge"] { background: var(--battery); }
+.mode-strip__run[data-mode="export"] { background: var(--export); }
+.mode-strip__run--idle { top: 5px; bottom: 5px; background: var(--mode-idle); border-radius: 2px; }  /* „aku ootel“ = 4 px joon */
+.mode-strip__names { display: none; position: relative; height: 16px; }
+@container (min-width: 640px) { .mode-strip__names { display: block; } }
+.mode-strip__name { position: absolute; top: 2px; overflow: hidden; white-space: nowrap; text-align: center;
+                    font-size: var(--fs-chart); line-height: 14px; color: var(--muted); }
+
+/* ---------- 17. Tabelivaade (iga graafiku tabelikaksik) ---------- */
+.table-view { margin: 0; padding-top: var(--s1); border-top: 1px solid var(--border); }
+.table-view > summary {          /* tekstivoog (mitte flex): kitsal kaardil murdub nagu lause, ikoonid jäävad teksti otsa */
+  display: block;
+  min-height: var(--tap);
+  margin: 0 calc(-1 * var(--s2));
+  padding: calc((var(--tap) - 1.45em) / 2) var(--s2);
+  border-radius: var(--radius-tile);
+  color: var(--text);
   font-weight: 600;
+  line-height: 1.45;
+  list-style: none;
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+}
+.table-view > summary::-webkit-details-marker { display: none; }
+.table-view > summary::marker { content: ""; }
+.table-view > summary .icon { width: 18px; height: 18px; color: var(--muted); }
+.table-view > summary > .icon:first-child { margin-right: 6px; }
+.table-view__chevron,
+.table-view > summary > .icon ~ .icon { margin-left: 4px; transition: transform 0.15s ease; }
+.table-view[open] > summary .table-view__chevron,
+.table-view[open] > summary > .icon ~ .icon { transform: rotate(180deg); }
+.table-view[open] > summary { margin-bottom: var(--s2); }
+.table-view > :not(summary) + :not(summary) { margin-top: var(--s2); }
+.table-view__sub { margin-left: 0.3em; font-size: var(--fs-small); font-weight: 500; color: var(--muted); }
+.table-view__hint { display: none; margin-left: 0.5em; font-size: var(--fs-micro); font-weight: 600; color: var(--muted); }   /* „keri →“ */
+@container (max-width: 599px) { .table-view[open] .table-view__hint { display: inline; } }
+
+.table-note { margin: 0; font-size: var(--fs-micro); color: var(--muted); }
+/* Kerimisvari paremas servas (kaob, kui tabel on lõpuni keritud); tabelipind on läbipaistmatu --surface */
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-tile);
+  background: var(--surface);
+  background:
+    linear-gradient(to left, var(--surface) 30%, transparent) right center / 32px 100% no-repeat local,
+    radial-gradient(farthest-side at 100% 50%, color-mix(in srgb, var(--text) 22%, transparent), transparent) right center / 12px 100% no-repeat scroll,
+    var(--surface);
+}
+.data-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: var(--fs-small);
+  line-height: 1.4;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.data-table caption { padding: 8px 12px; caption-side: top; text-align: left; font-weight: 700; color: var(--text); }
+.data-table th,
+.data-table td { padding: 8px 12px; border-bottom: 1px solid var(--hairline); text-align: right; font-weight: 400; }
+.data-table thead th {
+  border-bottom-color: var(--border);
+  background: var(--surface-2);
   color: var(--muted);
-  letter-spacing: 0;
+  font-size: var(--fs-micro);
+  font-weight: 600;
+  vertical-align: bottom;
 }
-
-/* ---------- Jalus ---------- */
-.app-footer {
-  margin: var(--s5) 0 var(--s3);
-  color: var(--muted);
-  font-size: 14px;
+.data-table tbody th { color: var(--text); }
+.data-table tbody tr:last-child > * { border-bottom: 0; }
+/* kleepuv esimene veerg */
+.data-table th:first-child,
+.data-table td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  text-align: left;
+  background: var(--surface);
+  box-shadow: inset -1px 0 0 var(--hairline);
 }
-.app-footer p { margin: 0 0 var(--s2); }
-.app-footer__meta {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  align-items: center;
-  gap: 0 var(--s4);
+.data-table thead th:first-child { z-index: 2; background: var(--surface-2); }
+.data-table tr.is-now > * { font-weight: 700; }
+.data-table tfoot > tr > * { border-top: 1px solid var(--border); border-bottom: 0; font-weight: 700; }
+.th-sub { display: block; font-size: 12px; font-weight: 500; color: var(--muted); }
+
+/* ---------- 18. Skeleton (mõõdud = lõppsisu mõõdud, paigutus ei hüppa) ---------- */
+.skeleton {
+  display: block;
+  border-radius: var(--radius-tile);
+  background: linear-gradient(90deg, var(--skeleton) 0%, var(--skeleton-hi) 50%, var(--skeleton) 100%);
+  background-size: 200% 100%;
+  animation: k32-shimmer 1.4s ease-in-out infinite;
 }
+@keyframes k32-shimmer { from { background-position: 100% 0; } to { background-position: 0 0; } }
+:not(.card):not(.card__body) > .skeleton + .skeleton { margin-top: var(--s2); }
+.skeleton--line { height: 14px; }
+.skeleton--short { width: 45%; }
+.skeleton--mid { width: 70%; }
+.skeleton--big { width: 55%; height: var(--fs-hero); }
+.skeleton--block { height: 150px; }
+.skeleton--flow { height: 280px; max-height: 300px; }
+.skeleton--chart { height: var(--skeleton-chart-h, 240px); margin: 0 8px 4px; border-radius: 10px; }   /* leht seab --skeleton-chart-h = virna kõrgus */
 
-/* ---------- Üldised abiklassid ---------- */
-.nowrap { white-space: nowrap; }
+/* ---------- 19. Mõõdik ---------- */
+.meter {
+  height: 10px;
+  margin: 0;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  background: color-mix(in srgb, var(--meter, var(--solar)) 16%, var(--surface));   /* rada = sama tooni heledam aste */
+}
+.meter__fill { height: 100%; border-radius: var(--radius-pill); background: var(--meter, var(--solar)); transition: width 0.4s ease; }
+.meter-label { display: flex; justify-content: space-between; gap: var(--s2); margin: 0; font-size: var(--fs-micro); color: var(--muted); }
 
+/* ---------- 20. Energiavoo ühisosa (energia suur voog ja elektriinfo kompaktne voog, p 7) ---------- */
+.flow-track { fill: none; stroke: var(--axis); stroke-width: 2; }          /* rada: alati, ei kanna infot */
+.flow-node__bg { fill: var(--plot); stroke: var(--border); stroke-width: 1; }
+
+/* ---------- 21. Olekud: värskendus ja aegunud mõõtmine (p 10) ---------- */
+.card__body { transition: opacity 0.2s ease; }
+.card.is-refreshing .card__body,
+.layout.is-refreshing .card__body { opacity: 0.62; }
+.card[aria-busy="true"] { cursor: progress; }
+
+/* ---------- 22. Abiklassid ---------- */
 .visually-hidden {
-  position: absolute;
+  position: absolute !important;
   width: 1px;
   height: 1px;
   margin: -1px;
   padding: 0;
   overflow: hidden;
   clip: rect(0 0 0 0);
+  clip-path: inset(50%);
   white-space: nowrap;
   border: 0;
 }
+.nowrap { white-space: nowrap; }
+.tabular { font-variant-numeric: tabular-nums; }
+.placeholder { margin: 0; color: var(--muted); }
+/* Kitsa ja laia ekraani sõnastus („päike (inverter)“ / „päikesetoodang (inverter)“) */
+.text--wide { display: none; }
+@media (min-width: 640px) { .text--wide { display: inline; } .text--narrow { display: none; } }
 
-:focus-visible {
-  outline: 3px solid var(--focus);
-  outline-offset: 2px;
-}
+/* ---------- 23. Fookus ---------- */
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 
+/* ---------- 24. Hõljutus: ainult interaktiivsed sisemised elemendid (--surface → --surface-2); kaart ei muutu ---------- */
 @media (hover: hover) {
+  .site-nav__link:not([aria-current="page"]):hover,
   .tab:not([aria-selected="true"]):hover,
-  .site-nav__link:not([aria-current="page"]):hover {
-    background: var(--surface);
-  }
+  .view-pill:not(.is-active):not([aria-pressed="true"]):hover,
+  .segmented input:not(:checked):not(:disabled) + label:hover,
+  .btn--ghost:not([disabled]):hover,
+  .btn--danger:not([disabled]):hover,
+  .icon-btn:not([disabled]):hover,
+  .table-view > summary:hover,
+  .legend__toggle:not([aria-disabled="true"]):hover { background: var(--surface-2); }
+  .link-btn:hover { text-decoration-thickness: 2px; }
 }
 
-/* ---------- Laiem ekraan (tahvel ja desktop) ---------- */
-@media (min-width: 768px) {
-  .app { padding: var(--s5); }
-  .layout { gap: var(--s4); }
-  .card {
-    padding: var(--s5);
-    display: flex;
-    flex-direction: column;
-  }
-  .hero-price__value { font-size: 60px; }
-  .stat__value { font-size: 22px; }
-}
-
-@media (min-width: 1024px) {
-  .app {
-    max-width: 1180px;
-    padding: var(--s5) var(--s6);
-  }
-  .app-title { font-size: 22px; }
-  .layout { gap: 20px; }
-  .card__title { font-size: 18px; }
-}
-
-/* Puuteekraanil vähemalt 44 px puuteala; hiirega töölaual jäävad kompaktsed kõrgused */
+/* ---------- 25. Puuteala ≥ 44 px (L-145) ---------- */
 @media (pointer: coarse) {
-  .site-nav__link,
-  .tab { min-height: 44px; }
+  .view-pill, .site-nav__link, .tab, .segmented label, .table-view > summary, .ev__summary, .legend__toggle, .link-btn { min-height: 44px; }
+  .icon-btn { width: 44px; height: 44px; }
 }
 
+/* ---------- 26. Vähendatud liikumine: miski ei liigu (voo täpid, skeleton, pöörlev ikoon, üleminekud) ---------- */
 @media (prefers-reduced-motion: reduce) {
-  .bar-current { animation: none; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .skeleton,
+  .icon-btn.is-loading .icon,
+  .btn.is-loading .icon,
+  .btn.is-loading .btn__icon,
+  .live-pill[data-state="loading"] .icon { animation: none; }
+  /* Laadiv ikoonnupp: pöörleva ikooni asemel tekst */
+  .icon-btn.is-loading { width: auto; padding: 0 12px; border-radius: var(--radius-pill); }
+  .icon-btn.is-loading .icon { display: none; }
+  .icon-btn.is-loading::after { content: "Laadin…"; font-size: var(--fs-micro); font-weight: 600; }
 }
 
-/* Printimine: heledad tokenid (tume komplekt on ainult @media screen all), juhtelemendid peidetud */
+/* ---------- 27. Sunnitud värvid (Windowsi kõrge kontrast) ---------- */
+@media (forced-colors: active) {
+  .card { background: Canvas; border: 1px solid CanvasText; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .card--hero { border-top: 6px solid CanvasText; }
+  body::before { display: none; }
+  .chart-well, .mode-strip, .mode-strip__run, .legend__swatch, .line-key, .battery-visual svg, .flow-svg { forced-color-adjust: none; }  /* lõuend ei järgi süsteemi paletti, p 6.13 */
+  .chart-stack:focus-visible { outline-color: Highlight; }
+  /* valitud olek ei tohi kaduda koos taustaga */
+  .site-nav__link[aria-current="page"],
+  .tab[aria-selected="true"],
+  .view-pill.is-active,
+  .view-pill[aria-pressed="true"],
+  .segmented input:checked + label { forced-color-adjust: none; border-color: Highlight; background: Highlight; color: HighlightText; }
+  .stat, .badge, .badge-pill, .live-pill, .state-pill, .verdict, .hero-period, .hero-final-pill, .facts li,
+  .notice, .banner, .chart-inspector, .tab__badge, .tooltip, .table-scroll, .meter { border: 1px solid CanvasText; }
+  .meter__fill { background: CanvasText; }
+  .skeleton { background: GrayText; }
+}
+
+/* ---------- 28. Printimine: heledad tokenid, klaasita kaardid, juhtnupud peidetud ---------- */
 @media print {
-  .site-nav,
-  .tooltip,
-  .banner .btn { display: none !important; }
-  .bar { transition: none; }
-  .bar--past { opacity: 0.75; }
-  .bar-current { animation: none; }
-  .card { break-inside: avoid; box-shadow: none; }
+  body { background: #fff; }
+  body::before { display: none; }
+  .card { background: #fff; -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: none;
+          border-color: var(--border); break-inside: avoid; }
+  .card--hero { border-top-color: var(--hero-accent, var(--border)); }
+  .site-nav, .view-filter, .tabs, .segmented, .icon-btn, .btn,
+  .tooltip, .chart-stack__cross, .skeleton { display: none !important; }
+  .link-btn { min-height: 0; color: inherit; text-decoration: none; }
+  .legend__swatch, .line-key, .mode-strip__run, .meter, .meter__fill, .card--hero, .verdict, .status-dot,
+  .state-pill, .badge, .live-pill, .tab__badge { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
