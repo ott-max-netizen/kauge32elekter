@@ -2500,7 +2500,7 @@ function buildDayChart({ slots, dayStart, dayEnd, width, nowMs, isToday, current
       // Silt vabale küljele: ei tohi katta tulpi ega praeguse perioodi kontuuri (kontrollitakse silti ümbritsev ala).
       // Kui kumbki serv ei sobi joone kohal ega all, on väärtus legendis („päeva keskmine 7,01“).
       const text = `keskmine ${numberFormat.d2.format(avg)}`;
-      const labelW = text.length * 6.4 + 6;
+      const labelW = text.length * 7 + 6; // 12 px paks kiri (nagu elektriinfo lehel)
       const free = (x0, x1, top, bottom) => top >= 0 && bottom <= height - padB + 2 && !items.some(it => it.rect &&
         it.slotX < x1 && it.slotX + it.slotW > x0 && it.top - (it.isCurrent ? 4 : 1) < bottom && it.bottom + (it.isCurrent ? 4 : 1) > top);
       const sides = [
@@ -2517,7 +2517,7 @@ function buildDayChart({ slots, dayStart, dayEnd, width, nowMs, isToday, current
       if (spot) {
         svg.append(svgEl('text', {
           class: 'avg-label', x: spot.lx, y: spot.ly, 'text-anchor': spot.anchor,
-          'font-size': 11, 'font-weight': 700,
+          'font-size': 12, 'font-weight': 700,
           fill: 'var(--text)', stroke: 'var(--surface)', 'stroke-width': 4, 'paint-order': 'stroke', text
         }));
         info.avgLabelShown = true;
