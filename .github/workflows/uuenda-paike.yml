@@ -69,7 +69,8 @@ jobs:
           # Solarmani välja nimed ja märgid jäetakse muutmata; tõlgendavad lehed (README „Märgid“). Selle jaama andmetes:
           # realTime.chargePower on laadimisel negatiivne, kaadrite chargePower positiivne, dischargePower >= 0,
           # batteryPower < 0 = laeb mõlemas (lehed: batteryKw = |chargePower| − |dischargePower|, + = laeb); gridPower
-          # on alati 0 ja wirePower == purchasePower (ost võrgust). Müüki võrku pole mõõtmistes seni esinenud.
+          # on peaaegu alati 0 (ostu ajal harva paar kümmet vatti; wirePower = purchasePower − gridPower), ost võrgust
+          # on purchasePower. Müüki võrku pole mõõtmistes seni esinenud.
           # Solarmani päevakogused (history timeType 2) on selle jaama puhul ~10× liiga väikesed – neid ei laeta.
           POWER_FIELDS = ("generationPower", "usePower", "gridPower", "purchasePower", "wirePower",
                           "chargePower", "dischargePower", "batteryPower")
@@ -272,8 +273,13 @@ jobs:
               data_out["lastUpdateTime"] = last_update
           if capacity:
               data_out["installedCapacityKw"] = round(capacity, 2)
+          # Viimase kaadri lõpp (Unix s); pooleli kaader on mõõdetud ainult kuni viimase mõõtmiseni (lastUpdateTime),
+          # muidu näitaksid lehed kaadreid „kuni“ ajani, mis on veel tulevikus
+          frames_until = frames[-1]["dateTime"] + FRAME_S if frames else None
+          if frames_until and last_update and frames[-1]["dateTime"] < last_update < frames_until:
+              frames_until = last_update
           data_out["meta"] = {
-              "framesUntil": frames[-1]["dateTime"] + FRAME_S if frames else None,  # viimase kaadri lõpp (Unix s)
+              "framesUntil": frames_until,
               "warnings": HOIATUSED,
           }
 

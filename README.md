@@ -86,14 +86,19 @@ mõnetunnise viivitusega, seega võib viimane `kwh` rida olla mitu tundi vana. F
 `timestamp` on perioodi algus (Unix sekundites, UTC), `price` on börsihind €/MWh ilma käibemaksuta ja `kwh` on perioodi ost võrgust kilovatt-tundides (Estfeed, liitumispunkti arvesti).
 
 - **Rea kWh:** 15-min rida saab oma veerandi koguse. Kui Elering peaks tagastama tunnised hinnad, saab
-  tunnirida nelja veerandi summa ainult siis, kui kõik veerandid on mõõdetud (poolik tund jääb `kwh`-ta).
+  tunnirida nelja veerandi summa ainult siis, kui kõik veerandid on mõõdetud (poolik tund jääb `kwh`-ta);
+  vana faili kaitse („uus vastus ulatub vähem tulevikku“) võrdleb viimase rea lõppu, nii et tunnine vastus
+  15-min faili peal (mõlemad kuni 24:00) ei katkesta käivitust.
   Kui Estfeed annab ainult tunnised kogused, jagatakse tund 15-min ridadele neljaks ja rida saab märke
   `"kwhRes":"hour"` (tunni ja päeva summa on mõõtmine, 15-min jaotus mitte). Kui Estfeedi vastus mõnda
   varem avaldatud perioodi ei kata (osaline vastus või tõrge), jääb eelmise faili väärtus alles.
   Jooksva kuu kWh ei kahane sama kuu jooksul: tühi või ainult viimaseid päevi kattev vastus jätab kuu kirje
   varasemaks (hoiatus „Estfeedi vastus oli puudulik …“). Tühi vastus ei muuda varem mõõdetud kuud
   „andmed puuduvad“ kirjeks (üks koondhoiatus „Estfeed ei andnud mõõteandmeid N kuu kohta …“); `noData`
-  kirje tehakse ainult kuule, millel mõõdetud kirjet pole olnud.
+  kirje tehakse ainult kuule, millel mõõdetud kirjet pole olnud. Kuu päritakse kuni 30-päevaste lõikudena;
+  kui vastus katab lõpliku kuu perioodidest alla 99 % ja annaks varasemast vähem kWh (nt üks lõik tuli
+  tühjana), jääb varasem kirje alles (koondhoiatus „Estfeedi vastus oli N kuu kohta osaline …“) ja kuu
+  arvutatakse järgmisel käivitusel uuesti.
 - **Puuduv hinnaperiood** jääb failist välja (eelmist rida ei pikendata); töövoog kirjutab hoiatuse.
 - **EIC:** kui `meteringPointEics`-filtriga päring ebaõnnestub, korratakse seda ilma filtrita, kuid
   vastusest võetakse ainult `ELERING_EIC` mõõtepunkt(id); logis on vastuse mõõtepunktide arv.
@@ -102,7 +107,8 @@ mõnetunnise viivitusega, seega võib viimane `kwh` rida olla mitu tundi vana. F
   (viimase hinnarea lõpp, ISO UTC), `estfeedOk` (Estfeedi päring õnnestus sel käivitusel),
   `estfeedUntil` (viimase `kwh`-ga rea lõpp või `null`), `tariffs` (kuu € arvutamisel kasutatud
   CONFIG-i väärtused, `source` = `"index.html"` või `"default"`, kui CONFIG-plokki ei leitud) ja
-  `warnings` (töövoo hoiatused, mida leht võib kuvada). Vanemas failis `meta`-t pole – lehed toimivad ka siis.
+  `warnings` (töövoo hoiatused; lehed näitavad neid elanikele, seega on need tavakeeles – sisemised nimed nagu
+  `kwhRes`, `CONFIG`, `TASUDE_AJALUGU` on ainult Actions-i logis). Vanemas failis `meta`-t pole – lehed toimivad ka siis.
 - **Kuu kirje:** `v` = arvutusreeglite versioon (`CALC_VERSION`), `cfg` = tasude sõrmejälg (versioon,
   KM ja tasude ajalugu, CONFIG-i tasud), `updatedAt` = millal kirje sisu viimati muutus. Lõplik kuu
   arvutatakse uuesti, kui `v` või `cfg` erineb; `noData: true` = selle kuu kohta mõõteandmeid pole (graafikul „—“).
@@ -126,7 +132,8 @@ mõnetunnise viivitusega, seega võib viimane `kwh` rida olla mitu tundi vana. F
   ise. Uued ja vanad kaadrid ühendatakse `dateTime`'i järgi, nii et lühem või ebaõnnestunud
   Solarmani vastus ei kustuta päeva varasemaid kaadreid.
 - `frameSeconds` = kaadri pikkus sekundites (900); lehed loevad selle (vaikimisi 900).
-- `meta.framesUntil` = viimase kaadri lõpp (Unix s), `meta.warnings` = töövoo hoiatused.
+- `meta.framesUntil` = viimase kaadri lõpp (Unix s), kuid mitte hilisem kui viimane mõõtmine `lastUpdateTime`
+  (viimane kaader on enamasti pooleli); `meta.warnings` = töövoo hoiatused.
 - Solarmani päevakoguseid (`data.day`) enam ei kirjutata: selle jaama puhul on need ~10× liiga
   väikesed; kõik päeva kogused arvutatakse 15-min kaadritest.
 
@@ -164,12 +171,14 @@ Solarmani välja nimed ja märgid on failis muutmata; lehed tõlgendavad neid ni
 - **Müük võrku:** müüki pole mõõtmistes seni esinenud, seega on selle märgikokkulepe kontrollimata.
   Lehed näitavad müüki ainult siis, kui ost ≤ 0,05 kW **ja** ülejääk (päike + aku tühjenemine − tarbimine −
   aku laadimine) on üle max(0,3 kW; 3 % toodangust); bilansi jäägist müüki ei tuletata. Töövoog kirjutab
-  logisse hoiatuse, kui `gridPower` või `wirePower − purchasePower` on üle 50 W – siis tuleb märgikokkulepe üle kontrollida.
+  logisse hoiatuse, kui |`gridPower`| või |`wirePower − purchasePower`| on vähemalt 50 W – siis tuleb märgikokkulepe üle kontrollida.
 
 ## Päikeseenergia (elektriinfo lehe päikesekaart)
 
 - Kõik päikese, maja tarbimise ja aku numbrid on **mõõtmised** failist `paike.json` (vt allpool
-  „Energia töölaud“). Mudelit ega prognoosi ei kuvata: kogused on summad kuni viimase mõõtmiseni ja
+  „Energia töölaud“). Mudelit ega prognoosi ei kuvata: kogused on summad kuni viimase mõõtmiseni
+  (`lastUpdateTime`; viimane, pooleli kaader arvestatakse ainult selle hetkeni, mitte lehe kellani – plaatide
+  „kuni HH:MM“ ja jaluse „kaadrid kuni“ on sama aeg) ja
   graafikul on päike ainult lõppenud ja täielikult mõõdetud perioodides (kWh 15 min või 1 h kohta, parem
   telg): täna kuni viimase lõppenud perioodini ja „Eile“ vaates, kui `paike.json` sisaldab eilseid kaadreid.
 - Kaardi märgil on mõõtmise kellaaeg ja vanus („Mõõdetud 14:59 · 23 min tagasi“). Kui viimane mõõtmine on
@@ -183,8 +192,12 @@ Solarmani välja nimed ja märgid on failis muutmata; lehed tõlgendavad neid ni
   PUUDU“, kui hinnaridades on auk või tunnine samm (`pricesOk: false`; hinnad ise on värsked).
 - „Päikesest kaetud“ = ise kasutatud päikeseenergia (toodang − müük) / maja tarbimine; sama mõõdik on
   energialehel. Aku laadimine (võrgust/päikesest) on voosõlmedes („sellest akusse“) ja selgitavas lauses
-  koos allika ja lõikeajaga („Akut laeti täna (inverter, kuni 15:00) 31,8 kWh …“). Kõige kitsamal telefonil
-  (≤ 380 px) on voosõlmede kiri väiksem ja „Päikese-park“ poolitub.
+  koos allika ja lõikeajaga („Akut laeti täna (inverter, kuni 14:59) 31,8 kWh …“); „Maja tarbis täna“ plaadil
+  „ost võrgust 126,5 kWh (inverter), sellest akusse 31,2 · kuni 14:59“, väärtusplaadil „täna kuni 14:59 ·
+  hinnang …“. Aku suund on |`chargePower`| − |`dischargePower`|, nende puudumisel `batteryPower`-ist (< 0 = laeb).
+  Kõige kitsamal telefonil (≤ 380 px) on voosõlmede kiri väiksem ja „Päikese-park“ poolitub; kahe veeru
+  paigutuses (768–1023 px) on sõlmedes telefoni lühikesed sildid ja 768–1179 px ning printimisel on neli
+  plaati kahes veerus.
 - Pargi võimsus (kWp) tuleb `paike.json`-i väljast `installedCapacityKw` (töövoog pärib selle Solarmanist
   kord päevas); `CONFIG.paike.paneelideKw` on varuväärtus. `paneelideArv` ja `kasutuselAlates` on ainult sildil.
 - **Vaadete lüliti** (*Kõik vaated*, *Elekter*, *Päike*, *Planeerija & EV*, *Maja üldelekter*; SVG-ikoonidega)
@@ -192,23 +205,28 @@ Solarmani välja nimed ja märgid on failis muutmata; lehed tõlgendavad neid ni
 
 ## Hinnagraafik (elektriinfo leht)
 
-- Tulbad on börsihind (s/kWh koos KM-ga, vasak telg), värv = hinnaklass; möödunud perioodid on heledamad
-  („Eile“ vaates kõik tulbad, kui graafikul on eilne päikesejoon, et tume joon ei sulanduks tulpadega).
+- Tulbad on börsihind (s/kWh koos KM-ga, vasak telg), värv = hinnaklass; möödunud perioodid on tuhmimad
+  (legendis „tuhmim = möödunud“; heledas teemas heledamad, tumedas tumedamad; „Eile“ vaates kõik tulbad, kui
+  graafikul on eilne päikesejoon, et tume joon ei sulanduks tulpadega).
   Arvutis on vaikimisi 15 min samm, telefonis (< 768 px) 1 h; lüliti „1 h / 15 min“ valik jääb kehtima.
 - Ost võrgust (Estfeed) ja päikesetoodang (inverter) on perioodi energia (kWh 15 min või 1 h kohta, parem
   telg). kWh-telje null on hinna nulljoonel ja kWh-skaala kasutab poolt hinnaala kõrgusest, et öine ostutipp
-  (aku laadimine võrgust) ei paistaks hinnatipuna. Puuduv periood katkestab joone; pooleli olevat perioodi
-  joonele ei kanta (tooltipis „pooleli, kuni HH:MM“). Tooltipis on ka keskmine võimsus (kW) ja aku laadimine
-  koos allikaga (võrgust/päikesest; allikas omistatud energia järgi, alla 0,05 kWh osa ei nimetata).
+  (aku laadimine võrgust) ei paistaks hinnatipuna. Puuduv periood katkestab joone; pooleli olevat ja ainult
+  osaliselt mõõdetud perioodi (viimane kaader kuni inverteri mõõtmiseni) joonele ei kanta (tooltipis „pooleli,
+  kuni HH:MM“ või „mõõdetud kuni HH:MM“). Kui Estfeed andis ainult tunnise koguse (`kwhRes: "hour"`), on see
+  15-min vaates katkendjoon (legendis „katkendjoon = tunni keskmine“). Tooltipis on ka keskmine võimsus (kW) ja
+  aku laadimine koos allikaga (võrgust/päikesest; allikas omistatud energia järgi, alla 0,05 kWh osa ei nimetata).
 - Kui ost (Estfeed) või inverteri kaadrid lõpevad enne päeva lõppu, on joone lõpus rõngas ja silt „kuni HH:MM“
-  (perioodi lõpp; allikad jõuavad eri viitega, nt Estfeed kuni 14:15 ja inverter kuni 15:00).
+  (perioodi lõpp; allikad jõuavad eri viitega, nt Estfeed kuni 14:15 ja inverter kuni 14:45).
 - Tooltip on tulba kõrval (nagu energialehel): aeg, börsihind ja hinnaklass, hind koos tasudega, kogused
   värvivõtmega (ost võrgust (Estfeed) koos maksumusega, päike ja maja (inverter), aku laadimine) ning võrdlus
-  päeva keskmisega. Puutel tooltipi ei kuvata: info on graafiku kohal fikseeritud kõrgusega inspektoris, nii et
-  graafik ei nihku sõrme all. Telefonis ja puuteekraaniga tahvlis (`pointer: coarse`) on inspektor kaherealine
-  paneel päeva sildi peal, hiirega laial ekraanil üks rida päeva sildi kõrval. Ekraanilugeja teade (`#chart-announcer`) tuleb ainult klaviatuuriga liikudes.
+  päeva keskmisega. Puutel ja kitsal ekraanil (< 768 px, ka klaviatuuri ja hiirega) tooltipi ei kuvata – see
+  kataks suurema osa graafikust: info on graafiku kohal fikseeritud kõrgusega inspektoris, nii et graafik ei
+  nihku sõrme all. Telefonis ja puuteekraaniga tahvlis (`pointer: coarse`) on inspektor kaherealine paneel päeva
+  sildi peal, hiirega laial ekraanil üks rida päeva sildi kõrval. Ekraanilugeja teade (`#chart-announcer`) tuleb
+  ainult klaviatuuriga liikudes. Energialehel käitub inspektor puutel samamoodi.
 - Puuduvat hinnaperioodi ei täideta eelmise hinnaga: graafikul jääb tühi koht, praeguse hetke puudumisel
-  ütleb hinnakaart, et praeguse hetke hinnaperiood puudub, ja osaliste homsete hindade korral on teade „Homsed börsihinnad on osalised (puudub …)“.
+  ütleb hinnakaart, et praeguse hetke hinnaperiood puudub, ja osaliste homsete hindade korral on teade „Homsed börsihinnad on osalised (puudub …)“ ning vaheleht „Homme (osaline)“.
 - Graafiku all on valitud päeva kokkuvõte kahes rühmas: „Hind, s/kWh“ (madalaim, keskmine, kõrgeim, võrdlus;
   tunnivaates märkega „15 min“, sest need on päeva tegelikud veerandtunni hinnad) ja „Ost võrgust sel päeval“
   (Estfeed: kogus allika ja lõikeajaga, kulu koos tasudega „≈“, sellest börsihind koos KM-ga). Inverteri kogused on
@@ -230,7 +248,7 @@ Solarmani välja nimed ja märgid on failis muutmata; lehed tõlgendavad neid ni
   `<head>`-is), energialehel `@media (prefers-color-scheme: dark)` all. Tume komplekt kehtib ainult ekraanil:
   **prinditakse alati heledana**, juhtelemendid (nupud, vaadete riba, navigatsioon) on printimisel peidetud.
 - **Värvi tähendus:** tulba värv = hinnaklass (heledas tumeneb toon hinnaga, tumedas kasvab kontrast hinnaga;
-  kollane ja oranž eristuvad ka värvipimedale heleduse järgi, lävedel 10 ja 20 s/kWh on ruudustiku joon).
+  kollane ja oranž eristuvad ka värvipimedale heleduse järgi, lävedel 10 ja 20 s/kWh on siltideta punktiirjoon).
   Roheline on „Väga odav“, olek „andmed ajakohased“ ja soodne muutus (võrdlusplaatide vahe, nt „Võrdlus
   eilsega −3,43“, ja planeerija sääst „43% odavam …“). Päike = kuldne (`--solar`), mõõdetud
   päikesetoodangu **joon** graafikutel tumepruun/kreem (`--solar-line`, et see ei sarnaneks kollase/oranži
@@ -302,14 +320,15 @@ Elering API      → GitHub Actions (uuenda-hinnad.yml) → hinnad.json ┴→ G
   Ühise välja `batteryPower` märki kasutatakse ainult siis, kui laadimise/tühjenemise väljad puuduvad;
   see kalibreeritakse kaadritest (selle jaama puhul `batteryPower` < 0 = laeb). Kui aku suund kuvatakse
   siiski valepidi, määra `energy-dashboard.html` `CONFIG`-is `solarman.akuMark` käsitsi. Hoidevool
-  (alla 0,2 kW muutumatu laetusega) on „Ootel · hoiab +0,1 kW“, mitte „Laeb“. Aku mahtu (`aku.mahtKwh`)
+  (alla 0,2 kW muutumatu laetusega) on „Ootel · hoiab +0,1 kW“ (ka graafiku tooltipis „aku ootel · hoiab
+  +0,1 kW“), mitte „Laeb“. Aku mahtu (`aku.mahtKwh`)
   on vaja laadimis- ja tühjenemisaja hinnanguks.
 - Päikeseandmete aegumislävi (45 min) loetakse `index.html`-i `CONFIG.paike.aegunudMinutites`-ist, nii et
   mõlemal lehel kehtib sama lävi. Vanema mõõtmise korral on energiavoog tuhm, liikumatu ja pealkirjas on
   mõõtmise kellaaeg („Energiavoog kell 14:59“). Kui `index.html`-i ei õnnestu lugeda, kasutatakse
   energialehe varukoopiat ja bänneris on vastav teade; erinevus `hinnad.json`-i `meta.tariffs`-iga kuvatakse samuti.
-- Tänased kogused on inverteri 15-min mõõtmiste summad kuni viimase kaadri lõpuni („Täna kuni 15:00
-  (inverter)“); arve alus (ost võrgust Estfeedi arvestist) on elektriinfo lehel. „Päikesest kaetud“ on sama
+- Tänased kogused on inverteri 15-min mõõtmiste summad kuni viimase mõõtmiseni („Täna kuni 14:59
+  (inverter)“; pooleli kaader ainult `lastUpdateTime`-ni); arve alus (ost võrgust Estfeedi arvestist) on elektriinfo lehel. „Päikesest kaetud“ on sama
   mõõdik mis elektriinfo lehel. Päeva graafikul on lisaks päikesele ja maja tarbimisele ost võrgust
   (katkendjoon) ja aku võimsus (+ laeb / − tühjeneb) ning odavaim 2 h aken (lõpphinna järgi).
 
