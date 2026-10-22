@@ -64,7 +64,9 @@ jobs:
           UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
           FRAME_S = 900  # 5-min kaadrid koondatakse 15-min keskmisteks (sama samm, mis börsihindadel)
 
-          # Solarmani välja nimed jäetakse muutmata; märgikokkuleppe tõlgendab energy-dashboard.html.
+          # Solarmani välja nimed jäetakse muutmata; märgikokkuleppe tõlgendavad lehed. Aku märk selle jaama puhul:
+          # realTime chargePower < 0 = laeb, history kaadrites chargePower > 0 = laeb, batteryPower < 0 = laeb
+          # mõlemas, dischargePower >= 0. Lehed kasutavad seepärast |chargePower| − |dischargePower| (+ = laeb).
           POWER_FIELDS = ("generationPower", "usePower", "gridPower", "purchasePower", "wirePower",
                           "chargePower", "dischargePower", "batteryPower")
           DAY_FIELDS = ("generationValue", "useValue", "gridValue", "buyValue", "chargeValue", "dischargeValue")
@@ -181,16 +183,18 @@ jobs:
           if not token:
               fail("Solarmani autentimine ebaõnnestus (kontrolli App ID-d, App Secretit, e-posti ja parooli)")
 
-          # 4. Jaam ja paigaldatud võimsus
+          # 4. Jaam ja paigaldatud võimsus. Võimsus päritakse uuesti iga UTC päeva esimesel käivitusel (vana faili
+          # generatedAt on eilne), et Solarmanis muudetud väärtus jõuaks lehele; päringu ebaõnnestumisel jääb vana.
           capacity = num(old_data.get("installedCapacityKw"), 0, 1e5)
-          if not station_id or capacity is None:
+          capacity_checked_today = str((old or {}).get("generatedAt") or "")[:10] == datetime.now(timezone.utc).strftime("%Y-%m-%d")
+          if not station_id or capacity is None or not capacity_checked_today:
               lst = call("/station/v1.0/list", {"page": 1, "size": 50}, token)
               stations = [s for s in ((lst or {}).get("stationList") or []) if isinstance(s, dict)]
               chosen = next((s for s in stations if str(s.get("id")) == station_id), None) if station_id \
                   else (stations[0] if stations else None)
               if chosen:
                   station_id = str(chosen.get("id"))
-                  capacity = num(chosen.get("installedCapacity"), 0, 1e5)
+                  capacity = num(chosen.get("installedCapacity"), 0, 1e5) or capacity
                   if len(stations) > 1 and not secret("SOLARMAN_STATION_ID"):
                       print(f"Kontol on {len(stations)} jaama, kasutan esimest. Täpsemaks valikuks lisa SOLARMAN_STATION_ID.")
               elif not station_id:
