@@ -42,6 +42,7 @@
 
   --avg-line: #1b2433;
   --bar-primary: #2c5aa0;
+  --bar-prev: color-mix(in srgb, var(--bar-primary) 10%, var(--surface)); /* maja graafiku aasta varem tulp */
   --share-1: #2c5aa0;
   --share-2: #3f8f5e;
   --share-3: #a0692a;
@@ -82,6 +83,7 @@
 
     --avg-line: #edf1f6;
     --bar-primary: #7faae8;
+    --bar-prev: color-mix(in srgb, var(--bar-primary) 10%, var(--surface));
     --share-1: #7faae8;
     --share-2: #6fcf97;
     --share-3: #e0a860;
@@ -121,6 +123,7 @@
 
   --avg-line: #edf1f6;
   --bar-primary: #7faae8;
+  --bar-prev: color-mix(in srgb, var(--bar-primary) 10%, var(--surface));
   --share-1: #7faae8;
   --share-2: #6fcf97;
   --share-3: #e0a860;
@@ -159,6 +162,7 @@
 
   --avg-line: #1b2433;
   --bar-primary: #2c5aa0;
+  --bar-prev: color-mix(in srgb, var(--bar-primary) 10%, var(--surface));
   --share-1: #2c5aa0;
   --share-2: #3f8f5e;
   --share-3: #a0692a;
@@ -1095,8 +1099,8 @@ body {
   border: 1.5px solid var(--cat-roheline);
 }
 .legend__swatch--outline {
-  background: var(--surface-2);
-  border: 1px dashed var(--bar-primary);
+  background: var(--bar-prev);
+  border: 1.25px dashed var(--bar-primary);
 }
 
 .stats {
@@ -1187,6 +1191,11 @@ body {
 }
 .building-bar-hit:hover {
   fill: rgba(128, 128, 128, 0.08);
+}
+.chart-hint {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
 }
 
 /* ---------- Plokk 3: planeerija ---------- */
@@ -1391,10 +1400,6 @@ body {
   font-weight: 600;
 }
 
-/* ---------- Plokk 5: maja üldelekter ---------- */
-.building-bar { cursor: pointer; transition: opacity 0.12s ease; }
-.building-bar:hover { opacity: 0.85; }
-
 /* ---------- Jalus ---------- */
 .app-footer {
   margin: var(--s5) 0 var(--s3);
@@ -1423,6 +1428,8 @@ body {
   white-space: nowrap;
   border: 0;
 }
+/* Peidetud andmetabel (maja üldelekter) murtakse sõnade kaupa, et see ei ulatuks kitsal ekraanil lehest välja */
+.visually-hidden table { white-space: normal; }
 
 :focus-visible {
   outline: 3px solid var(--focus);
