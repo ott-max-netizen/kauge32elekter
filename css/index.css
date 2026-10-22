@@ -1151,11 +1151,17 @@ body {
 
 .legend {
   display: flex;
-  flex-direction: column;
-  gap: var(--s1);
+  flex-wrap: wrap;
+  gap: var(--s1) var(--s3);
   margin: var(--s2) 0 0;
   font-size: 13px;
   color: var(--muted);
+}
+/* Hinnagraafiku legend: rühmad üksteise all (maja üldelektri legend jääb reaks) */
+.legend--groups {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  gap: var(--s1);
 }
 /* Rühmad: „Hind, s/kWh“ (vasak telg) ja „Energia, kWh“ (parem telg) */
 .legend__group {
