@@ -4,6 +4,39 @@ See fail kirjeldab rakenduse `index.html` versioonimuudatusi, arhitektuurilisi k
 
 ---
 
+## energy-dashboard.html [1.2.0] — 2026-10-22
+
+Energialehe parandused graafikute ülevaate (21.10.2026) punkti 5 järgi. Kõik numbrid on endiselt mõõtmised (`paike.json`, `hinnad.json`); muutusid tõlgendus, sildid ja graafik.
+
+### 1. Andmete tõlgendus
+- **Aku märk:** `batteryKw = |chargePower| − |dischargePower|` (nagu elektriinfo lehel). `batteryPower`-i märki kasutatakse ainult nende väljade puudumisel ja see kalibreeritakse kaadritest (enamus, varuks laetuse muutus); vaikimisi `batteryPower` < 0 = laeb. Varem jäi märk viiki ja vaikeväärtus oli andmetega vastuolus.
+- **Ost ja müük:** ost = `purchasePower`; `gridPower`-it ei loeta enam ostuks. Müük tuletatakse bilansist ainult siis, kui ostu pole ja ülejääk ületab kadude varu (0,3 kW / 3 % toodangust); muidu 0, ja kui päike või tarbimine puudub, „—“ ja „müüki ei mõõdeta“. `CONFIG.solarman.vorguMark` on eemaldatud.
+- **Hoidevool:** alla 0,2 kW muutumatu laetusega on aku „Ootel · hoiab +0,1 kW“; aku vood ei animeeru. kW ja päevakogused jäävad mõõtmisteks.
+- **`data.day`** (Solarmani ~10× väikesed päevakogused) ei kasutata ka varuna; otseühendus ei päri neid. Kaadri samm loetakse väljast `frameSeconds` (vaikimisi 900 s); fail võib sisaldada eilseid kaadreid.
+- **Kesköö:** tänased kaadrid valitakse igal renderdamisel; kuupäeva vahetusel laaditakse andmed kohe uuesti (minutitaimer ja `visibilitychange`).
+- **Aegumislävi** 30 → 45 min, loetakse `index.html`-i `CONFIG.paike.aegunudMinutites`-ist. Aegunud mõõtmisel: pealkiri „Energiavoog kell 14:59“, „mõõdetud 14:59“, „Laeb (14:59)“, voog tuhm ja liikumatu; märgil „Mõõdetud 14:59 · 23 min tagasi“.
+- **Puuduv hinnaperiood** jääb auguks (eelmist perioodi ei pikendata); homme on siis „(osaline)“ ja teade „Homsed hinnad on osalised (puudub HH:MM)“.
+
+### 2. Sildid ja kooskõla elektriinfo lehega
+- „Isevarustatus 7 %“ → **„Päikesest kaetud 32 %“** (toodang − müük) / tarbimine, alltekst „täna · 43,5 kWh 136,5-st“ – sama mõõdik mis elektriinfo lehel.
+- Ost võrgust: „täna 126 kWh · ≈ 15,28 € (inverter, hinnang)“, plaatide kohal „Täna kuni 15:00 (inverter)“; jaluses, et arve alus (Estfeed) on elektriinfo lehel. „graafikust kuni 14:59“ → „kuni 15:00“ (viimase arvestatud kaadri lõpp).
+- **Odavaim 2 h aken** valitakse lõpphinna järgi (`avgFinal`): „koos tasudega 7,34 s/kWh (börsihind 1,88 s/kWh)“.
+- „Järgmised tunnid“: esimene rida „15:00 · käimas“ (terve tunni keskmine), mitte „praegu“.
+- Võrgusõlme rõngas on võrgu osa maja tarbimisest („23% tarbimisest“), mitte täisring. Voo diagramm on kompaktsem (392 → 324).
+- **Kellakeeramine:** `formatTimeRange` kuvab lõpu alguse nihkes ja 25.10 korduvale tunnile lisandub „(suveaeg)“/„(talveaeg)“ („03:45–04:00 (suveaeg)“, tabelis „03:00 (suveaeg)“ ja „03:00 (talveaeg)“).
+- Andmete seis (`meta`: hinnad kuni, kaadrid kuni, töövoo hoiatused) jaluses ja päise oleku vihjes; tariifide varukoopia ja `meta.tariffs`-i erinevus bänneris; jaluses „Tariifid: sisemine koopia“.
+
+### 3. Päeva graafik ja tabel
+- kW-paneelil lisaks **ost võrgust** (katkendjoon) ja **aku** (+ laeb / − tühjeneb) astmeliste 15-min sarjadena; telg ulatub alla nulli ainult negatiivsete väärtuste korral. Tooltipis „ost võrgust 28,1 kW“, „aku laeb 18,8 kW“, „laetus 59%“ (kW ühe komakohaga).
+- „Praegu“ joon legendis ja kellaajaga, pv/maja joone lõpus täpp (viimane mõõtmine, ka aria-label'is).
+- Odavaim 2 h aken hinnapaneelil (ka „Homme“ vahelehel, kui aken sinna jääb) koos legendikirjega.
+- Keskmise silt pannakse vabale küljele; kui see kataks tulpi, on väärtus legendis („päeva keskmine 8,29“).
+- Möödunud tulbad `opacity` 0,38 → 0,58, legendis „heledam = möödunud“. „Täna“ vahelehel lisaks „Suurim tarbimine“.
+- Tabel: veerud „Võrk kW“ ja „Aku kW“ märgiga numbritena (+27,4 / −0,1), selgitus tabeli kohal, kleepuv kellaaja veerg ja kerimisvihje kitsal ekraanil.
+- Ligipääsetavus: nähtaval inspektoril pole `aria-live`; ekraanilugejale loetakse ette ainult klaviatuuriga valitud periood (`#chart-announcer`); „Homme“ täpi tähendus on tekstina, enne avaldamist „(alates 15:00)“.
+
+---
+
 ## Töövood — 2026-10-21
 
 - **„Uuenda elektrihinnad“ käivitab käsitsi käivitamisel ka „Uuenda päikeseandmed“.** `uuenda-hinnad.yml`-is on uus töö `paike`: kui töövoog käivitatakse käsitsi (Run workflow või väline ajastaja, `workflow_dispatch`), käivitab see `gh workflow run uuenda-paike.yml` (õigus `actions: write`). Päikeseandmed uuenevad paralleelselt hindadega ega oota 15:00 akna hindu. Ajastatud käivitustel seda ei tehta: päikeseandmed uuenevad niigi iga 10 min järel ja lisakäivitused ületaksid GitHub Pagesi avaldamise piirangu.
@@ -266,7 +299,7 @@ Versioon `2.0.0` (defineeritud konstandina `APP_VERSION = '2.0.0'` failis `index
 
 1. **Failide jaotus:** `index.html` sisaldab HTML-i ja JS-i, kujundus on failis `css/index.css` (alates 2.4.2). `energy-dashboard.html` kasutab faile `css/common.css` ja `css/energy-dashboard.css`. CSS-i muutmisel suurenda linkides `?v=` väärtust. Väliseid raamistikke ega bundlereid ei kasutata.
 2. **Muuda alati viimast versiooni:** enne muutmist tõmba `main`. Ära asenda faili vanema koopiaga: 2.4.0 kirjutas nii PR #5 parandused üle.
-3. **`CONFIG` puutumatus:** Kõik kasutaja muudetavad parameetrid on skripti alguses objektis `CONFIG`. Võtmeid ei tohi ümber nimetada, sest `index.html`-i `CONFIG`-i loevad regulaaravaldisega ka `energy-dashboard.html` (`loadTariffs`) ja töövoog `uuenda-hinnad.yml` (`load_tariff_config`).
+3. **`CONFIG` puutumatus:** Kõik kasutaja muudetavad parameetrid on skripti alguses objektis `CONFIG`. Võtmeid ei tohi ümber nimetada, sest `index.html`-i `CONFIG`-i loevad regulaaravaldisega ka `energy-dashboard.html` (`loadTariffs`, ka `aegunudMinutites`) ja töövoog `uuenda-hinnad.yml` (`load_tariff_config`). Tariifide varukoopiad on energialehe `CONFIG`-is ja töövoo vaikeväärtustes: tariifi muutmisel uuenda kõik kolm kohta või kontrolli `hinnad.json`-i `meta.tariffs`-i järgi (energialeht hoiatab erinevuse ja varukoopia kasutamise korral bänneris).
 4. **Turvaline DOM:** Kasuta elementide loomiseks ainult `el()` / `svgEl()` ja `textContent`-i, mitte `innerHTML`-i. Uue välise hosti lisamisel uuenda `Content-Security-Policy` meta-silti.
 5. **Ajavöönd:** Kõik kuupäevade ja päeva alguste arvutused käivad läbi `getTallinnDateParts` / `getTallinnDayStart` (`Europe/Tallinn`).
 6. **Mõõtmised vs hinnangud:** Näita mõõtmisi (Estfeed, inverter) ainult mõõtmistena. Tulevikku ei summeerita „tänase“ koguse sisse. Mudel või prognoos peab olema selgelt märgistatud, mitte „(Inverter)“. Solarmani päevakoguseid (`data.day`) ei kasutata, sest need on ~10× liiga väikesed: kogused arvutatakse 15-min mõõtmistest.

@@ -242,6 +242,11 @@
   stroke: var(--border);
   stroke-width: 2;
 }
+/* Aegunud mõõtmine: väärtused jäävad nähtavaks tuhmimalt ja vood ei liigu (pealkirjas mõõtmise kellaaeg) */
+.flow-layout.is-stale .flow-svg,
+.flow-layout.is-stale .stats,
+.big-number.is-stale { opacity: 0.7; }
+.flow-layout.is-stale .flow-dots { animation: none; stroke-dasharray: none; stroke-width: 2; stroke-opacity: 0.9; }
 
 .flow-side { min-width: 0; }
 .flow-side__label {
@@ -250,6 +255,8 @@
   font-size: 14px;
   font-weight: 600;
 }
+.flow-side__label--stats { margin: var(--s3) 0 0; }
+.flow-side__label--stats + .stats { margin-top: var(--s2); }
 .flow-list {
   list-style: none;
   margin: 0;
@@ -270,6 +277,12 @@
   margin-left: auto;
   font-weight: 700;
   white-space: nowrap;
+}
+/* Telefonis on voo sektsioon esimese ekraani all: tihedam loend, et hinnakaart jõuaks varem nähtavale */
+@media (max-width: 767px) {
+  .flow-layout { gap: var(--s3); }
+  .flow-list { gap: 4px; }
+  .flow-list li { padding: 5px 10px; font-size: 14px; }
 }
 
 /* ---------- Päike ja aku ---------- */
@@ -327,6 +340,11 @@
 .verdict { font-size: 17px; }
 .stats--price { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .stats--price .stat__value { font-size: 18px; }
+/* Graafiku all „Täna“: kolm hinnaplaati + suurim tarbimine */
+.stats--price.stats--4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (min-width: 640px) {
+  .stats--price.stats--4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
 .upcoming-label {
   margin: var(--s4) 0 var(--s2);
   color: var(--muted);
@@ -340,10 +358,10 @@
   display: grid;
   gap: 5px;
 }
-/* Esimene veerg mahutab ka „homme 00:00“, et read ei murduks */
+/* Esimene veerg mahutab ka „homme 00:00“ ja „15:00 · käimas“, et read ei murduks */
 .upcoming li {
   display: grid;
-  grid-template-columns: 7em minmax(0, 1fr) 3.5em;
+  grid-template-columns: 8.5em minmax(0, 1fr) 3.5em;
   align-items: center;
   gap: var(--s2);
   font-size: 14px;
@@ -393,7 +411,27 @@
 }
 .pv-line { stroke: var(--solar); }
 .load-line { stroke: var(--home); }
+/* Võrk ja aku: märgiga astmelised 15-min sarjad (+ ost / laeb, − müük / tühjeneb); võrk katkendjoonena */
+.grid-line, .battery-line {
+  fill: none;
+  stroke-width: 1.75;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+.grid-line { stroke: var(--grid); stroke-dasharray: 5 3; }
+.battery-line { stroke: var(--battery); }
+.series-end { stroke: var(--surface); stroke-width: 1.5; pointer-events: none; }
 .now-line { stroke: var(--muted); stroke-width: 1; pointer-events: none; }
+.now-label {
+  font-size: 11px;
+  font-weight: 600;
+  fill: var(--muted);
+  stroke: var(--surface);
+  stroke-width: 3;
+  paint-order: stroke;
+  pointer-events: none;
+}
+.best-window { pointer-events: none; }
 
 .tooltip__row {
   display: flex !important;
@@ -412,6 +450,13 @@
   border-top: 2px solid var(--solar);
   border-radius: 2px;
 }
+.legend__swatch--past { background: var(--muted); opacity: 0.58; }
+.legend__swatch--best {
+  background: var(--cat-roheline-bg);
+  border: 1.5px solid var(--cat-roheline);
+}
+.line-key--dashed { border-top-style: dashed; }
+.line-key--thin { border-top-width: 2px; }
 
 .table-view {
   margin: var(--s3) 0 0;
@@ -440,9 +485,23 @@
   margin-top: -2px;
 }
 .table-view[open] summary::after { transform: rotate(-135deg); margin-top: 3px; }
+/* Kerimisvihje kitsal ekraanil (tabel on laiem kui kaart) */
+.table-view__hint { display: none; color: var(--muted); font-size: 13px; font-weight: 600; }
+@media (max-width: 599px) {
+  .table-view[open] .table-view__hint { display: inline; }
+}
+.table-note {
+  margin: 0 0 var(--s2);
+  color: var(--muted);
+  font-size: 13px;
+}
+/* Parema serva vari näitab, et tabel jätkub (kaob, kui on lõpuni keritud) */
 .table-scroll {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+  background:
+    linear-gradient(to left, var(--surface) 30%, transparent) right center / 32px 100% no-repeat local,
+    radial-gradient(farthest-side at 100% 50%, color-mix(in srgb, var(--text) 22%, transparent), transparent) right center / 12px 100% no-repeat scroll;
 }
 .data-table {
   width: 100%;
@@ -457,10 +516,20 @@
   text-align: right;
   font-weight: 400;
 }
-.data-table th { color: var(--muted); font-size: 13px; font-weight: 600; }
+.data-table th { color: var(--muted); font-size: 13px; font-weight: 600; vertical-align: bottom; }
+.data-table tbody th { color: var(--text); font-size: 14px; font-weight: 400; }
+.th-sub { display: block; font-size: 12px; font-weight: 500; }
+/* Kellaaja veerg jääb horisontaalsel kerimisel nähtavale */
 .data-table th:first-child,
-.data-table td:first-child { text-align: left; }
-.data-table tr.is-now td { font-weight: 700; }
+.data-table td:first-child {
+  text-align: left;
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--surface);
+}
+.data-table tr.is-now td,
+.data-table tr.is-now th { font-weight: 700; }
 
 /* ---------- Otseühenduse dialoog ---------- */
 .dialog {
