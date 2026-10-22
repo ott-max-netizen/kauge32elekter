@@ -26,7 +26,7 @@ Elering API → GitHub Actions → hinnad.json → GitHub Pages → index.html b
 | Fail | Sisu |
 |---|---|
 | `index.html` | **Elektriinfo**: börsihind, odavaim aeg, päikesekaart, maja lõpphind ja üldelekter (HTML ja JS; kujundus failis `css/index.css`) |
-| `energy-dashboard.html` | **Energia**: päikesepark, akupank, energiavoog ja soovitus |
+| `energy-dashboard.html` | **Energia**: päikesepark, akupank, energiavoog, soovitus, „Täna kokku“ (kWh ja €) ja päeva graafik |
 | `css/index.css` | elektriinfo lehe kujundus (teemamootor, hele/tume) |
 | `css/common.css`, `css/energy-dashboard.css` | energialehe kujundus |
 | `hinnad.json`, `paike.json` | GitHub Actionsi kirjutatud andmefailid |
@@ -321,16 +321,40 @@ Elering API      → GitHub Actions (uuenda-hinnad.yml) → hinnad.json ┴→ G
   see kalibreeritakse kaadritest (selle jaama puhul `batteryPower` < 0 = laeb). Kui aku suund kuvatakse
   siiski valepidi, määra `energy-dashboard.html` `CONFIG`-is `solarman.akuMark` käsitsi. Hoidevool
   (alla 0,2 kW muutumatu laetusega) on „Ootel · hoiab +0,1 kW“ (ka graafiku tooltipis „aku ootel · hoiab
-  +0,1 kW“), mitte „Laeb“. Aku mahtu (`aku.mahtKwh`)
-  on vaja laadimis- ja tühjenemisaja hinnanguks.
+  +0,1 kW“), mitte „Laeb“. Aku kasutatav mahutavus on `aku.mahtKwh` (100 kWh): sellest tulevad laadimis- ja
+  tühjenemisaja hinnang, „Salvestatud“ plaat ja aku tulu laetuse muutus.
+- **Müügihind** = börsihind ilma KM-ta − `muuk.tasu` (müügilepingu marginaal koos KM-ga, 1,05 s/kWh); müügihinnale
+  käibemaksu ei lisata.
 - Päikeseandmete aegumislävi (45 min) loetakse `index.html`-i `CONFIG.paike.aegunudMinutites`-ist, nii et
   mõlemal lehel kehtib sama lävi. Vanema mõõtmise korral on energiavoog tuhm, liikumatu ja pealkirjas on
   mõõtmise kellaaeg („Energiavoog kell 14:59“). Kui `index.html`-i ei õnnestu lugeda, kasutatakse
   energialehe varukoopiat ja bänneris on vastav teade; erinevus `hinnad.json`-i `meta.tariffs`-iga kuvatakse samuti.
 - Tänased kogused on inverteri 15-min mõõtmiste summad kuni viimase mõõtmiseni („Täna kuni 14:59
   (inverter)“; pooleli kaader ainult `lastUpdateTime`-ni); arve alus (ost võrgust Estfeedi arvestist) on elektriinfo lehel. „Päikesest kaetud“ on sama
-  mõõdik mis elektriinfo lehel. Päeva graafikul on lisaks päikesele ja maja tarbimisele ost võrgust
-  (katkendjoon) ja aku võimsus (+ laeb / − tühjeneb) ning odavaim 2 h aken (lõpphinna järgi).
+  mõõdik mis elektriinfo lehel.
+- **Päeva graafik** (ühine ajatelg, lüliti „1 h / 15 min“: telefonis vaikimisi 1 h, laiemal ekraanil 15 min):
+  - **Inverteri režiimi riba** (ainult „Täna“): iga 15-min kaader on *laeb võrgust*, *laeb päikesest*, *aku kasutus*,
+    *müük võrku* või *aku ootel* (alla 0,2 kW). Režiim on tuletatud mõõtmistest (laadimise allikas = suurem osa
+    energiavoost), mitte inverteri plaan; riba kohal „Inverter praegu: Aku kasutus · alates 17:30“ (vananenud
+    mõõtmisel „Inverter (mõõdetud 14:59): …“).
+  - **Hinnapaneel:** börsihinna tulbad, **ostuhind** (lõpphind koos tasudega, pidev joon), **müügihind**
+    (punktiir), päeva keskmine ja odavaim 2 h aken (lõpphinna järgi).
+  - **Alumine paneel** (lüliti ainult „Täna“): *Energiavood* – päike, maja, ost võrgust (katkendjoon), aku võimsus
+    (+ laeb / − tühjeneb) ja **aku laetus** (punktiir, parem telg 0–100 %); *Võrguga vahetus* – ost allapoole
+    ja müük ülespoole kWh-des perioodi kohta (mõõdetud osa; tooltipis ka ≈ €).
+  - **Päeva kogusummad** (avatav plokk graafiku all): päike, maja, ost, müük, aku laetud ja tühjendatud – kWh,
+    ≈ € ja keskmine s/kWh.
+- **Täna kokku** (inverter, kuni viimase mõõtmiseni; eurod on hinnang perioodi hinnaga):
+  - **Aku:** tulu = tühjendamise väärtus (lõpphinnaga) − laadimise kulu (päikesest laetud osa müügihinnaga, ülejäänu
+    lõpphinnaga) ± laetuse muutus (laetuse vahe × mahutavus tänase keskmise laadimishinnaga; laadimiseta päeval maja
+    keskmise ostuhinnaga). Ilma laetuse muutuseta oleks eile laetud energia tühjendamine „tasuta“.
+  - **Võrk:** ost ja müük kWh ja €, netokulu = ost − müük.
+  - **Päike:** toodang ja väärtus: otse majja läinud osa lõpphinnaga, akusse ja võrku läinud osa müügihinnaga
+    (akusse läinud päikese hilisem väärtus on aku tulus, nii et sama kWh-d ei loeta kaks korda); „Päikesest kaetud“.
+  - **Tarbimine:** maja tarbimine, selle hind ilma päikese ja akuta (kõik osta tarbimise ajal lõpphinnaga) ja võrgu netokulu.
+  - **Maja energiahind täna:** keskmine ostuhind (maja tarbimine perioodi lõpphinnaga) → maja maksis (võrgu netokulu /
+    maja tarbimine) ja „x % odavam“. Kõrval aku laetuse muutus, sest päeva lõpuks täitunud või tühjenenud aku
+    mõjutab võrdlust.
 
 **Otseühendus (valikuline):** jaluse lingi „Solarmani otseühendus“ kaudu saab ühes
 seadmes pärida andmed brauserist otse Solarmani API-st. Võtmed ja token salvestatakse
@@ -373,6 +397,6 @@ ootab 15 s.
 
 ## Versioon ja muudatuste ajalugu
 
-- Praegune versioon: **v2.5.0** (`APP_VERSION` failis `index.html`), energialehel **v1.2.0**
+- Praegune versioon: **v2.5.0** (`APP_VERSION` failis `index.html`), energialehel **v1.3.0**
   (`APP_VERSION` failis `energy-dashboard.html`).
 - Üksikasjalik ülevaade UI/UX muudatustest, komponentide klassidest ja arhitektuurireeglitest (sh juhised Claude AI-le) asub failis [CHANGELOG.md](CHANGELOG.md).
