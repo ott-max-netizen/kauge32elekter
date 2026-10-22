@@ -619,8 +619,10 @@ body {
 }
 .energy-flow-header {
   display: flex;
+  flex-wrap: wrap;               /* kitsal ekraanil läheb olekumärk oma reale, mitte kahele reale */
   align-items: center;
   justify-content: space-between;
+  gap: var(--s1) var(--s2);
   margin-bottom: var(--s2);
 }
 .energy-flow-title {
@@ -711,6 +713,14 @@ body {
 }
 @media (max-width: 400px) {
   .flow-connector { flex: 0 0 20px; }
+}
+/* Voosõlmede lai/kitsas tekst (responsiveText): ≤ 480 px lühem silt ilma allika-sulgudeta */
+.text--narrow { display: none; }
+@media (max-width: 480px) {
+  .text--wide { display: none; }
+  .text--narrow { display: inline; }
+  .flow-node { padding: 10px 4px; }
+  .flow-node__value { font-size: 15px; white-space: nowrap; } /* „30,6 kW“ ühel real */
 }
 .flow-arrow-svg {
   width: 100%;
@@ -1402,6 +1412,7 @@ body {
   font-size: 14px;
 }
 .app-footer p { margin: 0 0 var(--s2); }
+.app-footer__data { font-size: 13px; }
 .app-footer__meta {
   display: flex;
   flex-wrap: wrap;
