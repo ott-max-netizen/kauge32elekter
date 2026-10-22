@@ -161,9 +161,10 @@ jobs:
           def warn(msg):
               print(f"::warning::{msg}")
 
-          def note(msg):
-              """Hoiatus logisse ja faili meta.warnings-isse (leht saab selle kuvada)."""
-              warn(msg)
+          def note(msg, detail=""):
+              """Hoiatus logisse ja faili meta.warnings-isse. Lehed näitavad meta.warnings-i elanikele (olekumärgi vihje,
+              jalus), seega msg on tavakeeles; tehniline täpsustus (sisemised nimed) ainult logisse (detail)."""
+              warn(f"{msg} ({detail})" if detail else msg)
               if msg not in HOIATUSED:
                   HOIATUSED.append(msg)
 
@@ -197,11 +198,11 @@ jobs:
                   with open("index.html", encoding="utf-8") as f:
                       html = f.read()
               except OSError:
-                  note("index.html-i ei saanud lugeda; tariifid on töövoo vaikeväärtused")
+                  note("Tasude seadeid ei saanud lugeda; lõpphinnad on arvutatud vaiketasudega", "index.html-i ei saanud lugeda")
                   return cfg, "default"
               block = re.search(r"const\s+CONFIG\s*=\s*\{([\s\S]*?)\n\};", html)
               if not block:
-                  note("index.html-ist ei leitud CONFIG-plokki; tariifid on töövoo vaikeväärtused")
+                  note("Tasude seadeid ei saanud lugeda; lõpphinnad on arvutatud vaiketasudega", "index.html-ist ei leitud CONFIG-plokki")
                   return cfg, "default"
               src = block.group(1)
               missing = []
@@ -218,7 +219,7 @@ jobs:
                   else:
                       missing.append(key)
               if missing:
-                  note(f"index.html CONFIG-is puudub {', '.join(missing)}; kasutan töövoo vaikeväärtust")
+                  note("Osa tasude seadeid puudub; nende asemel on kasutatud vaikeväärtusi", f"index.html CONFIG-is puudub {', '.join(missing)}")
               return cfg, "index.html"
 
           def tariff_at(cfg, key, dt_tl):
@@ -614,12 +615,14 @@ jobs:
           if not any(r["timestamp"] <= now_ts < r["timestamp"] + 3600 for r in ee):
               fail("Vastus ei kata praegust hetke")
 
-          if old_ee and old_ee[-1]["timestamp"] > ee[-1]["timestamp"] and old_ee[-1]["timestamp"] > now_ts:
-              fail("Uus vastus ulatub vähem tulevikku kui olemasolev fail; jätan vana faili alles")
-
           # Rea kestus (15 min või tunnine) ja puuduvad hinnaperioodid. Auku ei sillutata: leht näitab seda
           # perioodi hinnata ja homne päev ei ole täielik (vt tomorrow_complete).
           steps = row_steps(ee)
+
+          # Võrreldakse viimase rea lõppu, mitte algust: tunnine vastus (viimane rida 23:00–24:00) katab sama aja
+          # kui 15-min fail (viimane rida 23:45–24:00)
+          if old_ee and old_ee[-1]["timestamp"] + row_steps(old_ee)[-1] > ee[-1]["timestamp"] + steps[-1] and old_ee[-1]["timestamp"] > now_ts:
+              fail("Uus vastus ulatub vähem tulevikku kui olemasolev fail; jätan vana faili alles")
           hourly_rows = sum(1 for s in steps if s != 900)
           if hourly_rows:
               note(f"Eleringi samm ei ole 15 min ({hourly_rows} tunnist rida); tunnirida saab kWh ainult siis, kui kõik selle veerandid on mõõdetud")
@@ -635,7 +638,8 @@ jobs:
           tariff_cfg, tariff_source = load_tariff_config()
           CFG_HASH = cfg_fingerprint(tariff_cfg)
           if tariff_cfg["kuutasu"] > 0 and any(v == 0 for _, v in TASUDE_AJALUGU["kuutasu"]):
-              note("CONFIG.hinnad.kuutasu on sisestatud, kuid töövoo kuutasu ajalugu (TASUDE_AJALUGU) on täitmata: varasemad kuud on ilma kuutasuta")
+              note("Kuutasu on seadetes olemas, kuid varasemate kuude kuutasu pole sisestatud; varasemad kuud on ilma kuutasuta",
+                   "CONFIG.hinnad.kuutasu > 0, töövoo TASUDE_AJALUGU['kuutasu'] täitmata")
 
           maja_elekter = list(old_maja)
           estfeed_ok = False
@@ -659,13 +663,13 @@ jobs:
                       # Kontrolli, kas arvesti tagastas tunnised või 15-minutilised intervallid
                       only_hourly = len(recent_kwh) > 2 and all(ts % 3600 == 0 for ts in recent_kwh)
                       if only_hourly:
-                          note("Estfeed tagastas tunnised andmed; 15-min read on tunni keskmised (kwhRes: hour)")
+                          note("Estfeed andis ainult tunnised kogused; 15-min jaotus on tunni keskmine", "kwhRes: hour")
                   else:
                       note("Estfeedi tarbimisandmeid ei saadud; kWh on eelmisest failist")
               else:
                   note("Estfeedi autentimine ebaõnnestus; kWh on eelmisest failist")
           else:
-              note("ELERING_CLIENT_ID / ELERING_CLIENT_SECRET puudub — tarbimisandmeid Estfeedist ei päritud.")
+              note("Estfeedi ligipääs pole seadistatud; tarbimisandmeid ei päritud", "ELERING_CLIENT_ID / ELERING_CLIENT_SECRET puudub")
 
           # 4. Seo tarbimine hinnaridadega. 15-min rida saab oma veerandi; tunnine rida nelja veerandi summa ainult
           # siis, kui kõik veerandid on mõõdetud (poolik tund jääb kWh-ta, et leht ei väidaks „kuni HH:00“).
@@ -738,6 +742,7 @@ jobs:
               # Koosta sihtkuude nimekiri: käesolev kuu (offset 0) + kuni 11 eelnevat kuud
               backfilled_pairs = 0
               empty_kept = []  # kuud, mille kohta Estfeed andis tühja vastuse, kuid varasem mõõdetud kirje jäi alles
+              partial_kept = []  # kuud, mille vastus kattis alla 99 % kuust ja andis varasemast vähem kWh
               for offset in range(0, 12):
                   ty, tm = shift_month(cur_y, cur_m, -offset)
                   py, pm = ty - 1, tm
@@ -792,6 +797,17 @@ jobs:
                       m_prices = fetch_nps_prices(ms, me, strict=False)
                       m_price_map = {r["timestamp"]: r["price"] for r in m_prices}
                       rec = compute_month_record(y, m, now, m_kwh, m_price_map, tariff_cfg, complete_flag=is_comp, prev_year_cutoff_dt=cutoff)
+                      # Osaline vastus (kuu päritakse 30-päevaste lõikudena; üks lõik võib tulla tühjana või auklikuna) ei
+                      # tohi varem mõõdetud kuud vähendada: lõplik kirje uue cfg-ga jääks muidu igaveseks liiga väikeseks.
+                      # Kaetus = vastuse perioodide arv / kuu perioodide arv (tunnise vastuse korral tunnid).
+                      t_ms, t_me = int(ms.timestamp()), int(me.timestamp())
+                      step_s = 3600 if len(m_kwh) > 2 and all(ts % 3600 == 0 for ts in m_kwh) else 900
+                      coverage = sum(1 for ts in m_kwh if t_ms <= ts < t_me) / max(1, (t_me - t_ms) // step_s)
+                      prev_m = cached_months.get(f"{y:04d}-{m:02d}") or {}
+                      if rec and coverage < 0.99 and (prev_m.get("kwh") or 0) > rec["kwh"] + 0.01:
+                          print(f"Kuu {y:04d}-{m:02d}: Estfeedi vastus kattis {coverage:.1%} kuust ({rec['kwh']} kWh, varem {prev_m['kwh']} kWh); varasem kirje jäi alles.")
+                          partial_kept.append(f"{y:04d}-{m:02d}")
+                          continue
                       if rec:
                           store_month(rec)
                           print(f"Kuu {rec['kuu']}: {rec['kwh']} kWh, {rec['eur']} € (complete={rec['complete']})")
@@ -799,6 +815,9 @@ jobs:
               if empty_kept:
                   ks = sorted(empty_kept)
                   note(f"Estfeed ei andnud mõõteandmeid {len(ks)} kuu kohta ({ks[0]}" + (f" … {ks[-1]}" if len(ks) > 1 else "") + "); varasemad kirjed jäid alles")
+              if partial_kept:
+                  ks = sorted(set(partial_kept))
+                  note(f"Estfeedi vastus oli {len(ks)} kuu kohta osaline ({ks[0]}" + (f" … {ks[-1]}" if len(ks) > 1 else "") + "); varasemad kirjed jäid alles")
               maja_elekter = [cached_months[k] for k in sorted(cached_months.keys())]
 
           # 6. Faili olekuinfo: lehed saavad eristada värsket ja eelmisest failist säilitatud andmestikku

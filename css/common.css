@@ -505,6 +505,44 @@ body {
   padding: 2px 10px;
   border-radius: 999px;
 }
+/* Infopaneel ei muuda riba kõrgust, seega graafik ei nihku sõrme all (sama mis css/index.css-is): laial ekraanil
+   hiirega üks rida päeva sildi kõrval (lõpp „…“, terve info on tooltipis), telefonis ja puuteekraanil kaherealine
+   paneel päeva sildi peal (puutel ainus infoallikas, tooltipi ei kuvata) */
+.chart-status-bar--inspect {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: baseline;
+}
+.chart-status-bar--inspect .chart-inspector {
+  justify-self: end;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@media (max-width: 767px), (pointer: coarse) {
+  .chart-status-bar--inspect {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: center;
+    min-height: 42px;
+  }
+  .chart-status-bar--inspect .chart-inspector {
+    position: absolute;
+    inset: 0;
+    justify-self: stretch;   /* katab päeva sildi tervenisti (lühike tekst ei jäta silti poolikuna nähtavale) */
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    max-width: none;
+    white-space: normal;
+    font-size: 13px;
+    line-height: 18px;
+    padding: 3px 10px;
+    border-radius: var(--radius-sm);
+  }
+}
 .chart-wrapper {
   position: relative;
   min-width: 0;
@@ -520,7 +558,8 @@ body {
 }
 
 .bar { transition: opacity 0.1s ease; }
-/* Möödunud perioodid heledamad, kuid kategooriavärv jääb eristatavaks (legendis „heledam = möödunud“) */
+/* Möödunud perioodid tuhmimad (heledas teemas heledamad, tumedas tumedamad), kategooriavärv jääb eristatavaks
+   (legendis „tuhmim = möödunud“) */
 .bar--past { opacity: 0.6; }
 .bar--active { stroke: var(--text); stroke-width: 2; opacity: 1 !important; }
 .bar-current { animation: pulse 2.4s ease-in-out infinite; }

@@ -116,7 +116,8 @@
         </div>
       </div>
       <div class="card__body" id="chart-panel" role="tabpanel" aria-labelledby="tab-today">
-        <div class="chart-status-bar">
+        <!-- Fikseeritud kõrgusega: inspektor katab päeva sildi, graafik ei nihku (telefonis ja puutel kahel real) -->
+        <div class="chart-status-bar chart-status-bar--inspect">
           <p id="chart-day-label" class="chart-day"></p>
           <p id="chart-inspector" class="chart-inspector" hidden></p>
         </div>
@@ -388,6 +389,7 @@ const state = {
   chartItems: [],
   chartCrosshairs: [],
   tooltipIndex: null,
+  tooltipPointer: null,   // 'mouse' | 'pen' | 'touch' | 'keyboard': sama periood teisest sisendist joonistatakse uuesti
   flowKey: ''
 };
 
@@ -1462,11 +1464,13 @@ async function refreshSolar(signal) {
    8. Analüüs — tänased kogused, energiavood ja soovitus
    ========================================================================== */
 /**
- * Tänased kWh 15-min mõõtmistest (kaadrid × kestus kuni järgmise kaadri või praeguse hetkeni) ning võrgu
+ * Tänased kWh 15-min mõõtmistest (kaadrid × kestus kuni järgmise kaadri või viimase mõõtmiseni) ning võrgu
  * ost/müük eurodes. Solarmani päevakoguseid (data.day) ei kasutata (~10× liiga väikesed); kaadrite
  * puudumisel on kogused null („—“). through = viimase arvestatud kaadri lõpp („kuni 15:00“).
+ * measuredEndMs: viimane kaader on enamasti pooleli ja mõõdetud ainult kuni inverteri mõõtmiseni (lastUpdateTime);
+ * lehe kellani pikendatuna oleks kogus ja „kuni“ aeg mõõtmisest hilisem (vt measuredEndOf).
  */
-function computeDayTotals(series, periods, now, frameSeconds = FRAME_SECONDS) {
+function computeDayTotals(series, periods, now, frameSeconds = FRAME_SECONDS, measuredEndMs = now.getTime()) {
   const acc = { pv: 0, load: 0, imp: 0, exp: 0, charge: 0, discharge: 0, impEur: 0, expEur: 0, impPriced: 0, expPriced: 0 };
   const has = { pv: false, load: false, imp: false, exp: false, bat: false };
   let peak = null;
@@ -1476,7 +1480,7 @@ function computeDayTotals(series, periods, now, frameSeconds = FRAME_SECONDS) {
   let through = null;
   series.forEach((s, i) => {
     const next = series[i + 1];
-    const endMs = Math.min(s.t + frameSeconds * 1000, next ? next.t : Infinity, now.getTime());
+    const endMs = Math.min(s.t + frameSeconds * 1000, next ? next.t : Infinity, now.getTime(), measuredEndMs);
     const h = Math.max(0, endMs - s.t) / HOUR_MS;
     if (s.pvKw != null && (!peak || s.pvKw > peak.kw)) peak = { kw: s.pvKw, t: new Date(s.t) };
     if (s.loadKw != null && (!peakLoad || s.loadKw > peakLoad.kw)) peakLoad = { kw: s.loadKw, t: new Date(s.t) };
@@ -1526,6 +1530,17 @@ function computeDayTotals(series, periods, now, frameSeconds = FRAME_SECONDS) {
   totals.coverage = totals.selfPvKwh != null && totals.loadKwh > 0 ? clamp(totals.selfPvKwh / totals.loadKwh, 0, 1) : null;
   totals.selfConsumption = totals.pvKwh > 0 && totals.exportKwh != null ? clamp(1 - totals.exportKwh / totals.pvKwh, 0, 1) : null;
   return totals;
+}
+
+/**
+ * Inverteri mõõtmiste lõpp (ms): viimase mõõtmise aeg, kui see on viimase kaadri sees, muidu praegune hetk
+ * (sama mis elektriinfo lehe buildSolarView measuredEndMs).
+ */
+function measuredEndOf(solar, now) {
+  const nowMs = now.getTime();
+  const last = solar && solar.series.length ? solar.series[solar.series.length - 1] : null;
+  const updatedMs = solar && solar.updated ? solar.updated.getTime() : null;
+  return updatedMs != null && last && updatedMs > last.t ? Math.min(nowMs, updatedMs) : nowMs;
 }
 
 /** Jagab hetkevõimsused allikate ja tarbijate vahel (päike eelistatult majale, siis akule, siis võrku). */
@@ -1585,7 +1600,7 @@ function derive() {
     tomorrowStatus: getTomorrowStatus(now, tomorrow.length > 0, tomorrowRaw),
     best2h: findBestWindow(future, now, 120, horizonEnd),
     solar, solarAgeMin, solarFresh, series,
-    totals: solar ? computeDayTotals(series, all, now, solar.frameSeconds) : null,
+    totals: solar ? computeDayTotals(series, all, now, solar.frameSeconds, measuredEndOf(solar, now)) : null,
     flows: solar ? allocateFlows(solar.now) : null
   };
 }
@@ -1787,8 +1802,11 @@ function describeDataState(now) {
   if (pricesUntil) parts.push(`börsihinnad ${describeUntil(pricesUntil, now)}`);
   const solar = state.solar.data;
   if (solar) {
+    // Töövoo framesUntil on viimase kaadri lõpp; pooleli kaader on mõõdetud ainult kuni inverteri mõõtmiseni
     const last = solar.series.length ? solar.series[solar.series.length - 1] : null;
-    const framesUntil = (solar.meta && metaDate(solar.meta.framesUntil)) || (last ? new Date(Math.min(last.t + solar.frameSeconds * 1000, now.getTime())) : null);
+    const metaUntil = solar.meta && metaDate(solar.meta.framesUntil);
+    const framesUntil = metaUntil && solar.updated && solar.updated < metaUntil ? solar.updated
+      : metaUntil || (last ? new Date(Math.min(last.t + solar.frameSeconds * 1000, measuredEndOf(solar, now))) : null);
     if (framesUntil) parts.push(`inverteri ${Math.round(solar.frameSeconds / 60)}-min kaadrid ${describeUntil(framesUntil, now)}`);
   }
   // pricesOk === false: hinnaread on värsked, kuid neis on auk või tunnine samm (ebaõnnestunud päring faili ei kirjuta).
@@ -2391,7 +2409,8 @@ function renderChartLegend({ hasPrices = false, hasPower = false, isToday = fals
       ['var(--cat-oranz)', `${labels.moodukas} (${fmt(limits.kollane)}–${fmt(limits.oranz)})`],
       ['var(--cat-punane)', `${labels.kallis} (≥${fmt(limits.oranz)})`]
     ].map(([color, text]) => legendItem(el('span', { class: 'legend__swatch', style: `--swatch:${color}`, 'aria-hidden': 'true' }), text)));
-    if (hasPast) nodes.push(legendItem(el('span', { class: 'legend__swatch legend__swatch--past', 'aria-hidden': 'true' }), 'heledam = möödunud'));
+    // „Heledam“ oleks tumedas teemas vale (0,6 läbipaistvus tumedal pinnal tumendab): tuhmim mõlemas teemas
+    if (hasPast) nodes.push(legendItem(el('span', { class: 'legend__swatch legend__swatch--past', 'aria-hidden': 'true' }), 'tuhmim = möödunud'));
     nodes.push(legendItem(legendLineKey('var(--avg-line)', 'line-key--dashed line-key--thin'),
       avgInLegend && avg != null ? `päeva keskmine ${numberFormat.d2.format(avg)}` : 'päeva keskmine'));
     if (isToday) nodes.push(legendItem(el('span', { class: 'legend__swatch legend__swatch--current', 'aria-hidden': 'true' }), 'praegune periood'));
@@ -2473,10 +2492,10 @@ function buildDayChart({ slots, dayStart, dayEnd, width, nowMs, isToday, current
       svg.append(svgEl('text', { x: padL - 6, y: ty + 4, 'text-anchor': 'end', 'font-size': 12, fill: 'var(--muted)', text: axis.format.format(tick) }));
     }
     svg.append(svgEl('text', { class: 'axis-unit', x: 2, y: 11, text: 's/kWh' }));
-    // Hinnaklasside lävedel (TARIFFS.hinnapiirid.kollane ja .oranz) ruudustiku joon ilma sildita, kui teljejaotus seda ei anna
+    // Hinnaklasside lävedel (TARIFFS.hinnapiirid.kollane ja .oranz) punktiirjoon ilma sildita, kui teljejaotus seda ei anna
     for (const limit of [TARIFFS.hinnapiirid.kollane, TARIFFS.hinnapiirid.oranz].map(Number)) {
       if (!(limit > yMin && limit < yMax) || axis.ticks.some(t => Math.abs(t - limit) < 1e-6)) continue;
-      svg.append(svgEl('line', { class: 'threshold-line', x1: padL, x2: width - padR, y1: y(limit), y2: y(limit), stroke: 'var(--border)', 'stroke-width': 1 }));
+      svg.append(svgEl('line', { class: 'threshold-line', x1: padL, x2: width - padR, y1: y(limit), y2: y(limit), stroke: 'var(--border)', 'stroke-width': 1, 'stroke-dasharray': '2 3' }));
     }
     for (const item of items) {
       const p = item.slot.period;
@@ -2802,6 +2821,8 @@ function tooltipRow(color, label, value, extraClass = '', keyClass = '') {
 /**
  * Näitab perioodi vihjet ja inspektorit. Sama perioodi korduval valimisel (iga hiireliigutus) ei uuendata midagi.
  * Ekraanilugejale (chart-announcer, aria-live) kirjutatakse ainult klaviatuuri/fookuse rajalt (pointerType 'keyboard').
+ * Puutel ainult inspektor (fikseeritud kõrgusega paneel graafiku kohal, nagu elektriinfo lehel): hõljuv kast kataks
+ * sõrme all hinnapaneeli ja graafik ei tohi nihkuda.
  */
 function showTooltip(index, pointerType = 'mouse') {
   const items = state.chartItems;
@@ -2809,7 +2830,7 @@ function showTooltip(index, pointerType = 'mouse') {
   index = clamp(index, 0, items.length - 1);
   const tooltip = byId('chart-tooltip');
   const inspector = byId('chart-inspector');
-  if (index === state.tooltipIndex && !inspector.hidden) return;
+  if (index === state.tooltipIndex && pointerType === state.tooltipPointer && !inspector.hidden) return;
   const item = items[index];
   const slot = item.slot;
   const wrapper = byId('chart-wrapper');
@@ -2822,6 +2843,7 @@ function showTooltip(index, pointerType = 'mouse') {
     line.setAttribute('visibility', 'visible');
   }
   state.tooltipIndex = index;
+  state.tooltipPointer = pointerType;
 
   const timeText = formatTimeRange(slot.start, slot.end);
   const lines = [el('strong', { text: timeText })];
@@ -2841,13 +2863,25 @@ function showTooltip(index, pointerType = 'mouse') {
   if (slot.pvKw != null) row('var(--solar-line)', 'päike', formatKw1(slot.pvKw));
   if (slot.loadKw != null) row('var(--home)', 'maja', formatKw1(slot.loadKw));
   if (slot.gridKw != null && Math.abs(slot.gridKw) > FLOW_MIN_KW) row('var(--grid)', slot.gridKw > 0 ? 'ost võrgust' : 'müük võrku', formatKw1(Math.abs(slot.gridKw)), 'line-key--dashed');
-  if (slot.batteryKw != null && Math.abs(slot.batteryKw) > FLOW_MIN_KW) row('var(--battery)', slot.batteryKw > 0 ? 'aku laeb' : 'aku tühjeneb', formatKw1(Math.abs(slot.batteryKw)));
+  if (slot.batteryKw != null && Math.abs(slot.batteryKw) > FLOW_MIN_KW) {
+    // Hoidevool (alla BATTERY_IDLE_KW, laetus eelmise perioodiga võrreldes sama) on „ootel“ nagu akukaardil, mitte „laeb“
+    const prev = index > 0 ? items[index - 1].slot : null;
+    const socSteady = slot.soc == null || !prev || prev.soc == null || Math.abs(slot.soc - prev.soc) < 0.5;
+    if (Math.abs(slot.batteryKw) < BATTERY_IDLE_KW && socSteady) row('var(--battery)', 'aku ootel · hoiab', formatSigned1(slot.batteryKw) + '\u00a0kW');
+    else row('var(--battery)', slot.batteryKw > 0 ? 'aku laeb' : 'aku tühjeneb', formatKw1(Math.abs(slot.batteryKw)));
+  }
   if (slot.soc != null) row('transparent', 'laetus', formatPct(slot.soc));
-  tooltip.replaceChildren(...lines);
-  tooltip.hidden = false;
-  inspector.textContent = summary.slice(0, short).join(' · ');
+  // Puutel on inspektor ainus infoallikas: kõik read (kaherealine paneel lõpetab liiga pika teksti „…“-ga)
+  inspector.textContent = summary.slice(0, pointerType === 'touch' ? summary.length : short).join(' · ');
   inspector.hidden = false;
   if (pointerType === 'keyboard') byId('chart-announcer').textContent = summary.join(' · ');
+  if (pointerType === 'touch') {
+    tooltip.hidden = true;
+    tooltip.replaceChildren();
+    return;
+  }
+  tooltip.replaceChildren(...lines);
+  tooltip.hidden = false;
 
   const firstSvg = wrapper.querySelector('svg');
   const scale = firstSvg && firstSvg.viewBox.baseVal.width ? firstSvg.getBoundingClientRect().width / firstSvg.viewBox.baseVal.width : 1;
@@ -2857,7 +2891,16 @@ function showTooltip(index, pointerType = 'mouse') {
   // Tooltip pannakse perioodi kõrvale, et see ei kataks vaadeldavat tulpa
   const left = px + 14 + tw <= wrapper.clientWidth ? px + 14 : px - 14 - tw;
   tooltip.style.left = `${Math.round(clamp(left, 0, maxLeft))}px`;
-  tooltip.style.top = pointerType === 'touch' ? '0px' : `${Math.round(Math.max(0, item.top * scale - 10))}px`;
+  tooltip.style.top = `${Math.round(Math.max(0, item.top * scale - 10))}px`;
+}
+
+/** Kas fookus tuli klaviatuurilt? Hiireklõps ja puudutus annavad graafikule samuti fookuse (tabindex). */
+function isKeyboardFocus(node) {
+  try {
+    return node.matches(':focus-visible');
+  } catch (error) {
+    return state.tooltipIndex == null;   // :focus-visible'ita brauser: periood pole pointerdown'ist juba valitud
+  }
 }
 
 function attachChartInteraction(stack, items) {
@@ -2894,7 +2937,12 @@ function attachChartInteraction(stack, items) {
     touchActive = false;
     if (event.pointerType !== 'touch' && document.activeElement !== stack) hideTooltip();
   });
-  stack.addEventListener('focus', () => showTooltip(state.tooltipIndex ?? defaultIndex, 'keyboard'));
+  stack.addEventListener('focus', () => {
+    // Klõps ja puudutus annavad samuti fookuse: periood on siis pointerdown'ist juba valitud ja 'keyboard'-kutse tooks
+    // puutel tooltipi tagasi sõrme alla. Ainult klaviatuuri fookus näitab perioodi ja teatab selle (nagu elektriinfo lehel).
+    if (!isKeyboardFocus(stack)) return;
+    showTooltip(state.tooltipIndex ?? defaultIndex, 'keyboard');
+  });
   stack.addEventListener('blur', hideTooltip);
   stack.addEventListener('keydown', event => {
     const index = state.tooltipIndex ?? defaultIndex;
