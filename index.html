@@ -1239,7 +1239,9 @@ function buildSolarView(raw, periods, now) {
     // Hoidevool: väike laadimine/tühjenemine ilma laetuse muutuseta ei ole laadimine (viimase kaadriga võrreldes)
     const last = series.length ? series[series.length - 1] : null;
     const socSteady = current.soc == null || !last || last.soc == null || Math.abs(current.soc - last.soc) < 0.5;
-    current.batteryIdle = current.batteryKw == null || (Math.abs(current.batteryKw) < BATTERY_IDLE_KW && socSteady);
+    // Mõõtemüra (≤ 0,05 kW) on ootel ka siis, kui laetus muutub (nagu energialehel)
+    current.batteryIdle = current.batteryKw == null || Math.abs(current.batteryKw) <= SOLAR_FLOW_MIN_KW ||
+      (Math.abs(current.batteryKw) < BATTERY_IDLE_KW && socSteady);
   }
 
   // Kogused: iga kaadri keskmine võimsus × kestus (kuni järgmise kaadri või praeguse hetkeni)
