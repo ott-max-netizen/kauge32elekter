@@ -4,6 +4,13 @@ See fail kirjeldab rakenduse `index.html` versioonimuudatusi, arhitektuurilisi k
 
 ---
 
+## Töövood: samaaegsed käivitused — 2026-10-22
+
+- PR-ide #12 ja #13 ühendamine 23 s vahega käivitas kaks „Uuenda elektrihinnad“ käivitust. Teine võttis aluseks oma sündmuse commit'i (mitte `main`-i uusimat seisu), selle push lükati tagasi ja `git pull --rebase` jooksis `hinnad.json`-is ja `paevad.json`-is konflikti (punane käivitus). Sama võis juhtuda varem, kui käivitus ootas järjekorras (`concurrency`).
+- Mõlemas töövoos (`uuenda-hinnad.yml`, `uuenda-paike.yml`): `actions/checkout` võtab haru uusima seisu (`ref: github.ref_name`). Kui push'i järel tekib andmefailides konflikt, katkestatakse rebase ja käivitus lõpeb hoiatusega („Teine käivitus uuendas samal ajal andmefaile …“): andmefailid on täielikult tuletatud ja järgmine käivitus arvutab need uuesti.
+
+---
+
 ## energy-dashboard.html [1.5.0] — tarbimise prognoos — 2026-10-22
 
 Maja tarbimise prognoos päeva graafikul. `APP_VERSION` `1.5.0`, CSS-i lingid `?v=20261022d`. Päikese prognoosi ja inverteri plaani ei kuvata (omaniku otsus).

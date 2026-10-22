@@ -67,6 +67,10 @@ jobs:
     steps:
       - name: Võta repositoorium
         uses: actions/checkout@v5
+        with:
+          # Haru uusim seis, mitte käivituse sündmuse commit: järjekorras oodanud või korratud käivitus alustaks
+          # muidu vananenud andmefailidest ja nende push jookseks teise käivituse commit'iga konflikti
+          ref: ${{ github.ref_name }}
 
       - name: Lae, kontrolli ja filtreeri hinnad ning tarbimine
         env:
@@ -1207,6 +1211,12 @@ jobs:
           for attempt in 1 2 3; do
             if git push origin "HEAD:${GITHUB_REF_NAME}"; then exit 0; fi
             echo "Push lükati tagasi (repot muudeti samal ajal), proovin uuesti ($attempt/3)..."
-            git pull --rebase origin "${GITHUB_REF_NAME}"
+            if ! git pull --rebase origin "${GITHUB_REF_NAME}"; then
+              # Teine käivitus kirjutas samal ajal samu andmefaile (hinnad.json/paevad.json). Need on täielikult tuletatud,
+              # seega selle käivituse tulemust ei salvestata ja järgmine käivitus arvutab need uuesti.
+              git rebase --abort || true
+              echo "::warning::Teine käivitus uuendas samal ajal andmefaile; selle käivituse tulemust ei salvestatud (järgmine käivitus arvutab need uuesti)."
+              exit 0
+            fi
           done
           exit 1
