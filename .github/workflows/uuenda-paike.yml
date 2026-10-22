@@ -258,9 +258,12 @@ jobs:
 
           # Müügi märgikokkulepe on kontrollimata (müüki pole seni esinenud): esimesel müügipäeval peab arendaja
           # kontrollima, kas gridPower/wirePower näitavad müüki ja kas lehtede tuletus (ost ≈ 0 ja ülejääk) klapib.
-          grid_frames = [f for f in new_frames if abs(f.get("gridPower") or 0) >= 1 or
-                         ("wirePower" in f and "purchasePower" in f and abs(f["wirePower"] - f["purchasePower"]) >= 1)]
-          if grid_frames or abs(real_time.get("gridPower") or 0) >= 1:
+          # Ostu ajal on gridPower harva paar kümmet vatti (wirePower = purchasePower − gridPower), seega hoiatatakse
+          # alles lehtede mürapiirist (0,05 kW) suurema väärtuse korral.
+          GRID_WARN_W = 50
+          grid_frames = [f for f in new_frames if abs(f.get("gridPower") or 0) >= GRID_WARN_W or
+                         ("wirePower" in f and "purchasePower" in f and abs(f["wirePower"] - f["purchasePower"]) >= GRID_WARN_W)]
+          if grid_frames or abs(real_time.get("gridPower") or 0) >= GRID_WARN_W:
               warn(f"Solarman: gridPower ≠ 0 või wirePower ≠ purchasePower ({len(grid_frames)} kaadris, realTime gridPower "
                    f"{real_time.get('gridPower')} W) – võimalik müük võrku; kontrolli märgikokkulepet (README „Piirangud“)")
 
