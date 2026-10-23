@@ -1,812 +1,274 @@
 /* ==========================================================================
-   Kauge 32 energia (energy-dashboard.html) — lehepõhine kujundus.
-   Ühised tokenid ja komponendid on failis css/common.css. Energia
-   identiteedivärvid (--solar, --home, --battery, --grid) on kontrastsed pinna suhtes (≥ 3:1).
-   Värvipimedale ei toetu ükski eristus ainult toonile: sõlmedel ja ridadel on sildid, võrk on
-   neutraalne terashall ja graafikul katkendjoon (maja ja võrk eristuvad ka heleduse järgi).
+   Kauge 32 energia (energy-dashboard.html) — ainult lehe paigutus ja lehepõhised komponendid.
+   Tokenid, klaas, bento-alus ja ühised komponendid (kaart, plaat, märk, lülitid, legend, graafiku raam,
+   režiimiriba, tabelivaade, skeleton, mõõdik) on failis css/common.css ja neid siin ei korrata (README reegel 11).
+   Disainispetsifikatsioon: p 4.3 (bento), p 5 (klassid), p 6.4–6.11 (graafikud), p 7 (energiavoog), p 10 (olekud).
+   NB! Pärast muutmist suurenda energy-dashboard.html-is lingi ?v= väärtust.
    ========================================================================== */
 
-/* Ainult energialehe tokenid: müük võrku (lilla, ei sarnane hinnaklassi ega osapoolte toonidega) ja
-   inverteri režiimiriba „aku ootel“ (neutraalne). Ühised tokenid on failis css/common.css. */
-:root {
-  --export: #7a4fb0;
-  --mode-idle: #b8c2cf;
+/* ---------- 1. Bento (p 4.3) ----------
+   Nimetatud alad kehtivad alates 640 px. Telefonis (üks veerg, alasid pole) ei tohi kaardil olla grid-area-d:
+   olematu ala nimi paigutaks kõik kaardid samasse kaudsesse lahtrisse. DOM-järjekord = lugemis- ja fookusjärjekord. */
+@media (min-width: 640px) {
+  #section-advice { grid-area: soovitus; } #section-flow { grid-area: voog; }    #section-price { grid-area: hind; }
+  #section-hours { grid-area: tunnid; }    #section-battery { grid-area: aku; }  #section-solar { grid-area: paike; }
+  #section-results { grid-area: tulemus; } #section-chart { grid-area: graafik; }
+  .layout { grid-template-areas:
+    "soovitus soovitus soovitus soovitus soovitus soovitus"
+    "voog voog voog voog voog voog"
+    "hind hind hind tunnid tunnid tunnid"
+    "aku aku aku paike paike paike"
+    "tulemus tulemus tulemus tulemus tulemus tulemus"
+    "graafik graafik graafik graafik graafik graafik"; }
 }
-@media screen and (prefers-color-scheme: dark) {
-  :root {
-    --export: #b597e0;
-    --mode-idle: #3a4a5e;
-  }
+@media (min-width: 1024px) {
+  .layout { grid-template-areas:
+    "soovitus soovitus soovitus soovitus soovitus soovitus soovitus soovitus soovitus soovitus soovitus soovitus"
+    "voog voog voog voog voog voog voog hind hind hind hind hind"
+    "voog voog voog voog voog voog voog tunnid tunnid tunnid tunnid tunnid"
+    "aku aku aku aku aku aku paike paike paike paike paike paike"
+    "tulemus tulemus tulemus tulemus tulemus tulemus tulemus tulemus tulemus tulemus tulemus tulemus"
+    "graafik graafik graafik graafik graafik graafik graafik graafik graafik graafik graafik graafik"; }
+  /* 2 rea kõrgune voo plaat ei jäta tühja keskele: SVG on vaba kõrguse keskel, loend all (tunnide kaardi põhjaga ühel joonel) */
+  #section-flow > .card__body { flex: 1 1 auto; }
+  #section-flow .flow-layout { height: 100%; grid-template-rows: minmax(0, 1fr) auto; }
+  #section-flow .flow-figure { align-self: center; }
 }
 
-/* Suured üksikud numbrid näevad proportsionaalsete numbritega parem välja */
-.stat__value,
-.big-number,
-.hero-price__value { font-variant-numeric: proportional-nums; }
+/* Kõrvuti kaartidel (aku + päike, hind + tunnid) on plaadid kaardi põhjas */
+#section-battery > .card__body,
+#section-solar > .card__body,
+#section-price > .card__body { flex: 1 1 auto; }
+#section-price .facts { margin-top: auto; }
 
-/* ---------- Päis ja nupud ---------- */
-.header-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--s2) var(--s3);
-}
+/* ---------- 2. Päis ----------
+   Uuendamise aeg (#status) on pealkirja all (nagu elektriinfo alapealkiri): telefonis mahub päis kahele reale
+   (bränd + navigatsioon, siis olekupill + teema + värskendus), et hinnakaart jõuaks esimesele ekraanile (L-135). */
+.brand .status { font-size: var(--fs-micro); line-height: 1.35; }
 @media (max-width: 479px) {
-  .status__next { display: none; }
+  .status__next { display: none; }   /* „järgmine HH:MM“ ainult laiemal ekraanil */
+  .app-header { column-gap: var(--s2); }
+  .app-title { font-size: 18px; }
+  .site-nav__link { padding: 0 12px; }
+  /* Värskendusnupp: ikoon + loendur; tekst „Värskenda“ jääb nupu ligipääsetavaks nimeks */
+  #refresh-button { padding: 0 12px; }
+  #refresh-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 }
 
-.btn--ghost {
-  background: var(--surface);
-  color: var(--text);
-  border-color: var(--border);
-  padding: 0 16px 0 14px;
-}
-.btn--danger {
-  background: var(--surface);
-  color: var(--cat-punane-fg);
-  border-color: var(--cat-punane);
-}
-.btn__icon {
-  width: 18px;
-  height: 18px;
-  flex: none;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-.btn.is-loading .btn__icon { animation: spin 0.9s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
-
-.link-btn {
-  appearance: none;
-  border: 0;
-  background: none;
-  padding: 0;
-  font: inherit;
-  color: var(--focus);
-  text-decoration: underline;
-  text-underline-offset: 2px;
-  cursor: pointer;
-  min-height: 44px;
-}
-
-/* ---------- Kaardid ---------- */
-.card__body { transition: opacity 0.2s ease; }
-.layout.is-refreshing .card__body { opacity: 0.62; }
-
-.state-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 4px 12px 4px 10px;
-  border-radius: 999px;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  font-size: 14px;
-  font-weight: 700;
-  line-height: 1.2;
-}
-.state-pill::before {
-  content: "";
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: var(--pill-dot, var(--muted));
-  flex: none;
-}
-
-/* ---------- Laadimise olekud ---------- */
-.skeleton {
-  display: block;
-  border-radius: var(--radius-sm);
-  background: linear-gradient(90deg, var(--skeleton) 0%, var(--skeleton-hi) 50%, var(--skeleton) 100%);
-  background-size: 200% 100%;
-  animation: shimmer 1.4s ease-in-out infinite;
-}
-.skeleton + .skeleton { margin-top: var(--s2); }
-.skeleton--line { height: 14px; }
-.skeleton--short { width: 45%; }
-.skeleton--mid { width: 70%; }
-.skeleton--big { height: 46px; width: 55%; }
-.skeleton--block { height: 150px; }
-.skeleton--flow { height: 280px; }
-@keyframes shimmer {
-  from { background-position: 200% 0; }
-  to { background-position: -200% 0; }
-}
-
-/* ---------- Soovitus ---------- */
-.card--advice {
-  border-left: 6px solid var(--tone, var(--border));
-  padding-top: var(--s3);
-  padding-bottom: var(--s3);
-}
-.card--advice[data-tone="good"] { --tone: var(--cat-roheline); --tone-bg: var(--cat-roheline-bg); --tone-fg: var(--cat-roheline-fg); }
-.card--advice[data-tone="warn"] { --tone: var(--cat-kollane); --tone-bg: var(--cat-kollane-bg); --tone-fg: var(--cat-kollane-fg); }
-.card--advice[data-tone="bad"]  { --tone: var(--cat-punane); --tone-bg: var(--cat-punane-bg); --tone-fg: var(--cat-punane-fg); }
-
-.advice-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--s2) var(--s4);
-}
+/* ---------- 3. Soovitus (12 / 6 / 1, õhuke riba) ---------- */
+.card--advice { border-left: 6px solid var(--tone, var(--border)); }
+.card--advice[data-tone="good"] { --tone: var(--cat-roheline); --tone-bg: var(--ok-bg);   --tone-fg: var(--ok-fg); }
+.card--advice[data-tone="warn"] { --tone: var(--cat-kollane);  --tone-bg: var(--warn-bg); --tone-fg: var(--warn-fg); }
+.card--advice[data-tone="bad"]  { --tone: var(--cat-punane);   --tone-bg: var(--bad-bg);  --tone-fg: var(--bad-fg); }
+.advice-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s4); min-width: 0; }
 .chip {
   display: inline-flex;
   align-items: center;
-  gap: var(--s2);
-  margin: 0;
-  padding: 6px 14px 6px 11px;
-  border-radius: 999px;
+  gap: 6px;
+  padding: 5px 14px 5px 10px;
+  border-radius: var(--radius-pill);
   background: var(--tone-bg, var(--surface-2));
   color: var(--tone-fg, var(--text));
-  font-size: 15px;
-  font-weight: 800;
-  letter-spacing: 0.01em;
-  white-space: nowrap;
-}
-.chip::before {
-  content: "";
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--tone, var(--muted));
-  flex: none;
-}
-.advice-main { flex: 1 1 280px; min-width: 0; }
-.advice-title {
-  margin: 0;
-  font-size: 19px;
+  font-size: var(--fs-secondary);
   font-weight: 800;
   line-height: 1.25;
-  letter-spacing: -0.01em;
+  white-space: nowrap;
 }
-.advice-text {
-  margin: 2px 0 0;
-  font-size: 15px;
-}
-.advice-reasons {
-  list-style: none;
-  margin: var(--s2) 0 0;
-  padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
+.chip .icon { width: 18px; height: 18px; }
+.advice-main { flex: 1 1 280px; min-width: 0; }
+.advice-title { font-size: 19px; font-weight: 800; line-height: 1.25; letter-spacing: -0.01em; }
+.advice-text { margin-top: 2px; font-size: var(--fs-secondary); }
+.advice-reasons { display: flex; flex-wrap: wrap; gap: 6px; padding: 0; list-style: none; }
 .advice-reasons li {
   padding: 2px 10px;
-  border-radius: 999px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
   background: var(--surface-2);
   color: var(--muted);
-  font-size: 13px;
+  font-size: var(--fs-micro);
   font-weight: 600;
+  line-height: 1.5;
+}
+@media (min-width: 1024px) { .advice-title { font-size: 21px; } }
+/* Telefonis õhem riba (hinnakaart esimesele ekraanile, L-135): põhjus ühel real; alused (samad neli väärtust on
+   kohe all voo- ja hinnakaardil) on ainult ekraanilugejale */
+@media (max-width: 639px) {
+  .card--advice { padding-block: var(--s3); }
+  .advice-row { row-gap: 6px; }
+  .advice-title { font-size: 18px; }
+  .advice-text { font-size: var(--fs-small); }
+  .advice-reasons { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 }
 
-/* ---------- Energiavoog ---------- */
-.flow-layout {
-  display: grid;
-  gap: var(--s4);
-  grid-template-columns: minmax(0, 1fr);
-  align-items: center;
-}
-.flow-svg {
-  display: block;
-  width: 100%;
-  max-width: 400px;
-  height: auto;
-  margin: 0 auto;
-}
-.flow-track {
-  fill: none;
-  stroke: var(--border);
-  stroke-width: 2;
-}
-.flow-line {
-  fill: none;
-  stroke-width: 2;
-  stroke-opacity: 0.4;
-}
-.flow-dots {
-  fill: none;
-  stroke-width: 5;
-  stroke-linecap: round;
-  stroke-dasharray: 0.1 13;
-  animation: flow-move var(--flow-dur, 1.6s) linear infinite;
-}
+/* ---------- 4. Energiavoog (p 7) ---------- */
+/* css/energy-dashboard.css – energiavoog; .flow-track ja .flow-node__bg on css/common.css-is (neid kasutab ka elektriinfo kompaktne voog) */
+.flow-svg { display: block; width: 100%; max-width: 400px; height: auto; margin: 0 auto; overflow: visible; }
+.flow-svg--wide { max-width: 560px; }
+.flow-track { fill: none; stroke: var(--axis); stroke-width: 2; }                        /* rada: alati, ei kanna infot */
+.flow-line { fill: none; stroke-opacity: .35; stroke-linecap: round; }                   /* laius √kW järgi (JS) */
+.flow-dots { fill: none; stroke-linecap: round; stroke-dasharray: 0.1 13;
+             animation: flow-move var(--flow-dur, 1.6s) linear infinite; }                /* kiirus = kW */
 .flow-dots--rev { animation-direction: reverse; }
 @keyframes flow-move { to { stroke-dashoffset: -13.1; } }
-.flow-node__bg {
-  fill: var(--surface);
-  stroke: var(--border);
-  stroke-width: 3;
-}
-.flow-node__ring {
-  fill: none;
-  stroke-width: 3;
-  stroke-linecap: round;
-}
-.flow-node--idle .flow-node__ring,
-.flow-node--idle .flow-node__icon { opacity: 0.45; }
-.flow-node__icon {
-  fill: none;
-  stroke-width: 1.8;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-/* SVG skaleerub mobiilis ~0,85-ni, seega on sildid veidi suuremad kui mujal */
-.flow-value {
-  font-size: 14px;
-  font-weight: 800;
-  fill: var(--text);
-}
-.flow-name {
-  font-size: 14px;
-  font-weight: 700;
-  fill: var(--text);
-}
-.flow-sub {
-  font-size: 13px;
-  font-weight: 500;
-  fill: var(--muted);
-}
-.flow-hub {
-  fill: var(--surface-2);
-  stroke: var(--border);
-  stroke-width: 2;
-}
-/* Aegunud mõõtmine: väärtused jäävad nähtavaks tuhmimalt ja vood ei liigu (pealkirjas mõõtmise kellaaeg) */
-.flow-layout.is-stale .flow-svg,
-.flow-layout.is-stale .stats,
-.big-number.is-stale { opacity: 0.7; }
-.flow-layout.is-stale .flow-dots { animation: none; stroke-dasharray: none; stroke-width: 2; stroke-opacity: 0.9; }
+.flow-node__bg { fill: var(--plot); stroke: var(--border); stroke-width: 1; }
+.flow-node__ring { fill: none; stroke-width: 3; stroke-linecap: round; }
+.flow-node--idle .flow-node__ring, .flow-node--idle .flow-node__icon { opacity: .45; }
+.flow-node__icon { fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.flow-value { font-size: 15px; font-weight: 800; fill: var(--text); }
+.flow-name { font-size: 14px; font-weight: 700; fill: var(--text); }
+.flow-sub { font-size: 13px; font-weight: 500; fill: var(--muted); }
+.flow-hub { fill: var(--surface-2); stroke: var(--axis); stroke-width: 1.5; }
+.flow-pill rect { fill: var(--plot); stroke: var(--border); stroke-width: 1; }
+.flow-pill text { font-size: 12px; font-weight: 700; fill: var(--text); }
+.flow-layout.is-stale .flow-svg { opacity: .7; }
+.flow-layout.is-stale .flow-dots { animation: none; stroke-dasharray: none; stroke-opacity: .9; }
+@media (prefers-reduced-motion: reduce) { .flow-dots { animation: none; stroke-dasharray: none; stroke-opacity: .9; } }
+@media print { .flow-dots { animation: none; stroke-dasharray: none; stroke-opacity: .9; } }
 
-.flow-side { min-width: 0; }
-.flow-side__label {
-  margin: 0 0 var(--s2);
-  color: var(--muted);
-  font-size: 14px;
-  font-weight: 600;
-}
-.flow-side__label--stats { margin: var(--s3) 0 0; }
-.flow-side__label--stats + .stats { margin-top: var(--s2); }
-.flow-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 6px;
-}
+/* Voo plaat: SVG (telefonis ≤ 300 px kõrge) ja selle all tekstikaksik „Kuhu energia liigub“ */
+.flow-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s3); min-width: 0; }
+.flow-figure { min-width: 0; }
+.flow-side { display: flex; flex-direction: column; gap: var(--s2); min-width: 0; }
+.flow-side__head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0 var(--s3); }
+.flow-side__label { color: var(--muted); font-size: var(--fs-small); font-weight: 600; }
+.flow-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .flow-list li {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 12px;
-  border-radius: var(--radius-sm);
-  background: var(--surface-2);
-  font-size: 15px;
-}
-.flow-list li span:last-child {
-  margin-left: auto;
-  font-weight: 700;
-  white-space: nowrap;
-}
-/* Telefonis on voo sektsioon esimese ekraani all: tihedam loend, et hinnakaart jõuaks varem nähtavale */
-@media (max-width: 767px) {
-  .flow-layout { gap: var(--s3); }
-  .flow-list { gap: 4px; }
-  .flow-list li { padding: 5px 10px; font-size: 14px; }
-}
-
-/* ---------- Päike ja aku ---------- */
-.big-number { font-size: 44px; }
-.kpi-caption {
-  margin: var(--s1) 0 0;
-  color: var(--muted);
-  font-size: 14px;
-}
-.meter {
-  height: 10px;
-  margin: var(--s3) 0 0;
-  border-radius: 999px;
-  background: var(--surface-2);
-  background: color-mix(in srgb, var(--meter, var(--solar)) 16%, var(--surface));
-  overflow: hidden;
-}
-.meter__fill {
-  height: 100%;
-  border-radius: 999px;
-  background: var(--meter, var(--solar));
-  transition: width 0.4s ease;
-}
-.meter-label {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--s2);
-  margin: 4px 0 0;
-  font-size: 13px;
-  color: var(--muted);
-}
-
-.battery-visual {
-  display: flex;
-  align-items: center;
-  gap: var(--s4);
-}
-.battery-visual svg {
-  flex: 0 1 200px;
-  min-width: 120px;
-  height: auto;
-}
-.battery-power {
-  margin: var(--s2) 0 0;
-  font-size: 17px;
-  font-weight: 700;
-}
-.battery-eta {
-  margin: 2px 0 0;
-  color: var(--muted);
-  font-size: 14px;
-}
-
-/* ---------- Elektrihind praegu ---------- */
-.verdict { font-size: 17px; }
-.stats--price { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.stats--price .stat__value { font-size: 18px; }
-/* Graafiku all „Täna“: kolm hinnaplaati + suurim tarbimine */
-.stats--price.stats--4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-@media (min-width: 640px) {
-  .stats--price.stats--4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-}
-.upcoming-label {
-  margin: var(--s4) 0 var(--s2);
-  color: var(--muted);
-  font-size: 14px;
-  font-weight: 600;
-}
-/* Esimene veerg mahutab ka „homme 00:00“ ja „15:00 · käimas“, et read ei murduks. Kellakeeramise päeval
-   („03:00 (suveaeg) · käimas“) laieneb veerg kõigil ridadel ühtmoodi (subgrid), tekst ei jookse tulba peale. */
-.upcoming {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: minmax(8.5em, max-content) minmax(0, 1fr) 3.5em;
-  gap: 5px var(--s2);
-  font-size: 14px;
-}
-.upcoming li {
-  display: grid;
-  grid-column: 1 / -1;
-  grid-template-columns: minmax(8.5em, max-content) minmax(0, 1fr) 3.5em;   /* subgrid'ita brauser */
-  grid-template-columns: subgrid;
-  align-items: center;
-  gap: var(--s2);
-  white-space: nowrap;
-}
-.upcoming li.is-now { font-weight: 700; }
-.upcoming__bar {
-  height: 8px;
-  border-radius: 999px;
-  background: var(--surface-2);
-  overflow: hidden;
-}
-.upcoming__fill {
-  display: block;
-  height: 100%;
-  border-radius: 999px;
-  background: var(--fill, var(--muted));
-}
-.upcoming li span:last-child {
-  text-align: right;
-  font-weight: 700;
-}
-
-/* ---------- Päeva graafik ---------- */
-.chart-stack {
-  display: grid;
-  gap: 2px;
-  border-radius: var(--radius-sm);
-  touch-action: pan-y;
-  user-select: none;
-  -webkit-user-select: none;
-  cursor: crosshair;
-}
-.crosshair {
-  stroke: var(--text);
-  stroke-width: 1;
-  stroke-opacity: 0.55;
-  pointer-events: none;
-}
-.pv-area { fill: var(--solar); fill-opacity: 0.1; pointer-events: none; }
-.pv-line, .load-line {
-  fill: none;
-  stroke-width: 2.5;
-  stroke-linejoin: round;
-  stroke-linecap: round;
-  pointer-events: none;
-}
-/* Mõõdetud päikesetoodang: sama joonetoon mis elektriinfo lehel (--solar-line); ala on päikese toon */
-.pv-line { stroke: var(--solar-line); }
-/* Pinnavärvi halo joonte all eraldab kõverad üksteisest ja ruudustikust */
-.line-halo {
-  fill: none;
-  stroke: var(--surface);
-  stroke-width: 5;
-  stroke-opacity: 0.85;
-  stroke-linejoin: round;
-  stroke-linecap: round;
-  pointer-events: none;
-}
-.load-line { stroke: var(--home); }
-/* Võrk ja aku: märgiga astmelised 15-min sarjad (+ ost / laeb, − müük / tühjeneb); võrk katkendjoonena */
-.grid-line, .battery-line {
-  fill: none;
-  stroke-width: 1.75;
-  stroke-linejoin: round;
-  pointer-events: none;
-}
-.grid-line { stroke: var(--grid); stroke-dasharray: 5 3; }
-.battery-line { stroke: var(--battery); }
-.series-end { stroke: var(--surface); stroke-width: 1.5; pointer-events: none; }
-.now-line { stroke: var(--muted); stroke-width: 1; pointer-events: none; }
-.now-label {
-  font-size: 12px;
-  font-weight: 600;
-  fill: var(--muted);
-  stroke: var(--surface);
-  stroke-width: 3;
-  paint-order: stroke;
-  pointer-events: none;
-}
-.best-window { pointer-events: none; }
-/* Ostuhind (lõpphind koos tasudega) pidev, müügihind punktiir; neutraalsed toonid, et need ei sarnaneks hinnaklassidega */
-.buy-line, .sell-line {
-  fill: none;
-  stroke-linejoin: round;
-  pointer-events: none;
-}
-.buy-line { stroke: var(--text); stroke-width: 1.5; }
-.sell-line { stroke: var(--muted); stroke-width: 2; stroke-dasharray: 1.5 3; stroke-linecap: round; }
-.line-halo--thin { stroke-width: 4; }
-/* Maja tarbimise prognoos: maja toon katkendjoonena (mõõdetud tarbimine on pidev joon) */
-.forecast-line {
-  fill: none;
-  stroke: var(--home);
-  stroke-width: 2;
-  stroke-dasharray: 5 4;
-  stroke-linejoin: round;
-  pointer-events: none;
-}
-.chart-forecast { margin: var(--s2) 0 0; }
-/* Aku laetus (%) parema telje järgi: punktiir aku tooniga (aku kW on pidev joon) */
-.soc-line {
-  fill: none;
-  stroke: var(--battery);
-  stroke-width: 2.5;
-  stroke-dasharray: 0.5 4.5;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  pointer-events: none;
-}
-/* Inverteri režiim (mõõdetud): üks riba graafiku kohal */
-.mode-band { pointer-events: none; }
-.mode-label { font-size: 11px; font-weight: 600; fill: var(--muted); }
-/* Võrguga vahetus: ost allapoole (terashall), müük ülespoole (lilla) */
-.exchange-bar { stroke-width: 1; pointer-events: none; }
-.exchange-bar--import { fill: color-mix(in srgb, var(--grid) 40%, transparent); stroke: var(--grid); }
-.exchange-bar--export { fill: color-mix(in srgb, var(--export) 40%, transparent); stroke: var(--export); }
-.exchange-label {
-  font-size: 12px;
-  font-weight: 600;
-  fill: var(--muted);
-  stroke: var(--surface);
-  stroke-width: 3;
-  paint-order: stroke;
-  pointer-events: none;
-}
-
-.tooltip__row {
-  display: flex !important;
-  align-items: center;
-  gap: 8px;
-}
-.tooltip__row b { font-weight: 700; }
-.tooltip__sep {
-  margin-top: 3px;
-  padding-top: 3px;
-  border-top: 1px solid rgba(128, 128, 128, 0.35);
-}
-
-.legend__swatch--area {
-  background: color-mix(in srgb, var(--solar) 22%, var(--surface));
-  border-top: 3px solid var(--solar-line);
-  border-radius: 2px;
-}
-.legend__swatch--past { background: var(--muted); opacity: 0.6; }
-/* Odavaim aken: valiku aktsent (--focus), mitte hinnakategooria „Väga odav“ roheline */
-.legend__swatch--best {
-  background: color-mix(in srgb, var(--focus) 10%, var(--surface));
-  border: 1.5px solid var(--focus);
-}
-.legend__swatch--import {
-  background: color-mix(in srgb, var(--grid) 40%, var(--surface));
-  border: 1px solid var(--grid);
-}
-.legend__swatch--export {
-  background: color-mix(in srgb, var(--export) 40%, var(--surface));
-  border: 1px solid var(--export);
-}
-.line-key--dashed { border-top-style: dashed; }
-.line-key--dotted { border-top-style: dotted; }
-.line-key--thin { border-top-width: 2px; }
-
-.table-view {
-  margin: var(--s3) 0 0;
-  border-top: 1px solid var(--border);
-  padding-top: var(--s1);
-}
-.table-view summary {
-  list-style: none;
-  cursor: pointer;
-  padding: 10px 0;
-  font-weight: 600;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s2);
-  min-height: 44px;
-}
-.table-view summary::-webkit-details-marker { display: none; }
-.table-view summary::after {
-  content: "";
-  width: 7px;
-  height: 7px;
-  border-right: 2px solid var(--muted);
-  border-bottom: 2px solid var(--muted);
-  transform: rotate(45deg);
-  transition: transform 0.15s ease;
-  margin-top: -2px;
-}
-.table-view[open] summary::after { transform: rotate(-135deg); margin-top: 3px; }
-.table-view__sub { color: var(--muted); font-weight: 500; font-size: 14px; }
-.table-view + .table-view { margin-top: 0; }
-.sums-label { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
-.data-table--sums td .th-sub { color: var(--muted); }
-.data-table--sums tbody th,
-.data-table--sums td { vertical-align: top; }
-
-/* ---------- Graafiku juhtelemendid ja inverteri režiim ---------- */
-.chart-controls {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--s2) var(--s3);
-  margin: 0 0 var(--s2);
-}
-.chart-controls:not(:has(fieldset:not([hidden]))) { display: none; }
-#resolution-toggle { margin-left: auto; }
-.segmented {
-  border: 0;
-  margin: 0;
-  padding: 0;
   min-width: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s2);
-}
-.segmented input {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
-  pointer-events: none;
-}
-.segmented label {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 40px;
-  min-width: 48px;
-  padding: 0 12px;
+  padding: 7px 12px;
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-tile);
   background: var(--surface-2);
-  font-size: 15px;
-  font-weight: 600;
-  cursor: pointer;
-  user-select: none;
-  -webkit-user-select: none;
-  transition: background-color 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+  font-size: var(--fs-secondary);
 }
-.segmented input:checked + label {
-  background: var(--text);
-  color: var(--surface);
-  border-color: var(--text);
+.flow-list__value { margin-left: auto; font-weight: 700; white-space: nowrap; }
+.flow-side__hint { display: flex; flex-wrap: wrap; align-items: center; column-gap: 6px; margin-left: auto; color: var(--muted); font-size: var(--fs-small); }
+.flow-side__hint .link-btn { margin-block: calc((20px - var(--tap)) / 2); }   /* puuteala --tap, rida jääb 20 px kõrguseks */
+/* Lai täisrea plaat (640–1023 px): loend SVG kõrvale */
+@container (min-width: 860px) {
+  .flow-layout { grid-template-columns: minmax(0, 560px) minmax(0, 1fr); align-items: center; gap: var(--s5); }
 }
-.segmented input:focus-visible + label {
-  outline: 3px solid var(--focus);
-  outline-offset: 2px;
-}
-@media (pointer: coarse) {
-  .segmented label { min-height: 44px; }
-}
-.chart-mode {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 8px;
-  margin: 0 0 var(--s2);
-  font-size: 14px;
-  color: var(--muted);
-}
-.chart-mode strong { color: var(--text); }
 
-/* ---------- Täna kokku ---------- */
-.results {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--s2);
+/* ---------- 5. Akupank ja päikesepark ---------- */
+.battery-layout,
+.solar-layout { display: flex; flex: 1 1 auto; flex-direction: column; gap: var(--s3); min-width: 0; }
+.battery-main,
+.solar-main { display: flex; flex-direction: column; gap: var(--s2); min-width: 0; }
+.battery-layout > .stats,
+.solar-layout > .stats { margin-top: auto; }
+@container (min-width: 560px) {
+  .battery-layout,
+  .solar-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
+  .battery-layout > .stats,
+  .solar-layout > .stats { margin-top: 0; }
 }
-@media (min-width: 560px) {
-  .results { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-@media (min-width: 1024px) {
-  .results { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-}
+.battery-visual { display: flex; align-items: center; gap: var(--s4); min-width: 0; }
+.battery-visual svg { flex: 0 1 200px; min-width: 120px; height: auto; }
+.battery-power { font-size: 17px; font-weight: 700; }
+.battery-eta,
+.kpi-caption { color: var(--muted); font-size: var(--fs-small); }
+
+/* ---------- 6. Järgmised tunnid (p 6.11): kaevuta, otse klaasil ---------- */
+.hours-skeleton { height: 232px; }
+.chart-host--hours { height: 232px; }      /* JS: ridu × 28 + 8 */
+/* Chart.js puudub: tekstikaksik on nähtav loend */
+.hours-list { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; font-size: var(--fs-small); font-variant-numeric: tabular-nums; }
+
+/* ---------- 7. Täna kokku: perioodivalik, tulemusplokid, maja energiahind, kogusummad ---------- */
+.results { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s2); }
+@container (min-width: 480px) { .results { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container (min-width: 900px) { .results { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 .result {
-  min-width: 0;
-  padding: var(--s3);
-  border: 1px solid var(--border);
-  border-top: 3px solid var(--accent, var(--muted));
-  border-radius: var(--radius-sm);
   display: flex;
   flex-direction: column;
+  min-width: 0;
+  padding: 10px 12px 12px;
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--accent, var(--muted));
+  border-radius: var(--radius-tile);
+  background: var(--surface-2);
 }
 .result--battery { --accent: var(--battery); }
 .result--grid { --accent: var(--grid); }
 .result--solar { --accent: var(--solar); }
 .result--load { --accent: var(--home); }
-.result__title { margin: 0; font-size: 15px; font-weight: 700; }
-.result__value {
-  margin: var(--s2) 0 0;
-  font-size: 26px;
-  font-weight: 800;
-  line-height: 1.1;
-  letter-spacing: -0.01em;
-  font-variant-numeric: proportional-nums;
-}
-.result__caption { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
-.result__rows {
-  margin: auto 0 0;
-  padding-top: var(--s2);
-  display: grid;
-  gap: 4px;
-  font-size: 14px;
-}
+.result__title { display: flex; align-items: center; gap: 6px; font-size: var(--fs-secondary); font-weight: 700; line-height: 1.3; }
+.result__title .icon { width: 18px; height: 18px; color: var(--muted); }
+.result__value { margin-top: var(--s2); font-size: var(--fs-result); font-weight: 800; line-height: 1.1; letter-spacing: -0.01em; }
+.result__caption { margin-top: 2px; color: var(--muted); font-size: var(--fs-micro); line-height: 1.35; }
+.result__rows { display: grid; gap: 4px; margin: auto 0 0; padding-top: var(--s2); font-size: var(--fs-small); font-variant-numeric: tabular-nums; }
 .result__rows > div {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   column-gap: var(--s2);
-  border-top: 1px solid var(--border);
   padding-top: 4px;
+  border-top: 1px solid var(--border);
 }
 .result__rows dt { color: var(--muted); white-space: nowrap; }
-.result__rows dd { margin: 0 0 0 auto; display: flex; flex-wrap: wrap; justify-content: flex-end; column-gap: var(--s2); min-width: 0; }
+.result__rows dd { display: flex; flex-wrap: wrap; justify-content: flex-end; column-gap: var(--s2); min-width: 0; margin: 0 0 0 auto; }
 .result__rows dd > * { white-space: nowrap; }
 .result__amount { color: var(--muted); }
 
 .energy-price {
-  margin: var(--s3) 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
   padding: var(--s3);
-  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-tile);
   background: var(--surface-2);
 }
-.energy-price__title { margin: 0 0 var(--s2); font-weight: 700; font-size: 15px; }
-.energy-price__row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--s2) var(--s4);
-}
-.energy-price__value {
-  margin: 2px 0 0;
-  font-size: 26px;
-  font-weight: 800;
-  line-height: 1.1;
-  font-variant-numeric: proportional-nums;
-}
+.energy-price__title { font-size: var(--fs-secondary); font-weight: 700; }
+.energy-price__row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s4); }
+.energy-price__value { margin-top: 2px; font-size: var(--fs-result); font-weight: 800; line-height: 1.1; }
 .energy-price__arrow { color: var(--muted); font-size: 20px; }
 .energy-price__badge {
-  margin: 0 0 0 auto;
+  margin-left: auto;
   padding: 4px 12px;
-  border-radius: 999px;
   border: 1px solid var(--border);
-  font-weight: 700;
-  font-size: 14px;
-}
-.energy-price__badge.is-good {
-  background: var(--cat-roheline-bg);
-  color: var(--cat-roheline-fg);
-  border-color: transparent;
-}
-.energy-price .table-note { margin: var(--s2) 0 0; }
-
-/* ---------- Kokkuvõtte periood ja päevade graafik ---------- */
-.results-period { margin: 0 0 var(--s3); }
-.results-period label[hidden] { display: none; }
-.days-panel {
-  margin: var(--s3) 0 0;
-  padding-top: var(--s3);
-  border-top: 1px solid var(--border);
-}
-.days-inspector {
-  margin: 0 0 var(--s2);
-  min-height: 40px;
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 20px;
-}
-.day-bar { pointer-events: none; }
-.day-bar--partial { opacity: 0.55; }
-.day-highlight { fill: color-mix(in srgb, var(--text) 8%, transparent); pointer-events: none; }
-.day-missing { font-size: 12px; fill: var(--muted); }
-.legend__swatch--outline { background: none; border: 1.5px solid var(--swatch); }
-/* Kerimisvihje kitsal ekraanil (tabel on laiem kui kaart) */
-.table-view__hint { display: none; color: var(--muted); font-size: 13px; font-weight: 600; }
-@media (max-width: 599px) {
-  .table-view[open] .table-view__hint { display: inline; }
-}
-.table-note {
-  margin: 0 0 var(--s2);
-  color: var(--muted);
-  font-size: 13px;
-}
-/* Parema serva vari näitab, et tabel jätkub (kaob, kui on lõpuni keritud) */
-.table-scroll {
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  background:
-    linear-gradient(to left, var(--surface) 30%, transparent) right center / 32px 100% no-repeat local,
-    radial-gradient(farthest-side at 100% 50%, color-mix(in srgb, var(--text) 22%, transparent), transparent) right center / 12px 100% no-repeat scroll;
-}
-.data-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 14px;
-  white-space: nowrap;
-}
-.data-table th,
-.data-table td {
-  padding: 6px 10px 6px 0;
-  border-bottom: 1px solid var(--border);
-  text-align: right;
-  font-weight: 400;
-}
-.data-table th { color: var(--muted); font-size: 13px; font-weight: 600; vertical-align: bottom; }
-.data-table tbody th { color: var(--text); font-size: 14px; font-weight: 400; }
-.th-sub { display: block; font-size: 12px; font-weight: 500; }
-/* Kellaaja veerg jääb horisontaalsel kerimisel nähtavale */
-.data-table th:first-child,
-.data-table td:first-child {
-  text-align: left;
-  position: sticky;
-  left: 0;
-  z-index: 1;
+  border-radius: var(--radius-pill);
   background: var(--surface);
+  font-size: var(--fs-small);
+  font-weight: 700;
 }
-.data-table tr.is-now td,
-.data-table tr.is-now th { font-weight: 700; }
+.energy-price__badge.is-good { border-color: transparent; background: var(--ok-bg); color: var(--ok-fg); }
+.sums-label { display: inline-flex; align-items: center; gap: var(--s2); }
 
-/* ---------- Otseühenduse dialoog ---------- */
+/* ---------- 8. Päevade graafik (p 6.9) ---------- */
+.days-panel { display: flex; flex-direction: column; gap: var(--s3); padding-top: var(--s3); border-top: 1px solid var(--border); }
+.days-inspector { min-height: 40px; font-size: var(--fs-small); font-weight: 600; line-height: 20px; }
+/* Legend peegeldab märki: hantli ○ (keskmine ostuhind) ja ● (maja maksis), 45 % täide (laetud), 50 % (pooleli päev) */
+.legend__swatch--ring { border: 2px solid var(--swatch, var(--text)); border-radius: 50%; background: var(--plot); }
+.legend__swatch--dot { border-radius: 50%; }
+.legend__swatch--light { border: 1.5px solid var(--swatch, var(--battery)); background: color-mix(in srgb, var(--swatch, var(--battery)) 45%, var(--plot)); }
+.legend__swatch--partial { background: color-mix(in srgb, var(--swatch, var(--muted)) 50%, var(--plot)); }
+
+/* ---------- 9. Päeva ülevaade (p 6.2, 6.4–6.8) ---------- */
+.chart-host--price { height: 180px; } @media (min-width: 640px) { .chart-host--price { height: 220px; } }
+/* Skeleton ja tühi olek on lõppsisu kõrgusega: hind + alumine + režiimiriba + laetus / hind + alumine */
+#chart-well { --skeleton-chart-h: 450px; --chart-empty-h: 320px; }
+@media (min-width: 640px) { #chart-well { --skeleton-chart-h: 548px; --chart-empty-h: 390px; } }
+.chart-controls:not(:has(fieldset:not([hidden]))) { display: none; }
+#resolution-toggle { margin-left: auto; }
+.chart-mode { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; color: var(--muted); font-size: var(--fs-small); }
+.chart-mode strong { color: var(--text); }
+.chart-legend { row-gap: var(--s2); }   /* .legend__group = üks rida rühma kohta (common.css) */
+.chart-legend:empty { display: none; }
+.chart-forecast { position: relative; padding-left: 26px; color: var(--muted); font-size: var(--fs-micro); line-height: 1.45; }
+.chart-forecast > .icon { position: absolute; left: 0; top: 0; width: 18px; height: 18px; }
+@container (min-width: 640px) { .stats--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.chart-empty > .notice { max-width: 560px; text-align: left; }
+
+/* ---------- 10. Solarmani otseühenduse dialoog (läbipaistmatu, klaasita) ---------- */
 .dialog {
   width: min(560px, calc(100vw - 24px));
   max-height: calc(100vh - 24px);
   padding: 0;
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-card);
   background: var(--surface);
   color: var(--text);
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.28);
@@ -814,129 +276,38 @@
 .dialog::backdrop { background: rgba(15, 22, 32, 0.55); }
 .dialog__body { padding: var(--s5) var(--s4); }
 .dialog__title { margin: 0 0 var(--s2); font-size: 19px; font-weight: 800; }
-.dialog__text { margin: 0 0 var(--s2); font-size: 14px; color: var(--muted); }
-.dialog__text--warn {
-  padding: var(--s2) var(--s3);
-  border-radius: var(--radius-sm);
-  background: var(--cat-kollane-bg);
-  color: var(--cat-kollane-fg);
-}
-.form-grid {
-  display: grid;
-  gap: var(--s3);
-  grid-template-columns: minmax(0, 1fr);
-  margin: var(--s3) 0 0;
-}
+.dialog__text { margin: 0 0 var(--s2); color: var(--muted); font-size: var(--fs-small); }
+.dialog__text--warn { padding: var(--s2) var(--s3); border-radius: var(--radius-tile); background: var(--warn-bg); color: var(--warn-fg); }
+.form-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s3); margin: var(--s3) 0 0; }
 .field { min-width: 0; }
-.field label {
-  display: block;
-  margin: 0 0 4px;
-  font-size: 14px;
-  font-weight: 600;
-}
+.field label { display: block; margin: 0 0 4px; font-size: var(--fs-small); font-weight: 600; }
 .field input {
   width: 100%;
   min-height: 44px;
   padding: 0 12px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-tile);
   background: var(--surface-2);
   color: var(--text);
   font: inherit;
 }
-.field--check label {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--s2);
-  margin: 0;
-  font-weight: 600;
-  cursor: pointer;
-}
-.field--check input {
-  width: 20px;
-  height: 20px;
-  min-height: 0;
-  margin: 1px 0 0;
-  flex: none;
-  accent-color: var(--text);
-}
-.field__hint {
-  margin: 4px 0 0;
-  font-size: 12px;
-  color: var(--muted);
-}
-.dialog__actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: var(--s2);
-  margin: var(--s4) 0 0;
-}
+.field--check label { display: flex; align-items: flex-start; gap: var(--s2); margin: 0; font-weight: 600; cursor: pointer; }
+.field--check input { flex: none; width: 20px; height: 20px; min-height: 0; margin: 1px 0 0; accent-color: var(--text); }
+.field__hint { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
+.dialog__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--s2); margin: var(--s4) 0 0; }
 .dialog__actions .btn--danger { margin-right: auto; }
-
-@media (hover: hover) {
-  .btn--ghost:not([disabled]):hover { border-color: var(--muted); }
-  .segmented input:not(:checked) + label:hover { border-color: var(--muted); background: var(--surface); }
-  .table-view summary:hover { color: var(--focus); }
-}
-
-/* ---------- Laiem ekraan (tahvel) ---------- */
 @media (min-width: 768px) {
-  .layout {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-template-areas:
-      "advice advice"
-      "flow price"
-      "solar battery"
-      "results results"
-      "chart chart";
-  }
-  #section-advice { grid-area: advice; }
-  #section-flow { grid-area: flow; }
-  #section-price { grid-area: price; }
-  #section-solar { grid-area: solar; }
-  #section-battery { grid-area: battery; }
-  #section-results { grid-area: results; }
-  #section-chart { grid-area: chart; }
-  .card--advice { padding-top: var(--s4); padding-bottom: var(--s4); }
-  .card__body {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-  }
-  #section-solar .stats,
-  #section-battery .stats,
-  #price-body .facts { margin-top: auto; padding-top: var(--s3); }
-  .big-number { font-size: 48px; }
   .dialog__body { padding: var(--s5); }
   .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .field--wide { grid-column: 1 / -1; }
 }
 
-/* ---------- Laiem ekraan (desktop) ---------- */
-@media (min-width: 1024px) {
-  .layout {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    grid-template-areas:
-      "advice advice advice"
-      "flow flow price"
-      "solar battery price"
-      "results results results"
-      "chart chart chart";
-  }
-  .flow-layout { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); }
-  .advice-title { font-size: 21px; }
+/* ---------- 11. Sunnitud värvid ja printimine (lehepõhised osad) ---------- */
+@media (forced-colors: active) {
+  .chip, .advice-reasons li, .flow-list li, .result, .energy-price, .energy-price__badge { border: 1px solid CanvasText; }
+  .card--advice { border-left: 6px solid CanvasText; }
 }
-
 @media print {
-  #refresh-button,
-  #direct-open,
-  .chart-controls,
-  .table-view { display: none !important; }
-  .flow-dots { animation: none; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .skeleton, .btn.is-loading .btn__icon { animation: none; }
-  .flow-dots { animation: none; stroke-dasharray: none; stroke-width: 2; stroke-opacity: 0.9; }
+  #direct-open, .chart-controls, .days-panel .chart-controls { display: none !important; }
+  .chip, .result, .energy-price__badge { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
