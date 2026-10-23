@@ -2496,7 +2496,9 @@ const kNow = {
       const tw = ctx.measureText(k.nowLabel).width;
       const lx = clamp(px - tw / 2, a.left, a.right - tw);
       const b = k.$bestBox;
-      const inside = b && b.x0 < lx + tw + 4 && b.x1 > lx - 4;   // odavaima akna silt on samal real
+      const unitEnd = k.unit ? 4 + ctx.measureText(k.unit).width + 8 : 0;   // kUnit: ühik samal real alates x = 4
+      // odavaima akna silt või telje ühik (kell 00:00–00:30) on samal real: silt plot-ala sisse, joonest paremale
+      const inside = (b && b.x0 < lx + tw + 4 && b.x1 > lx - 4) || lx < unitEnd;
       haloText(ctx, k.nowLabel, inside ? Math.min(px + 4, a.right - tw) : lx, inside ? a.top + 14 : a.top - 8, T.muted);
     }
     ctx.restore();
@@ -2505,13 +2507,26 @@ const kNow = {
 const kExchangeLabels = {
   id: 'kExchangeLabels',
   afterDatasetsDraw(chart) {
-    const labels = chart.data.$k?.exchangeLabels;   // { up: 'müük ↑', down: 'ost ↓' }
+    const k = chart.data.$k;
+    const labels = k?.exchangeLabels;   // { up: 'müük ↑', down: 'ost ↓' }
     if (!labels) return;
-    const { ctx, chartArea: a } = chart;
+    const { ctx, chartArea: a, scales: { x } } = chart;
+    // Puuduvate andmete kontuurid (kMissing) on samuti takistus
+    const slot = chart.data.labels?.length ? (a.right - a.left) / chart.data.labels.length : 0;
+    const gaps = (k.missing || []).map(g => (Array.isArray(g) ? [x.getPixelForValue(g[0]), x.getPixelForValue(g[1])]
+      : [x.getPixelForValue(g) - slot * 0.35, x.getPixelForValue(g) + slot * 0.35]));
     ctx.save();
     ctx.font = `600 12px ${T.font}`;
-    haloText(ctx, labels.up, a.left + 4, a.top + 12, T.muted);
-    haloText(ctx, labels.down, a.left + 4, a.bottom - 5, T.muted);
+    // Nurgasilt ei kata tulpa, teist silti ega puuduvat perioodi: vasak nurk, siis parem; kui mõlemad on kaetud, jääb
+    // silt ära (tähendus on legendis)
+    for (const [text, base] of [[labels.up, a.top + 12], [labels.down, a.bottom - 5]]) {
+      const tw = ctx.measureText(text).width;
+      const spot = [a.left + 4, a.right - 4 - tw].map(lx => ({ x0: lx, x1: lx + tw, y0: base - 11, y1: base + 3 }))
+        .find(box => !chartHits(chart, box) && !gaps.some(([g0, g1]) => g0 < box.x1 + 2 && g1 > box.x0 - 2));
+      if (!spot) continue;
+      if (k.$boxes) k.$boxes.push(spot);
+      haloText(ctx, text, spot.x0, base, T.muted);
+    }
     ctx.restore();
   }
 };
