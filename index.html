@@ -159,7 +159,7 @@
         <div id="chart-legend" class="legend" role="group" aria-label="Graafiku selgitus" hidden></div>
         <div id="day-summary" class="day-summary" role="group" aria-label="Valitud päeva kokkuvõte" hidden></div>
         <details class="table-view" id="chart-table" hidden>
-          <summary><svg class="icon" aria-hidden="true" focusable="false"><use href="img/icons.svg?v=20261023#i-table"></use></svg>Tabelivaade (tunni kaupa)<span class="table-view__hint">keri →</span><svg class="icon" aria-hidden="true" focusable="false"><use href="img/icons.svg?v=20261023#i-chevron-down"></use></svg></summary>
+          <summary><svg class="icon" aria-hidden="true" focusable="false"><use href="img/icons.svg?v=20261023#i-table"></use></svg>Tabelivaade (tunni kaupa)<span class="table-view__hint" aria-hidden="true">keri →</span><svg class="icon" aria-hidden="true" focusable="false"><use href="img/icons.svg?v=20261023#i-chevron-down"></use></svg></summary>
           <div id="chart-table-body"></div>
         </details>
       </div>
@@ -214,6 +214,7 @@
           <p class="building-status__hint" aria-hidden="true">Vali kuu tulbal (ka nooleklahvidega)</p>
         </div>
         <p id="building-announcer" class="visually-hidden" aria-live="polite"></p>
+        <span id="building-selected" class="visually-hidden" data-testid="building-selected"></span>
         <div class="chart-well" id="building-well">
           <span class="skeleton skeleton--chart" id="building-skeleton" aria-hidden="true"></span>
           <div class="chart-stack" id="building-stack" tabindex="0" role="group" aria-roledescription="tulpdiagramm" aria-label="" hidden>
@@ -2361,6 +2362,7 @@ const kMeasuredEnd = {
       ctx.stroke();
     }
     ctx.font = `600 12px ${T.font}`;
+    const nowPx = k.nowMs != null ? x.getPixelForValue(k.nowMs) : null;   // silt ei tohi jääda „praegu“-joone alla
     for (const r of rings) {
       if (!r.text) continue;
       const tw = ctx.measureText(r.text).width;
@@ -2368,6 +2370,8 @@ const kMeasuredEnd = {
         .map(([lx, base]) => ({ x0: lx, x1: lx + tw, y0: base - 12, y1: base + 3, base }))
         .find(c => c.x0 >= a.left && c.x1 <= a.right && c.y0 >= a.top - 18 && c.y1 <= a.bottom
           && !k.$boxes.some(b => boxesOverlap(b, c))
+          && !(nowPx != null && c.x0 - 4 < nowPx && c.x1 + 4 > nowPx)
+          && !chartHits(chart, c, true)
           && rings.every(o => o === r || Math.hypot(clamp(o.px, c.x0, c.x1) - o.px, clamp(o.py, c.y0, c.y1) - o.py) > 8));
       if (!spot) continue;
       k.$boxes.push(spot);
@@ -3544,7 +3548,7 @@ function renderEv(d) {
   const metaEl = byId('ev-summary-meta');
   const ev = CONFIG.elektriauto;
   if (metaEl) {
-    metaEl.textContent = `${numberFormat.pct.format(ev.laadimiseAlgusProtsent)}→${numberFormat.pct.format(ev.laadimiseLoppProtsent)}% · ${numberFormat.max1.format(state.evChargerKw)} kW`;
+    metaEl.textContent = `${numberFormat.pct.format(ev.laadimiseAlgusProtsent)}→${numberFormat.pct.format(ev.laadimiseLoppProtsent)}% · ${numberFormat.max1.format(state.evChargerKw)}\u00a0kW`;
   }
   if (!state.periods.length) {
     host.replaceChildren(el('p', { class: 'placeholder', text: placeholderText() }));
@@ -3919,8 +3923,8 @@ function renderSolarDashboard(d) {
     statTile('Maja tarbis täna', t.loadKwh != null ? kwh(t.loadKwh) : '—',
       t.importKwh != null ? `ost võrgust ${kwh(t.importKwh)} (inverter)${t.gridChargeKwh > 0.5 ? `, sellest akusse ${numberFormat.d1.format(t.gridChargeKwh)}` : ''} · ${until}` : until,
       { value: 'home-today-kwh' }),
-    statTile('Päikeseenergia väärtus', t.pvKwh != null ? `≈ ${formatEur(t.pvValueEur)}` : '—',
-      t.pvKwh != null ? `täna ${until} · hinnang: asendatud ost lõpphinnaga` : until, { value: 'solar-value' })
+    statTile('Päikeseenergia väärtus', t.pvKwh != null && state.periods.length ? `≈ ${formatEur(t.pvValueEur)}` : '—',
+      t.pvKwh != null && state.periods.length ? `täna ${until} · hinnang: asendatud ost lõpphinnaga` : (t.pvKwh != null ? 'hinnad puuduvad' : until), { value: 'solar-value' })
   ]);
 
   // Selgitus mõõtmiste põhjal (kogused on plaatidel, siin ainult see, mida neist ei näe)
@@ -4020,7 +4024,7 @@ function selectBuildingMonth(index, pointerType) {
 /** Maja üldelektri tekstid ühes kohas (inforida, plaadid, tabel, aria-label). */
 function buildingText(data, metric) {
   const eurTxt = v => (data.source === 'estfeed' ? '≈ ' : '') + formatEur(v);   // „≈“ ei murdu summast lahku
-  const kwhTxt = v => `${numberFormat.d0.format(v)} kWh`;
+  const kwhTxt = v => `${numberFormat.d0.format(v)}\u00a0kWh`;
   return {
     eurTxt,
     kwhTxt,
@@ -4058,6 +4062,10 @@ function renderBuildingSelection(data, metric, announce = false) {
   if (info.textContent !== curDesc + prevDesc) info.textContent = curDesc + prevDesc;
 
   const selectedValue = selectedRow.isPlaceholder ? 'andmed puuduvad' : tx.valTxt(selectedRow[metric]);
+  // Lõuendil joonistatud valitud kuu sildi peidetud DOM-kaksik (andmetest building-selected): kWh ilma ühikuta nagu sildil
+  const selectedTwin = byId('building-selected');
+  const selectedTwinText = selectedRow.isPlaceholder ? 'andmed puuduvad' : (metric === 'eur' ? tx.eurTxt(selectedRow.eur) : numberFormat.d0.format(selectedRow.kwh));
+  if (selectedTwin && selectedTwin.textContent !== selectedTwinText) selectedTwin.textContent = selectedTwinText;
   const stackEl = byId('building-stack');
   if (stackEl) {
     stackEl.setAttribute('aria-label', `Maja üldelekter kuude kaupa, ${data.groups.length} kuud; valitud ` +
@@ -4173,7 +4181,7 @@ function renderBuildingElectricity() {
   const ongoingToDate = Boolean(ongoingGroup && ongoingGroup.previous && ongoingGroup.previous.kwhToDate != null);
   const hasNoData = data.groups.some(g => g.current.noData);
   const table = el('details', { class: 'table-view', id: 'building-table' }, [
-    el('summary', {}, [iconEl('table'), 'Tabelivaade (kuude kaupa)', el('span', { class: 'table-view__hint', text: 'keri →' }), iconEl('chevron-down')]),
+    el('summary', {}, [iconEl('table'), 'Tabelivaade (kuude kaupa)', el('span', { class: 'table-view__hint', 'aria-hidden': 'true', text: 'keri →' }), iconEl('chevron-down')]),
     el('div', { class: 'table-scroll', tabindex: '0', role: 'region', 'aria-label': 'Tabelivaade kuude kaupa' }, el('table', { class: 'data-table' }, [
       el('caption', { class: 'visually-hidden', text: `Maja üldelekter kuude kaupa (${unit})` }),
       el('thead', {}, el('tr', {}, [
