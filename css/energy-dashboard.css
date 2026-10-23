@@ -29,10 +29,14 @@
     "aku aku aku aku aku aku paike paike paike paike paike paike"
     "tulemus tulemus tulemus tulemus tulemus tulemus tulemus tulemus tulemus tulemus tulemus tulemus"
     "graafik graafik graafik graafik graafik graafik graafik graafik graafik graafik graafik graafik"; }
-  /* 2 rea kõrgune voo plaat ei jäta tühja keskele: SVG on vaba kõrguse keskel, loend all (tunnide kaardi põhjaga ühel joonel) */
+  /* 2 rea kõrgune voo plaat ei jäta tühja keskele: joonis täidab vaba kõrguse, loend all (tunnide kaardi põhjaga ühel
+     joonel). Kõrge geomeetria (flowTallGeometry, kõrgus ala kuju järgi) on absoluutne ja skaleerub alasse
+     (preserveAspectRatio meet), nii et see ei kasvata ridu; min-height hoiab joonise loetavana, kui kõrvalveerg on lühike. */
   #section-flow > .card__body { flex: 1 1 auto; }
   #section-flow .flow-layout { height: 100%; grid-template-rows: minmax(0, 1fr) auto; }
   #section-flow .flow-figure { align-self: center; }
+  #section-flow .flow-figure--tall { position: relative; align-self: stretch; min-height: 540px; }
+  #section-flow .flow-svg--tall { position: absolute; inset: 0; width: 100%; height: 100%; max-width: none; margin: 0; }
 }
 
 /* Kõrvuti kaartidel (aku + päike, hind + tunnid) on plaadid kaardi põhjas */
@@ -53,6 +57,12 @@
   /* Värskendusnupp: ikoon + loendur; tekst „Värskenda“ jääb nupu ligipääsetavaks nimeks */
   #refresh-button { padding: 0 12px; }
   #refresh-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+}
+
+/* 640–889 px ei mahu olekupill, teemanupp ja „Värskenda (30 s)“ brändi ja navigatsiooni kõrvale: need on alati teisel
+   real, ka laadimise ajal (lühem „Laadin…“ mahuks esimesele) ja ooteaja lõpus – päis ega leht ei hüppa (p 10). */
+@media (min-width: 640px) and (max-width: 889px) {
+  .app-header > .header-actions { flex-basis: 100%; justify-content: flex-end; }
 }
 
 /* ---------- 3. Soovitus (12 / 6 / 1, õhuke riba) ---------- */
@@ -104,6 +114,7 @@
 /* css/energy-dashboard.css – energiavoog; .flow-track ja .flow-node__bg on css/common.css-is (neid kasutab ka elektriinfo kompaktne voog) */
 .flow-svg { display: block; width: 100%; max-width: 400px; height: auto; margin: 0 auto; overflow: visible; }
 .flow-svg--wide { max-width: 560px; }
+.flow-svg--tall { max-width: 420px; }   /* väljaspool 2-realist plaati (nt printimisel) loomulikus suuruses */
 .flow-track { fill: none; stroke: var(--axis); stroke-width: 2; }                        /* rada: alati, ei kanna infot */
 .flow-line { fill: none; stroke-opacity: .35; stroke-linecap: round; }                   /* laius √kW järgi (JS) */
 .flow-dots { fill: none; stroke-linecap: round; stroke-dasharray: 0.1 13;
@@ -120,10 +131,16 @@
 .flow-hub { fill: var(--surface-2); stroke: var(--axis); stroke-width: 1.5; }
 .flow-pill rect { fill: var(--plot); stroke: var(--border); stroke-width: 1; }
 .flow-pill text { font-size: 12px; font-weight: 700; fill: var(--text); }
-.flow-layout.is-stale .flow-svg { opacity: .7; }
-.flow-layout.is-stale .flow-dots { animation: none; stroke-dasharray: none; stroke-opacity: .9; }
-@media (prefers-reduced-motion: reduce) { .flow-dots { animation: none; stroke-dasharray: none; stroke-opacity: .9; } }
-@media print { .flow-dots { animation: none; stroke-dasharray: none; stroke-opacity: .9; } }
+/* Liikumiseta olekud (aegunud mõõtmine, vähendatud liikumine, printimine): täppe pole, joon on täistoonis ja suunda
+   näitab noolepea (p 7.2; täppide pidev rada kattis varem noole). */
+.flow-layout.is-stale .flow-dots { display: none; }
+.flow-layout.is-stale .flow-line { stroke-opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .flow-dots { display: none; } .flow-line { stroke-opacity: 1; } }
+@media print { .flow-dots { display: none; } .flow-line { stroke-opacity: 1; } }
+/* Aegunud mõõtmine (p 7.3, 10): tuhmuvad ainult graafilised osad; sõlmede väärtused, nimed ja alltekstid jäävad
+   täiskontrasti (≥ 4,5:1 klaasi halvimal pinnal). Olekut kannavad ka hoiatusmärk, pealkiri ja bänner. */
+.flow-layout.is-stale :is(.flow-track, .flow-line, .flow-hub, .flow-node__ring, .flow-node__icon) { opacity: .7; }
+.flow-layout.is-stale .flow-node--idle :is(.flow-node__ring, .flow-node__icon) { opacity: .45; }
 
 /* Voo plaat: SVG (telefonis ≤ 300 px kõrge) ja selle all tekstikaksik „Kuhu energia liigub“ */
 .flow-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s3); min-width: 0; }
@@ -167,6 +184,9 @@
 .battery-visual { display: flex; align-items: center; gap: var(--s4); min-width: 0; }
 .battery-visual svg { flex: 0 1 200px; min-width: 120px; height: auto; }
 .battery-power { font-size: 17px; font-weight: 700; }
+/* Aegunud mõõtmine (p 10): number --muted toonis (7,08:1 klaasi halvimal pinnal), ühik jääb --muted täistooni;
+   common.css .big-number.is-stale tuhmistas läbipaistvusega (3,45:1). Olekut kannavad hoiatusmärk ja bänner. */
+.big-number.is-stale { opacity: 1; color: var(--muted); }
 .battery-eta,
 .kpi-caption { color: var(--muted); font-size: var(--fs-small); }
 
@@ -211,6 +231,14 @@
 .result__rows dd { display: flex; flex-wrap: wrap; justify-content: flex-end; column-gap: var(--s2); min-width: 0; margin: 0 0 0 auto; }
 .result__rows dd > * { white-space: nowrap; }
 .result__amount { color: var(--muted); }
+/* Kitsas plokk (sisu < 280 px: 4 veergu ≥ 900 px konteineris, 2 veergu kitsal ekraanil): iga rida on kahel real –
+   silt, selle all väärtus paremal –, mitte nii, et üks rida murdub ja naaberread mitte (QA: sakilised read 1024–1280 px
+   juures). Pikim rida („Tühjendatud 1 234,5 kWh ≈ 300,22 €“) on ≈ 275 px, laiemas plokis mahub iga rida ühele reale. */
+.result { container-type: inline-size; }
+@container (max-width: 279px) {
+  .result__rows > div { display: grid; grid-template-columns: minmax(0, 1fr); row-gap: 1px; }
+  .result__rows dd { margin-left: 0; }
+}
 
 .energy-price {
   display: flex;
@@ -261,6 +289,9 @@
 .chart-forecast > .icon { position: absolute; left: 0; top: 0; width: 18px; height: 18px; }
 @container (min-width: 640px) { .stats--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 .chart-empty > .notice { max-width: 560px; text-align: left; }
+/* Hinnakaardi viga (p 10): ikoon, senine tekst ja „Proovi uuesti“ */
+.notice--action { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3); }
+.notice--action > p { flex: 1 1 220px; min-width: 0; }
 
 /* ---------- 10. Solarmani otseühenduse dialoog (läbipaistmatu, klaasita) ---------- */
 .dialog {
@@ -301,6 +332,100 @@
   .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .field--wide { grid-column: 1 / -1; }
 }
+
+/* ---------- 12. Esimene laadimine (p 5 skeleton, p 10): kaardid on lõppsisu kõrgusega, paigutus ei hüppa ----------
+   renderAll joonistab kõik kaardid korraga ja eemaldab aria-busy. Kõrgused on lõppsisu omad (kontrollkella andmed,
+   mõõdetud 350–1290 px iga 10 px järel); teistsugune sisu (nt lühem soovitus) muudab neid vähe. Viimane plokk-
+   skeleton täidab kaardi. ≥ 1024 px määrab hinnakaardi kõrgus tundide kaardi ja voo plaadi kõrguse. */
+.card[aria-busy="true"] > .card__body { flex: 1 1 auto; }
+.card[aria-busy="true"] > .card__body > .skeleton--block { flex: 1 1 auto; }
+/* Energiavoog: skeleton = joonise mõõdud (kompaktne / lai geomeetria nagu renderFlow) + loendi rida; pealkirja
+   kõrvale tulev mõõtmisaja märk murdub kitsal ekraanil teisele reale */
+#flow-body > .skeleton--flow { width: 100%; max-width: 400px; height: auto; max-height: none; aspect-ratio: 360 / 324; margin: 0 auto 78px; }
+@container (min-width: 520px) { #flow-body > .skeleton--flow { max-width: 560px; aspect-ratio: 560 / 360; } }
+@container (min-width: 860px) { #flow-body > .skeleton--flow { margin-bottom: 0; } }
+#section-flow[aria-busy="true"] > .card__head { min-height: 28px; }
+@media (max-width: 489px) { #section-flow[aria-busy="true"] > .card__head { min-height: 51px; } }
+@media (min-width: 1024px) {   /* 2-realine plaat: kõrguse annavad hind ja tunnid, skeleton täidab selle */
+  #flow-body > .skeleton--flow { flex: 1 1 auto; max-width: none; aspect-ratio: auto; }
+}
+/* Ühe veeru telefon (< 640 px) */
+#section-advice[aria-busy="true"] { min-height: 148px; }
+#section-price[aria-busy="true"] { min-height: 620px; }
+#section-hours[aria-busy="true"] { min-height: 377px; }
+#section-battery[aria-busy="true"] { min-height: 367px; }
+#section-solar[aria-busy="true"] { min-height: 385px; }
+#section-results[aria-busy="true"] { min-height: 1400px; }
+#section-chart[aria-busy="true"] { min-height: 1580px; }
+@media (min-width: 365px) { #section-advice[aria-busy="true"] { min-height: 126px; } }
+@media (min-width: 375px) {
+  #section-advice[aria-busy="true"] { min-height: 106px; }
+  #section-price[aria-busy="true"] { min-height: 560px; }
+  #section-results[aria-busy="true"] { min-height: 1160px; }
+}
+@media (min-width: 385px) { #section-chart[aria-busy="true"] { min-height: 1500px; } }
+@media (min-width: 415px) { #section-hours[aria-busy="true"] { min-height: 353px; } }
+@media (min-width: 425px) { #section-price[aria-busy="true"] { min-height: 462px; } }
+@media (min-width: 455px) { #section-chart[aria-busy="true"] { min-height: 1360px; } }
+@media (min-width: 465px) { #section-hours[aria-busy="true"] { min-height: 332px; } }
+@media (min-width: 475px) { #section-solar[aria-busy="true"] { min-height: 368px; } }
+@media (min-width: 485px) { #section-results[aria-busy="true"] { min-height: 1086px; } }
+@media (min-width: 505px) {
+  #section-advice[aria-busy="true"] { min-height: 114px; }
+  #section-chart[aria-busy="true"] { min-height: 1300px; }
+}
+@media (min-width: 525px) { #section-advice[aria-busy="true"] { min-height: 71px; } }
+@media (min-width: 545px) {
+  #section-price[aria-busy="true"] { min-height: 434px; }
+  #section-results[aria-busy="true"] { min-height: 860px; }
+}
+@media (min-width: 625px) {   /* aku ja päike kahes veerus kaardi sees */
+  #section-price[aria-busy="true"] { min-height: 386px; }
+  #section-battery[aria-busy="true"] { min-height: 284px; }
+  #section-solar[aria-busy="true"] { min-height: 267px; }
+}
+/* 640–1023 px: hind + tunnid ja aku + päike on samas reas (kõrgus = suurem) */
+@media (min-width: 640px) {
+  #section-advice[aria-busy="true"] { min-height: 127px; }
+  #section-price[aria-busy="true"] { min-height: 677px; }
+  #section-hours[aria-busy="true"] { min-height: 0; }
+  #section-battery[aria-busy="true"],
+  #section-solar[aria-busy="true"] { min-height: 400px; }
+  #section-results[aria-busy="true"] { min-height: 858px; }
+  #section-chart[aria-busy="true"] { min-height: 1300px; }
+}
+@media (min-width: 700px) { #section-results[aria-busy="true"] { min-height: 752px; } }
+@media (min-width: 715px) { #section-chart[aria-busy="true"] { min-height: 1205px; } }
+@media (min-width: 725px) { #section-price[aria-busy="true"] { min-height: 590px; } }
+@media (min-width: 765px) { #section-chart[aria-busy="true"] { min-height: 1150px; } }
+@media (min-width: 805px) { #section-price[aria-busy="true"] { min-height: 560px; } }
+@media (min-width: 835px) { #section-chart[aria-busy="true"] { min-height: 1123px; } }
+@media (min-width: 885px) {
+  #section-price[aria-busy="true"] { min-height: 478px; }
+  #section-results[aria-busy="true"] { min-height: 734px; }
+}
+@media (min-width: 975px) { #section-results[aria-busy="true"] { min-height: 648px; } }
+/* ≥ 1024 px: hind ja tunnid on voo kõrval eraldi ridades */
+@media (min-width: 1024px) {
+  #section-advice[aria-busy="true"] { min-height: 138px; }
+  #section-price[aria-busy="true"] { min-height: 576px; }
+  #section-hours[aria-busy="true"] { min-height: 394px; }
+  #section-battery[aria-busy="true"],
+  #section-solar[aria-busy="true"] { min-height: 397px; }
+  #section-results[aria-busy="true"] { min-height: 652px; }
+  #section-chart[aria-busy="true"] { min-height: 1131px; }
+}
+@media (min-width: 1036px) { #section-hours[aria-busy="true"] { min-height: 370px; } }
+@media (min-width: 1065px) {
+  #section-price[aria-busy="true"] { min-height: 557px; }
+  #section-results[aria-busy="true"] { min-height: 633px; }
+}
+@media (min-width: 1095px) { #section-price[aria-busy="true"] { min-height: 497px; } }
+@media (min-width: 1165px) {
+  #section-hours[aria-busy="true"] { min-height: 349px; }
+  #section-chart[aria-busy="true"] { min-height: 1121px; }
+}
+@media (min-width: 1185px) { #section-price[aria-busy="true"] { min-height: 478px; } }
 
 /* ---------- 11. Sunnitud värvid ja printimine (lehepõhised osad) ---------- */
 @media (forced-colors: active) {

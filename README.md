@@ -295,7 +295,7 @@ Solarmani välja nimed ja märgid on failis muutmata; lehed tõlgendavad neid ni
   0,76 / tume 0,74), kaardi sees on ainult läbipaistmatud pinnad (plaadid, graafikukaev, tabelid), nii et tekst ja
   märgid on alati arvutatud pinnal (tekst ≥ 4,5:1 halvimal komposiitpinnal). `@supports not (backdrop-filter)`,
   `prefers-reduced-transparency` ja `forced-colors` annavad läbipaistmatud kaardid. Klaas ei liigu ega reageeri
-  hõljutusele; ainus liikumine saidil on energiavoo täpid (`prefers-reduced-motion` peatab need).
+  hõljutusele; ainus liikumine saidil on energiavoo täpid (`prefers-reduced-motion` korral on täpid peidetud ja suunda näitab iga marsruudi nooleots).
 - **Tokenid:** värvid on CSS-i custom property'd **ainult failis `css/common.css`** (hele `:root`, tume
   `:root[data-theme="dark"]` ja `prefers-color-scheme: dark` all; mõlemad lehed seavad `data-theme` juba
   `<head>`-is ja jagavad teemavõtit `kauge32_theme`). Tume komplekt kehtib ainult ekraanil: **prinditakse alati
@@ -384,12 +384,15 @@ Elering API      → GitHub Actions (uuenda-hinnad.yml) → hinnad.json ┴→ G
 - **Müügihind** = börsihind ilma KM-ta − `muuk.tasu` (müügilepingu marginaal koos KM-ga, 1,05 s/kWh); müügihinnale
   käibemaksu ei lisata.
 - Päikeseandmete aegumislävi (45 min) loetakse `index.html`-i `CONFIG.paike.aegunudMinutites`-ist, nii et
-  mõlemal lehel kehtib sama lävi. Vanema mõõtmise korral on energiavoog tuhm, liikumatu ja pealkirjas on
+  mõlemal lehel kehtib sama lävi. Vanema mõõtmise korral on energiavoo graafika tuhm ja liikumatu (tekst jääb täiskontrastiga) ja pealkirjas on
   mõõtmise kellaaeg („Energiavoog kell 14:59“). Kui `index.html`-i ei õnnestu lugeda, kasutatakse
   energialehe varukoopiat ja bänneris on vastav teade; erinevus `hinnad.json`-i `meta.tariffs`-iga kuvatakse samuti.
 - Tänased kogused on inverteri 15-min mõõtmiste summad kuni viimase mõõtmiseni („Täna kuni 14:59
   (inverter)“; pooleli kaader ainult `lastUpdateTime`-ni); arve alus (ost võrgust Estfeedi arvestist) on elektriinfo lehel. „Päikesest kaetud“ on sama
   mõõdik mis elektriinfo lehel.
+- **Järgmised tunnid** (oma kaart hinnakaardi all): tulevate tundide keskmine börsihind horisontaaltulpadena
+  hinnaklassi toonides; graafiku all on legend ainult esinevate klasside sõna ja vahemikuga, ekraanilugejale on
+  tabelikaksik, kus iga tunni real on ka hinnaklassi sõna.
 - **Päeva graafik** (Chart.js-i virn ühise ajateljega: hinnapaneel, alumine paneel, inverteri režiimiriba ja aku
   laetuse paneel; lüliti „1 h / 15 min“: telefonis vaikimisi 1 h, laiemal ekraanil 15 min):
   - **Inverteri režiimi riba** (ainult „Täna“): iga 15-min kaader on *laeb võrgust*, *laeb päikesest*, *aku kasutus*,
