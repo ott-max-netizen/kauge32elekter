@@ -2748,6 +2748,7 @@ const kMeasuredEnd = {
       ctx.stroke();
     }
     ctx.font = `600 12px ${T.font}`;
+    const nowPx = k.nowMs != null ? x.getPixelForValue(k.nowMs) : null;   // silt ei tohi jääda „praegu“-joone alla
     for (const r of rings) {
       if (!r.text) continue;
       const tw = ctx.measureText(r.text).width;
@@ -2755,6 +2756,8 @@ const kMeasuredEnd = {
         .map(([lx, base]) => ({ x0: lx, x1: lx + tw, y0: base - 12, y1: base + 3, base }))
         .find(c => c.x0 >= a.left && c.x1 <= a.right && c.y0 >= a.top - 18 && c.y1 <= a.bottom
           && !k.$boxes.some(b => boxesOverlap(b, c))
+          && !(nowPx != null && c.x0 - 4 < nowPx && c.x1 + 4 > nowPx)
+          && !chartHits(chart, c, true)
           && rings.every(o => o === r || Math.hypot(clamp(o.px, c.x0, c.x1) - o.px, clamp(o.py, c.y0, c.y1) - o.py) > 8));
       if (!spot) continue;
       k.$boxes.push(spot);
