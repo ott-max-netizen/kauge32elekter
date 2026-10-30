@@ -856,16 +856,42 @@ jobs:
                   PAEVAD_HOIATUSED.append(msg)
 
           def read_sell_fee():
-              """Müügitasu s/kWh energy-dashboard.html CONFIG.muuk.tasu-st (sama väärtus, mida leht kasutab müügihinnaks)."""
+              """Müügitasu s/kWh index.html CONFIG.hinnad.muugitasu-st (sama väärtus, mida energialeht kasutab müügihinnaks)."""
               try:
-                  with open("energy-dashboard.html", encoding="utf-8") as f:
-                      m = re.search(r"\bmuuk\s*:\s*\{[^}]*?\btasu\s*:\s*(-?\d+(?:\.\d+)?)", f.read())
+                  with open("index.html", encoding="utf-8") as f:
+                      block = re.search(r"const\s+CONFIG\s*=\s*\{([\s\S]*?)\n\};", f.read())
+                  m = re.search(r"\bmuugitasu\s*:\s*(-?\d+(?:\.\d+)?)", block.group(1)) if block else None
                   if m:
                       return float(m.group(1))
               except OSError:
                   pass
-              paevad_note("Müügitasu ei saanud lugeda; müügihind on börsihind ilma KM-ta", "energy-dashboard.html CONFIG.muuk.tasu puudub")
+              paevad_note("Müügitasu ei saanud lugeda; müügihind on börsihind ilma KM-ta", "index.html CONFIG.hinnad.muugitasu puudub")
               return 0.0
+
+          def read_battery_capacity():
+              """Aku kasutatav mahutavus kWh energy-dashboard.html CONFIG.aku.mahtKwh-st (aku tulu laetuse muutuse jaoks); None, kui puudub."""
+              try:
+                  with open("energy-dashboard.html", encoding="utf-8") as f:
+                      m = re.search(r"\baku\s*:\s*\{[^}]*?\bmahtKwh\s*:\s*(\d+(?:\.\d+)?)", f.read())
+                  return float(m.group(1)) if m and float(m.group(1)) > 0 else None
+              except OSError:
+                  return None
+
+          def battery_gain(rec, capacity):
+              """Päeva aku tulu € – sama valem mis energialehe finishTotals-is: tühjendamise väärtus − laadimise kulu + laetuse
+              muutus × mahutavus päeva keskmise laadimishinnaga (laadimiseta päeval maja keskmise ostuhinnaga)."""
+              charge_eur, discharge_eur = rec.get("chargeEur"), rec.get("dischargeEur")
+              if charge_eur is None or discharge_eur is None:
+                  return None
+              stored = None
+              if capacity and rec.get("socStart") is not None and rec.get("socEnd") is not None:
+                  stored = (rec["socEnd"] - rec["socStart"]) / 100.0 * capacity
+              price = None
+              if (rec.get("chargeKwh") or 0) > 1:
+                  price = charge_eur / rec["chargeKwh"]
+              elif (rec.get("loadKwh") or 0) > 0 and rec.get("loadEur") is not None:
+                  price = rec["loadEur"] / rec["loadKwh"]
+              return round(discharge_eur - charge_eur + (stored * price if stored is not None and price is not None else 0.0), 3)
 
           def read_solar_start():
               """Päikesepargi kasutuselevõtu kuu esimene päev index.html CONFIG.paike.kasutuselAlates-ist ("AAAA-KK") või None."""
@@ -1144,8 +1170,16 @@ jobs:
                       print(f"Päevakokkuvõtted: Solarmanist laaditi {len(batch)} päeva, ootel veel {max(0, len(todo) - len(batch))}.")
 
               out_days = [days[k] for k in sorted(days) if k < today.isoformat()][-MAX_PAEVAD:]
+              # Tuletatud väli (elektriinfo lehe „Eile“ rida): arvutatakse igal käivitusel kirje väljadest, mitte Solarmanist
+              capacity = read_battery_capacity()
+              for rec in out_days:
+                  gain = None if rec.get("noData") else battery_gain(rec, capacity)
+                  if gain is None:
+                      rec.pop("batteryGainEur", None)
+                  else:
+                      rec["batteryGainEur"] = gain
               missing = sum(1 for d in todo if d.isoformat() not in days or not is_current(days[d.isoformat()]))
-              meta = {"from": first.isoformat(), "pending": missing, "sellFee": sell_fee, "warnings": PAEVAD_HOIATUSED}
+              meta = {"from": first.isoformat(), "pending": missing, "sellFee": sell_fee, "batteryKwh": capacity, "warnings": PAEVAD_HOIATUSED}
               old_out = (old_file or {}).get("data") if isinstance(old_file, dict) else None
               if old_out == {"days": out_days, "meta": meta}:
                   print("Päevakokkuvõtted ei muutunud.")

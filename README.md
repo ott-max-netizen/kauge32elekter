@@ -151,7 +151,7 @@ Energialehe kokkuvõtte perioodivaliku (eile, 7 päeva, kuu) andmed. Faili kirju
      "importEur":18.919,"exportKwh":0.0,"exportEur":0.0,"chargeKwh":17.43,"chargeEur":1.322,"dischargeKwh":59.59,
      "dischargeEur":13.722,"socStart":70.0,"socEnd":28.0,"loadH":[8.02,7.08,"… 24 väärtust …",12.67],"kaadrid":96,"complete":true,"src":"paike","v":1,
      "cfg":"aeacd889b482","updatedAt":"2026-10-22T00:31:00Z"}],
-   "meta":{"from":"2026-06-01","pending":0,"sellFee":1.05,"warnings":[]}
+   "meta":{"from":"2026-06-01","pending":0,"sellFee":1.05,"batteryKwh":100.0,"warnings":[]}
  }}
 ```
 
@@ -159,13 +159,16 @@ Energialehe kokkuvõtte perioodivaliku (eile, 7 päeva, kuu) andmed. Faili kirju
 - Kogused ja eurod arvutatakse inverteri 15-min kaadritest **samade reeglitega mis energialehe „Täna kokku“**
   (`computeDayTotals`; kontrollitud: sama kaadrite ja hindade korral on tulemus sama). Ost, maja tarbimine ja aku
   tühjendamine on lõpphinnaga (`calc_final_cents_kwh`, sel ajal kehtinud tasud ja KM), müük ja päikesest laetud
-  energia müügihinnaga (börsihind ilma KM-ta − `energy-dashboard.html` `CONFIG.muuk.tasu`), päike otse majja
+  energia müügihinnaga (börsihind ilma KM-ta − `index.html` `CONFIG.hinnad.muugitasu`), päike otse majja
   lõpphinnaga ning akusse ja võrku müügihinnaga. Eurod on 3 komakohaga (summeerimiseks), kWh 2 komakohaga.
 - **Eilne päev** arvutatakse `paike.json`-i kaadritest; kui päev on seal veel poolik (`complete: false`, nt
   käivitus kell 00:05), arvutatakse see järgmistel käivitustel uuesti. **Varasemad päevad** alates
   `index.html` `CONFIG.paike.kasutuselAlates` kuust laaditakse Solarmani history-päringuga järk-järgult
   (10 päeva käivituse kohta, uuemad enne; vajab samu `SOLARMAN_*` Secrets'eid mis `uuenda-paike.yml`).
   `meta.pending` = veel laadimata päevi; päev, mille kohta Solarman mõõtmisi ei andnud, on `"noData": true`.
+- `batteryGainEur` = päeva aku tulu (tuletatud: arvutatakse igal käivitusel kirje väljadest sama valemiga mis energialehe
+  `finishTotals`, mahutavus `energy-dashboard.html` `CONFIG.aku.mahtKwh`-st, `meta.batteryKwh`); seda kasutab elektriinfo
+  lehe päikesekaardi „Eile“ rida. `meta.sellFee` = kasutatud müügitasu.
 - `loadH` = maja tarbimise tunniprofiil (24 Tallinna kellatundi, kWh tunnis = keskmine kW; alla poole tunni
   mõõtmisi → `null`, kellakeeramise päeval korduv tund on kahe tunni keskmine). Väli on viimase 14 päeva kirjetel
   (vanemad kirjed ilma selleta arvutatakse üks kord uuesti) ja sellest arvutab energialeht tarbimise prognoosi.
@@ -214,6 +217,9 @@ Solarmani välja nimed ja märgid on failis muutmata; lehed tõlgendavad neid ni
 
 ## Päikeseenergia (elektriinfo lehe päikesekaart)
 
+- **„Eile“ rida** kaardi põhjas (`paevad.json`, `CONFIG.paike.paevadeFail`): eilne aku tulu (`batteryGainEur`), maja
+  makstud hind (võrgu netokulu / maja tarbimine) ja keskmine ostuhind s/kWh ning link energialehe perioodivalikule.
+  Kirje või faili puudumisel on rida peidetud.
 - Kõik päikese, maja tarbimise ja aku numbrid on **mõõtmised** failist `paike.json` (vt allpool
   „Energia töölaud“). Mudelit ega prognoosi ei kuvata: kogused on summad kuni viimase mõõtmiseni
   (`lastUpdateTime`; viimane, pooleli kaader arvestatakse ainult selle hetkeni, mitte lehe kellani – plaatide
@@ -381,7 +387,8 @@ Elering API      → GitHub Actions (uuenda-hinnad.yml) → hinnad.json ┴→ G
   (alla 0,2 kW muutumatu laetusega) on „Ootel · hoiab +0,1 kW“ (ka graafiku tooltipis „aku ootel · hoiab
   +0,1 kW“), mitte „Laeb“. Aku kasutatav mahutavus on `aku.mahtKwh` (100 kWh): sellest tulevad laadimis- ja
   tühjenemisaja hinnang, „Salvestatud“ plaat ja aku tulu laetuse muutus.
-- **Müügihind** = börsihind ilma KM-ta − `muuk.tasu` (müügilepingu marginaal koos KM-ga, 1,05 s/kWh); müügihinnale
+- **Müügihind** = börsihind ilma KM-ta − `index.html` `CONFIG.hinnad.muugitasu` (müügilepingu marginaal koos KM-ga,
+  1,05 s/kWh; energialeht loeb selle koos teiste tasudega, varukoopia on energialehe `CONFIG.hinnad`-is); müügihinnale
   käibemaksu ei lisata.
 - Päikeseandmete aegumislävi (45 min) loetakse `index.html`-i `CONFIG.paike.aegunudMinutites`-ist, nii et
   mõlemal lehel kehtib sama lävi. Vanema mõõtmise korral on energiavoo graafika tuhm ja liikumatu (tekst jääb täiskontrastiga) ja pealkirjas on
@@ -405,11 +412,15 @@ Elering API      → GitHub Actions (uuenda-hinnad.yml) → hinnad.json ┴→ G
     (+ laeb / − tühjeneb) ja **aku laetus** (omaette paneel 0–100 % režiimiriba all, reservijoon 20 %,
     kaksiktelge pole); *Võrguga vahetus* – ost allapoole
     ja müük ülespoole kWh-des perioodi kohta (mõõdetud osa; tooltipis ka ≈ €).
-  - **Maja tarbimise prognoos** (katkendjoon maja tooniga, ainult *Energiavood* vaates): viimase 7 täieliku päeva
-    (`paevad.json` `loadH`) sama kellatunni keskmine, kui päevi on vähemalt 3. „Täna“ praegusest hetkest päeva lõpuni,
+  - **Maja tarbimise prognoos** (katkendjoon maja tooniga, ainult *Energiavood* vaates): prognoositava päevaga
+    **sama tüüpi** (tööpäev / puhkepäev = laupäev, pühapäev, riigipüha) viimase 7 täieliku päeva (`paevad.json` `loadH`)
+    sama kellatunni keskmine; kui sama tüüpi päevi on alla 3, siis kõigi viimase 7 päeva keskmine. Silt näitab alust
+    („7 tööpäeva keskmine“, „7 puhkepäeva keskmine“, „7 päeva keskmine“). „Täna“ praegusest hetkest päeva lõpuni,
     „Homme“ terve päev (alumine paneel on siis ainult prognoos) ja plaat „Tarbimise prognoos ≈ … kWh, ≈ … € võrgust ostes“.
-    Graafiku all on selgitus (päevad, kogus, maksumus lõpphinnaga, täna lisaks mõõdetud + prognoos). Nädalapäevi, ilma,
-    päikese ega aku prognoosi ei arvestata; prognoos on märgitud „prognoos“, mitte „(inverter)“.
+    Graafiku all on selgitus (päevad, kogus, maksumus lõpphinnaga, täna lisaks mõõdetud + prognoos). Ilma, päikese ega
+    aku prognoosi ei arvestata; prognoos on märgitud „prognoos“, mitte „(inverter)“. Puhkepäeva profiil erineb andmetes
+    tööpäevast (hommik madalam, keskpäev kuni ~2,5 kW kõrgem); tagasiulatuvalt (112 päeva) vähendas päevatüüp prognoosi
+    viga ~5 %.
   - **Päeva kogusummad** (avatav plokk graafiku all): päike, maja, ost, müük, aku laetud ja tühjendatud – kWh,
     ≈ € ja keskmine s/kWh.
 - **Kokkuvõtte periood** (lüliti kaardi ülaosas, nähtav siis, kui `paevad.json` on olemas): *Täna* (`paike.json`,
@@ -472,6 +483,6 @@ ootab 15 s.
 
 ## Versioon ja muudatuste ajalugu
 
-- Praegune versioon: **v3.0.0** (`APP_VERSION` failis `index.html`), energialehel **v2.0.0**
+- Praegune versioon: **v3.1.0** (`APP_VERSION` failis `index.html`), energialehel **v2.1.0**
   (`APP_VERSION` failis `energy-dashboard.html`).
 - Üksikasjalik ülevaade UI/UX muudatustest, komponentide klassidest ja arhitektuurireeglitest (sh juhised Claude AI-le) asub failis [CHANGELOG.md](CHANGELOG.md).

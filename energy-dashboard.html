@@ -343,7 +343,7 @@ const CONFIG = {
     kallis: "Kallis"
   },
 
-  // Maja elektripaketi tasud, s/kWh ILMA käibemaksuta (v.a "kuutasu" €/kuu ja "kaibemaks" %).
+  // Maja elektripaketi tasud, s/kWh ILMA käibemaksuta (v.a "kuutasu" €/kuu, "muugitasu" s/kWh koos KM-ga ja "kaibemaks" %).
   hinnad: {
     marginaal: 0.6,
     vorgutasuPaev: 3.49,
@@ -351,6 +351,7 @@ const CONFIG = {
     taastuvenergiaTasu: 1.598,
     aktsiis: 0.21,
     kuutasu: 0.00,
+    muugitasu: 1.05,  // võrku müüdud elektri müügitasu s/kWh KOOS KM-ga (müügihind = börsihind ilma KM-ta − müügitasu)
     kaibemaks: 24
   },
 
@@ -419,17 +420,11 @@ const CONFIG = {
     ylejaakKw: 0.2,        // päikese ülejääk (kW), millest alates soovitatakse ülejääki kasutada
     minSaastProtsent: 15,  // võrgust laadimine: hilisem lõpphind peab olema vähemalt nii palju kõrgem (pärast kadusid)
     vaatePiirTundides: 12  // kui kaugele ette hindu võrreldakse
-  },
-
-  // Võrku müüdud elektri hind: börsihind ILMA käibemaksuta miinus müügitasu (s/kWh).
-  // Müügitasu on müügilepingu marginaal koos käibemaksuga (s/kWh); müügihinda käibemaksu ei lisata.
-  muuk: {
-    tasu: 1.05
   }
 };
 
 /* Tehnilised konstandid — neid ei ole tavakasutuses vaja muuta. */
-const APP_VERSION = '2.0.0';
+const APP_VERSION = '2.1.0';
 const TIME_ZONE = 'Europe/Tallinn';
 const API_URL = 'https://dashboard.elering.ee/api/nps/price';
 const PRICE_TIMEOUT_MS = 20000;
@@ -1087,7 +1082,7 @@ function calculateFinalPrice(spotExVatCentsKwh, date) {
 }
 function finalCents(period) { return calculateFinalPrice(period.spotExVatCentsKwh, period.start).total; }
 /** Võrku müüdud kWh hind: börsihind ilma KM-ta miinus müügitasu. */
-function sellCents(period) { return period.spotExVatCentsKwh - Number(CONFIG.muuk?.tasu || 0); }
+function sellCents(period) { return period.spotExVatCentsKwh - (Number(TARIFFS.hinnad.muugitasu) || 0); }
 
 function compareToDayAverage(price, avg) {
   if (avg == null) return null;
@@ -4227,7 +4222,7 @@ function renderPrice(d) {
   const facts = [];
   // Aken valitakse lõpphinna järgi (öine võrgutasu on odavam), börsihind on kõrval – nagu elektriinfo lehel
   if (d.best2h) facts.push(['fact-best-window', `Odavaim 2 h aken: ${describeRange(d.best2h.start, d.best2h.end, d.now)}, koos tasudega ${formatCents(d.best2h.avgFinal)} (börsihind ${formatCents(d.best2h.avg)}).`]);
-  facts.push(['fact-sell-price', `Müügihind praegu ${formatCents(sellCents(current))} (börsihind ilma KM-ta${Number(CONFIG.muuk?.tasu) ? ' − müügitasu' : ''}).`]);
+  facts.push(['fact-sell-price', `Müügihind praegu ${formatCents(sellCents(current))} (börsihind ilma KM-ta${Number(TARIFFS.hinnad.muugitasu) ? ' − müügitasu' : ''}).`]);
   facts.push([null, `Kehtib ${finalPrice.tariff === 'oo' ? 'öötariif' : 'päevatariif'} (võrgutasu ${formatCents(finalPrice.tariff === 'oo' ? TARIFFS.hinnad.vorgutasuOo : TARIFFS.hinnad.vorgutasuPaev)} ilma KM-ta).`]);
   facts.push([null, d.hasTomorrow ? 'Homsed börsihinnad on saadaval (vt graafikul „Homme“).' : tomorrowNotice(d.tomorrowStatus)]);
 
@@ -4439,7 +4434,7 @@ function renderChartLegend({ hasPrices = false, isToday = false, avg = null, avg
     const items = [];
     if (lower.pv) items.push(legendToggle('päike', legendSwatch('var(--solar)', 'legend__swatch--area'), 'päikesetoodang (kW)'));
     if (lower.load) items.push(legendToggle('maja', legendLineKey('var(--home)'), 'maja tarbimine (kW)'));
-    if (lower.forecastDays) items.push(legendToggle('maja prognoos', legendLineKey('var(--home)', 'line-key--dotted'), `maja tarbimise prognoos (${lower.forecastDays} päeva keskmine)`));
+    if (lower.forecastBasis) items.push(legendToggle('maja prognoos', legendLineKey('var(--home)', 'line-key--dotted'), `maja tarbimise prognoos (${lower.forecastBasis})`));
     if (lower.grid) items.push(legendToggle('võrk', legendLineKey('var(--grid)', 'line-key--dashed'), lower.gridSigned ? 'võrk (kW): + ost, − müük' : 'võrk (kW): + ost'));
     if (lower.battery) items.push(legendToggle('aku', legendLineKey('var(--battery)'), lower.batterySigned ? 'aku (kW): + laeb, − tühjeneb' : 'aku (kW): + laeb'));
     if (nowLine) items.push(nowItem());
@@ -4742,20 +4737,36 @@ function dayAriaSummary({ slots, series, avg, best, nowMs, dayStartMs, dayEndMs,
 const FORECAST_DAYS = 7;       // mitme viimase täieliku päeva keskmine
 const FORECAST_MIN_DAYS = 3;   // vähem päevi -> prognoosi ei kuvata
 
+/** Puhkepäev Tallinna aja järgi: laupäev, pühapäev või riigipüha (maja tarbimise päevaprofiil erineb tööpäevast). */
+function isRestDay(date) {
+  const p = getTallinnDateParts(date);
+  return p.weekday === 0 || p.weekday === 6 || isPublicHoliday(p.year, p.month, p.day);
+}
+
 /**
- * Tunniprofiil paevad.json-i viimaste FORECAST_DAYS täieliku päeva (enne tänast) loadH-st: profile[tund] = keskmine kW
- * (kWh tunnis); tund, millel on alla FORECAST_MIN_DAYS väärtuse, on null. null, kui päevi on liiga vähe.
- * Lihtne keskmine (nädalapäevi ega ilma ei arvestata) – lehel märgitud „prognoos, N päeva keskmine“.
+ * Tunniprofiil paevad.json-i loadH-st: prognoositava päevaga sama tüüpi (tööpäev / puhkepäev) viimase FORECAST_DAYS
+ * täieliku päeva (enne tänast) keskmine; kui sama tüüpi päevi on alla FORECAST_MIN_DAYS, siis kõigi viimaste päevade
+ * keskmine (kind 'all'). profile[tund] = keskmine kW (kWh tunnis); tund, millel on alla FORECAST_MIN_DAYS väärtuse, on
+ * null. null, kui päevi on liiga vähe. Ilma ei arvestata – lehel märgitud „prognoos, N tööpäeva keskmine“.
  */
-function loadForecastProfile(now) {
+function loadForecastProfile(now, dayStart = now) {
   const todayKey = tallinnDateKey(now);
-  const days = state.days.list.filter(r => r.paev < todayKey && r.complete && !r.noData && r.loadH).slice(-FORECAST_DAYS);
+  const usable = state.days.list.filter(r => r.paev < todayKey && r.complete && !r.noData && r.loadH);
+  const rest = isRestDay(dayStart);
+  const same = usable.filter(r => isRestDay(dateFromKey(r.paev)) === rest).slice(-FORECAST_DAYS);
+  const byType = same.length >= FORECAST_MIN_DAYS;
+  const days = byType ? same : usable.slice(-FORECAST_DAYS);
   if (days.length < FORECAST_MIN_DAYS) return null;
   const profile = Array.from({ length: 24 }, (_, hour) => {
     const values = days.map(r => r.loadH[hour]).filter(v => v != null);
     return values.length >= FORECAST_MIN_DAYS ? values.reduce((a, b) => a + b, 0) / values.length : null;
   });
-  return { profile, days: days.length, from: days[0].paev, to: days[days.length - 1].paev };
+  return { profile, days: days.length, kind: byType ? (rest ? 'rest' : 'work') : 'all', from: days[0].paev, to: days[days.length - 1].paev };
+}
+
+/** Prognoosi alus sõnadega: „5 tööpäeva keskmine“, „4 puhkepäeva keskmine“ või „7 päeva keskmine“. */
+function forecastBasis(forecast) {
+  return `${forecast.days} ${{ work: 'tööpäeva', rest: 'puhkepäeva' }[forecast.kind] || 'päeva'} keskmine`;
 }
 
 /**
@@ -4763,7 +4774,7 @@ function loadForecastProfile(now) {
  * kokku kWh ja maksumus lõpphinnaga (kui kõik osta võrgust, ilma päikese ja akuta). null, kui profiili pole.
  */
 function buildLoadForecast(d, dayStart, dayEnd, fromMs) {
-  const info = loadForecastProfile(d.now);
+  const info = loadForecastProfile(d.now, dayStart);
   if (!info) return null;
   const segments = [];
   const p = getTallinnDateParts(dayStart);
@@ -4803,9 +4814,9 @@ function forecastNote(forecast, isToday, d) {
   if (isToday) {
     const measured = d.totals && d.totals.loadKwh != null ? d.totals.loadKwh : null;
     const total = measured != null ? ` – täna kokku ≈\u00a0${formatKwh(measured + forecast.kwh)} (mõõdetud ${formatKwh(measured)})` : '';
-    return `Tarbimise prognoos (${forecast.days} päeva keskmine, ${range}): ülejäänud päev ≈\u00a0${formatKwh(forecast.kwh)}${cost}${total}. Päikese ja aku prognoosi ei kuvata.`;
+    return `Tarbimise prognoos (${forecastBasis(forecast)}, ${range}): ülejäänud päev ≈\u00a0${formatKwh(forecast.kwh)}${cost}${total}. Päikese ja aku prognoosi ei kuvata.`;
   }
-  return `Tarbimise prognoos homseks (${forecast.days} päeva keskmine, ${range}): ≈\u00a0${formatKwh(forecast.kwh)}${cost}. Päikese ja aku prognoosi ei kuvata.`;
+  return `Tarbimise prognoos homseks (${forecastBasis(forecast)}, ${range}): ≈\u00a0${formatKwh(forecast.kwh)}${cost}. Päikese ja aku prognoosi ei kuvata.`;
 }
 
 /** Tühi päev („Homme“ enne avaldamist, hilinemine, andmed puuduvad): virn peidetud, kaevus sama kõrgusega teade (p 10). */
@@ -4939,7 +4950,7 @@ function renderChart(d) {
     lower: exchange
       ? { view: 'grid', unit: hourly ? '1 h' : '15 min', imp: slots.some(s => s.importKwh > 0.005), exp: slots.some(s => s.exportKwh > 0.005) }
       : view.hasPower || lowerForecast.length ? {
-        view: 'flows', pv: view.hasPower, load: view.hasPower, forecastDays: lowerForecast.length ? forecast.days : 0,
+        view: 'flows', pv: view.hasPower, load: view.hasPower, forecastBasis: lowerForecast.length ? forecastBasis(forecast) : '',
         grid: view.hasPower && stackSeries.some(s => s.gridKw != null),
         gridSigned: stackSeries.some(s => s.gridKw != null && s.gridKw < -FLOW_MIN_KW),
         battery: view.hasPower && stackSeries.some(s => s.batteryKw != null && Math.abs(s.batteryKw) > FLOW_MIN_KW),
@@ -5013,7 +5024,7 @@ function renderChartStats(d, isToday, forecast = null) {
   const avg = calculateWeightedAverage(periods);
   const peakLoad = isToday && d.totals ? d.totals.peakLoad : null;
   const forecastTile = !isToday && forecast
-    ? statTile('Tarbimise prognoos', `≈ ${formatKwh(forecast.kwh)}`, forecast.eur != null ? `≈ ${formatEur(forecast.eur)} võrgust ostes` : `${forecast.days} päeva keskmine`)
+    ? statTile('Tarbimise prognoos', `≈ ${formatKwh(forecast.kwh)}`, forecast.eur != null ? `≈ ${formatEur(forecast.eur)} võrgust ostes` : forecastBasis(forecast))
     : null;
   host.classList.toggle('stats--4', Boolean(peakLoad || forecastTile));
   host.classList.toggle('stats--3', !(peakLoad || forecastTile));
