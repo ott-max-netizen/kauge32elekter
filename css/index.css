@@ -195,6 +195,13 @@
 }
 .sun-card__note { font-size: var(--fs-small); line-height: 1.45; }
 .sun-card__foot .link-btn { vertical-align: middle; }
+/* „Eile“ rida (paevad.json): kokkuvõte kaardi põhjas jaluse kohal */
+.sun-card__yesterday { margin: auto 0 var(--s2); padding-top: var(--s3); font-size: var(--fs-small); line-height: 1.45; color: var(--muted); }
+.sun-card__yesterday:not([hidden]) + .card__foot { margin-top: 0; }
+.sun-card__yesterday strong { color: var(--text); font-weight: 700; white-space: nowrap; }
+.sun-card__yesterday-label { color: var(--text); font-weight: 600; }
+/* Link omaette real: puuteala (--tap) ei venita tekstiridade vahet */
+.sun-card__yesterday .link-btn { display: flex; width: fit-content; }
 
 /* Kompaktne voog (p 7.4); .flow-track ja .flow-node__bg on samad mis energialehel (common.css) */
 .mini-flow { display: block; width: 100%; max-width: 420px; height: auto; margin: 0 auto; }

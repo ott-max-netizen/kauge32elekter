@@ -15,7 +15,7 @@
 <title>Kauge 32 · Elektri ja päikese dashboard</title>
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="css/common.css?v=20261023">
-<link rel="stylesheet" href="css/index.css?v=20261023">
+<link rel="stylesheet" href="css/index.css?v=20261030">
 <script>
 /* Teema enne esimest joonistamist (sama reegel mis applyTheme): <html data-theme> on alati "light" või "dark",
    ka „auto“ korral süsteemi eelistuse järgi, seega on tume tokenikomplekt failis css/common.css ainult kahes plokis. */
@@ -180,6 +180,7 @@
         <span class="skeleton skeleton--line skeleton--mid" aria-hidden="true"></span>
         <p class="visually-hidden">Päikeseandmete laadimine…</p>
       </div>
+      <p class="sun-card__yesterday" id="solar-yesterday" data-testid="solar-yesterday" hidden></p>
       <p class="card__foot sun-card__foot">Aku, energiavoo ja päeva graafiku täpsem vaade: <a class="link-btn" href="energy-dashboard.html">Energia</a>.</p>
     </section>
 
@@ -264,7 +265,8 @@ const CONFIG = {
     aegunudMinutites: 45,
     paneelideKw: 27.5,              // varuväärtus: päikesepargi võimsus, kWp; eelistatakse paike.json-i installedCapacityKw-d (ainult sildil)
     paneelideArv: 36,               // päikesepaneelide arv (ainult sildil)
-    kasutuselAlates: "2026-06"      // päikesepargi kasutuselevõtu kuu kujul "AAAA-KK" (silt; töövoog arvutab päevakokkuvõtted sellest kuust alates); null = teadmata
+    kasutuselAlates: "2026-06",     // päikesepargi kasutuselevõtu kuu kujul "AAAA-KK" (silt; töövoog arvutab päevakokkuvõtted sellest kuust alates); null = teadmata
+    paevadeFail: "paevad.json"      // päevakokkuvõtted (töövoog uuenda-hinnad.yml): kaardi jaluses „Eile“ rida; tühi ("") lülitab välja
   },
 
   // Hinnakategooriate piirid, ühik s/kWh KOOS käibemaksuga (sama number, mis
@@ -302,6 +304,7 @@ const CONFIG = {
     taastuvenergiaTasu: 1.598, // taastuvenergia tasu 0.84 + varustuskindluse tasu 0.758 (alates 01.01.2026), s/kWh ilma KM-ta
     aktsiis: 0.21,            // elektriaktsiis, s/kWh ilma KM-ta
     kuutasu: 0.00,            // fikseeritud kuutasud kokku (võrgu kuu- ja läbilaskevõimetasu, müüja kuutasu), €/kuu koos KM-ga; kuvatakse eraldi reana, 0 peidab rea
+    muugitasu: 1.05,          // võrku müüdud elektri müügitasu (müügilepingu marginaal), s/kWh KOOS KM-ga; müügihind = börsihind ilma KM-ta − müügitasu (energialeht, paevad.json)
     kaibemaks: 24             // käibemaksu määr, % (kasutatakse kõikjal, ka börsihinna KM-ga näitamisel)
   },
 
@@ -368,7 +371,7 @@ const CONFIG = {
 };
 
 /* Tehnilised konstandid — neid ei ole tavakasutuses vaja muuta. */
-const APP_VERSION = '3.0.0';
+const APP_VERSION = '3.1.0';
 const TIME_ZONE = 'Europe/Tallinn';
 const API_URL = 'https://dashboard.elering.ee/api/nps/price';
 const API_TIMEOUT_MS = 20000;
@@ -418,6 +421,7 @@ const state = {
   tooltipIndex: null,
   tooltipPointer: 'mouse', // viimase tooltipi sisendi tüüp ('mouse' | 'touch' | 'pen' | 'keyboard')
   solarRaw: null,         // paike.json-i data (inverteri mõõtmised), vt buildSolarView
+  days: null,             // paevad.json-i päevakirjed (päikesekaardi „Eile“ rida), vt loadDaysData
   solarLoaded: false,     // vähemalt üks paike.json-i laadimiskatse on lõppenud
   solarError: null,       // veateade, kui päikeseandmeid pole kordagi saadud
   activeFilter: 'all',    // 'all' | 'electricity' | 'solar' | 'planner' | 'building'
@@ -745,6 +749,22 @@ async function loadSolarData(signal) {
   }
 }
 
+/** Laeb paevad.json-i (päevakokkuvõtted, valikuline): viga või puudumine peidab ainult „Eile“ rea. */
+async function loadDaysData(signal) {
+  const file = CONFIG.paike && CONFIG.paike.aktiivne && typeof CONFIG.paike.paevadeFail === 'string'
+    ? CONFIG.paike.paevadeFail.trim() : '';
+  if (!file || location.protocol === 'file:') return;
+  try {
+    const response = await fetch(`${file}?v=${Date.now()}`, { signal, cache: 'no-store' });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const json = await response.json();
+    if (!json || json.success !== true || !Array.isArray(json.data?.days)) throw new Error('paevad.json: success !== true või days puudub');
+    state.days = json.data.days.filter(r => r && typeof r === 'object' && typeof r.paev === 'string');
+  } catch (error) {
+    if (!state.days) console.info('Päevakokkuvõtteid (paevad.json) pole:', error.message);
+  }
+}
+
 async function fetchPrices() {
   if (state.loading) return;
   state.loading = true;
@@ -754,6 +774,7 @@ async function fetchPrices() {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
   const solarTask = loadSolarData(controller.signal); // paralleelselt hindadega
+  const daysTask = loadDaysData(controller.signal);
   let result = null;
   let fresh = false;
   let lastError = null;
@@ -793,6 +814,7 @@ async function fetchPrices() {
     }
   } finally {
     await solarTask;
+    await daysTask;
     clearTimeout(timer);
     state.loading = false;
     state.pricesLoaded = true;
@@ -3811,6 +3833,44 @@ const SOLAR_STATUS_DOT = {
   'Aku- ja võrgutoitel': 'var(--battery)', 'Võrgutoitel': 'var(--grid)'
 };
 
+/**
+ * Päikesekaardi „Eile“ rida paevad.json-i eilsest kirjest (inverteri 15-min mõõtmised, töövoog uuenda-hinnad.yml):
+ * aku tulu (kirje batteryGainEur, sama valem mis energialehel) ning maja makstud ja keskmine ostuhind s/kWh.
+ * Kirje puudumisel peidetud; täpsem perioodivalik on energialehe kokkuvõtte kaardil.
+ */
+function renderSolarYesterday(d) {
+  const host = byId('solar-yesterday');
+  if (!host) return;
+  const y = getTallinnDateParts(getTallinnDayStart(d.now, -1));
+  const key = `${y.year}-${String(y.month).padStart(2, '0')}-${String(y.day).padStart(2, '0')}`;
+  const rec = Array.isArray(state.days) ? state.days.find(r => r.paev === key && !r.noData) : null;
+  const num = v => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+  const loadKwh = rec ? num(rec.loadKwh) : null;
+  const loadEur = rec ? num(rec.loadEur) : null;
+  const importEur = rec ? num(rec.importEur) : null;
+  const gain = rec ? num(rec.batteryGainEur) : null;
+  const market = loadKwh > 0.5 && loadEur != null ? loadEur / loadKwh * 100 : null;
+  const paid = loadKwh > 0.5 && importEur != null ? (importEur - (num(rec.exportEur) ?? 0)) / loadKwh * 100 : null;
+  if (gain == null && paid == null) { host.hidden = true; host.replaceChildren(); return; }
+  const signedEur = v => {
+    const r = Math.round(v * 100) / 100;
+    return `≈\u00a0${r > 0 ? '+' : r < 0 ? '−' : ''}${formatEur(Math.abs(r))}`;
+  };
+  const parts = [];
+  if (gain != null) parts.push(['aku tulu ', el('strong', { text: signedEur(gain) })]);
+  if (paid != null) {
+    const diff = market > 0 ? 1 - paid / market : null;
+    parts.push(['maja maksis ', el('strong', { text: formatCents(paid) }),
+      market != null ? ` (keskmine ostuhind ${numberFormat.d2.format(market)}${diff != null && Math.abs(diff) >= 0.005 ? `, ${formatPercentAbs(diff * 100)} ${diff > 0 ? 'odavam' : 'kallim'}` : ''})` : '']);
+  }
+  host.replaceChildren(
+    el('span', { class: 'sun-card__yesterday-label', text: 'Eile (inverter): ' }),
+    ...parts.flatMap((part, i) => (i ? [' · ', ...part] : part)),
+    el('a', { class: 'link-btn', href: 'energy-dashboard.html#section-results', text: 'Perioodid energialehel (eile, 7 päeva, kuu)' })
+  );
+  host.hidden = false;
+}
+
 function renderSolarDashboard(d) {
   const section = byId('section-solar');
   const host = byId('solar-body');
@@ -3818,6 +3878,7 @@ function renderSolarDashboard(d) {
     if (section) section.hidden = true;
     return;
   }
+  renderSolarYesterday(d);
   // Ära too sektsiooni tagasi vaates, mis selle peidab
   if (section) section.hidden = !['all', 'solar'].includes(state.activeFilter);
   const pill = byId('solar-status-pill');
