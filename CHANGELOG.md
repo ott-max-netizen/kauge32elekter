@@ -4,6 +4,79 @@ See fail kirjeldab rakenduse `index.html` versioonimuudatusi, arhitektuurilisi k
 
 ---
 
+## [3.2.1] ja energy-dashboard.html [2.2.1] — 2026-10-31 · koodi ülevaatus ja optimeerimine
+
+Kuvatavad numbrid ja tekstid ei muutunud (kontrollitud fikseeritud kella ja sünteetiliste andmetega: hele/tume teema,
+1280/390 px, hõljutus, sakid, teemanupp – kõigi hetktõmmiste tekst ja tooltipid on samad), välja arvatud allpool
+nimetatud vigade parandused. `js/common.js?v=20261031`, `css/energy-dashboard.css?v=20261031`, `js/lukk.js?v=20261031c`.
+
+### 1. Ühine skriptikood `js/common.js`
+- Mõlemas lehes baidi täpsusega samad 101 tipptaseme deklaratsiooni (~1120 rida kummaski: Tallinna aeg,
+  vormindamine, hinnaarvutuste abifunktsioonid, DOM-abi ja kogu „GRAAFIKUTE ÜHISOSA“) on nüüd ühes failis, mis
+  laaditakse tavalise skriptina enne lehe põhiskripti. Brauser laadib ja hoiab selle vahemälus üks kord; parandus
+  tehakse ühes kohas (varasem „baidi täpsusega sama“ `diff`-kontroll pole enam vajalik). `index.html` väheneb
+  ~1180 rea võrra (ka energialehe `loadTariffs` laadib vähem).
+- Eemaldatud surnud kood: `index.html`-i esimene `iconEl` (hilisem deklaratsioon kirjutas selle alati üle),
+  `CATEGORY_ORDER`, `CHART_HEIGHT`, `CHART_HEIGHT_DESKTOP`, kasutamata olekuväljad (`chart`, `chartView`,
+  `chartItems`, `chartCrosshairs`, `tooltipIndex`, `tooltipPointer`).
+
+### 2. Vähem tööd ja andmesidet
+- **Minutitikk peidetud vahelehel ei joonista** (mõlemad lehed); vahelehele naastes joonistatakse kohe. Tikk on
+  `try/finally`-s: üks visatud viga ei peata enam kella ja „praegu“-joont kogu sessiooniks.
+- **Muutuseta andmefail ei ehita lehte ümber:** hinnad (mõlemad lehed) ja energialehe `paevad.json` loetakse
+  tekstina; sama sisu korral versioon ei suurene, nii et graafikuid, tabeleid ja nende kerimisasendit ei
+  puudutata (töövoog kirjutab faile ainult muutuse korral, enamik kontrolle on muutuseta).
+- **Elektriinfo leht laadib `paevad.json`-i (~100 kB) uuesti ainult vajadusel:** kasutusel on ainult eilne
+  kirje; kui see on lõplik, laaditakse fail uuesti alles uuel päeval või 6 h pärast (varem igal kontrollil).
+- Energialehe lõpphind arvutatakse perioodi kohta üks kord (`finalCents`), mitte igal kutsel (Tallinna
+  kuupäevaosad ja pühade arvutus).
+- Energiavoo SVG-d ei ehitata enam ümber hinnauuenduse ja 5 minuti sammu pärast (täpid ei hüppa algusesse), ja
+  täppide animatsioon seisab, kui kaart pole ekraanil (`IntersectionObserver`, `.is-offscreen`).
+
+### 3. Vigade parandused
+- **Energialehe tarbimise prognoos kellakeeramise päeval:** 25-tunnisel päeval puudus esimene 03:00 tund (prognoos
+  ~1/25 liiga väike, „Homme“ graafikul auk); nüüd käiakse päev läbi UTC tundide kaupa.
+- **Energialehe päevade graafik pärast keskööd:** võti sisaldab esimest päeva, nii et graafik ja selle kirjeldus
+  ei näita enam eri päevi.
+- **Ekraanilugeja:** olekurida (`aria-live`) ja hoiatusbänner (`role="alert"`) uuendatakse ainult sisu muutusel
+  (varem loeti sama teade iga minut uuesti ette). Energialehe aegunud päikeseandmete teatest jäi välja minutiti
+  muutuv vanus (see on energiavoo märgil): „Solarmani mõõtmised on aegunud (viimane 14:05)“.
+- **Elektriinfo „Eile“ rida** ehitatakse uuesti ainult sisu muutusel (lingil olev klaviatuurifookus ei kao iga minut).
+
+### 4. Töövoog `uuenda-hinnad.yml` (päevakokkuvõtted)
+- Muutumata päevakirje tunnistatakse taas muutumatuks (võrdlus jätab tuletatud `batteryGainEur`-i välja): varem
+  sai iga ümberarvutatud kirje uue `updatedAt`-i ja pooliku eilse päeva ajal tehti igal käivitusel uus
+  `paevad.json`-i commit.
+- Kui Eleringi hinnapäring varasemate päevade jaoks ebaõnnestub, jäetakse partii järgmisele käivitusele (hoiatus
+  „Börsihindu ei saanud laadida …“); varem salvestati päevad jäädavalt eurodeta.
+
+### 5. Päevakokkuvõtetest puudus päeva viimane pool tundi kuni tund
+- `uuenda-paike.yml` küsis Solarmanist ainult tänase päeva kaadreid; keskööle eelnev käivitus näeb mõõtmisi ~23:25-ni,
+  seega ei jõudnud eilse päeva viimased kaadrid kunagi `paike.json`-i. `paevad.json`-i eilne kirje (94/96 kaadrit,
+  üle 97 % läve) loeti siiski lõpetatuks ega arvutatud uuesti: igast päevast puudus öine tarbimine viimasel pooltunnil.
+- Nüüd küsib `uuenda-paike.yml` päeva esimesel 3 tunnil ka eilse päeva uuesti, ja `uuenda-hinnad.yml` loeb päeva
+  lõpetatuks ainult siis, kui päeva viimane 15-min kaader on olemas (eilne kirje täieneb ~00:30 käivitusel).
+- Varasemad `paike`-kirjed, milles on päeva perioodidest vähem kaadreid, laaditakse üks kord Solarmanist uuesti
+  (10 päeva käivituse kohta); kui ka Solarmanil puudub päeva lõpp, jääb kirje `complete: false` ega laadita uuesti.
+- Elektriinfo leht laadib pooliku eilse kirje korral `paevad.json`-i uuesti kõige rohkem iga 30 min järel.
+
+### 6. Parooli vahetus ei jäta enam faili vana parooli alla
+- Mõlemad töövood kirjutasid parooli vahetusel `lukk.json`-i juhusliku nonsiga: failid erinesid, teise töövoo push
+  jooksis konflikti ja lõppes siiski roheliselt, selle andmefail jäi vana parooli alla. Pärast `LEHE_PAROOL_VANA`
+  kustutamist jäid seisma selle töövoog ja ka hindade töövoog (mis loeb `paike.json`-i), brauser küsis aga õiget
+  parooli igal laadimisel uuesti.
+- `lukk.py`: kontrollväärtuse nonss tuletatakse soolast, nii et `lukk.json` on sama parooli ja soolaga baidi täpsusega
+  sama ja samaaegsed commit'id ühenduvad konfliktita (olemasolevat `lukk.json`-i ei kirjutata ümber).
+- `lukk.py ava … --loe FAIL`: teise töövoo faili, mida ainult loetakse, avamise viga on hoiatus, mitte töövoo peatus
+  (`uuenda-hinnad.yml` avab nii `paike.json`-i).
+- `js/lukk.js`: kui andmefail ei avane, kuid võti avab endiselt `lukk.json`-i, ei unustata võtit ega küsita parooli
+  uuesti – leht näitab ainult selle faili laadimisviga.
+- README: `LEHE_PAROOL_VANA` kustutatakse alles siis, kui mõlemad töövood on pärast vahetust roheliselt lõppenud.
+- Kontrollitud: kahe töövoo samaaegne parooli vahetus päris git'i repos (vana `lukk.py`: konflikt ja `paike.json`
+  vana parooli all; uus: rebase ja push õnnestuvad, kõik failid avanevad uue parooliga) ning brauseris.
+
+---
+
 ## Turvaparandused — 2026-10-31
 
 Lehe ja andmete loogika ei muutunud; `js/lukk.js?v=20261031b`.

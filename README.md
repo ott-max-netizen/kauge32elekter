@@ -30,12 +30,14 @@ Elering API → GitHub Actions → hinnad.json → GitHub Pages → index.html b
 | `css/common.css` | **ühine disainisüsteem** mõlemale lehele: tokenid (hele ja tume), klaaskaardid ja mesh-taust, bento-ruudustiku alus, komponendid, graafikuraam, olekud, print ja eelistuste varuvariandid |
 | `css/index.css`, `css/energy-dashboard.css` | ainult lehe paigutus (`grid-template-areas`) ja lehepõhised komponendid |
 | `img/icons.svg` | piktogrammide sprite (`<symbol id="i-…">`), mida kasutavad mõlemad lehed |
+| `js/common.js` | **mõlema lehe ühine skriptikood**: Tallinna aeg, vormindamine, hinnaarvutuste abifunktsioonid, DOM-abi ja graafikute ühisosa (Chart.js virn, tooltip, pluginad); laaditakse enne lehe põhiskripti, lehepõhine kood (`CONFIG`, olek, renderdamine) jääb HTML-i |
 | `js/vendor/chart.umd.min.js` | Chart.js 4.5.1 (MIT, `js/vendor/CHART_LICENSE.md`); graafikud joonistatakse sellega, teek on repo sees, sest CSP lubab skripte ainult samalt saidilt |
 | `hinnad.json`, `paike.json`, `paevad.json` | GitHub Actionsi kirjutatud andmefailid (`paevad.json`: inverteri päevakokkuvõtted kWh ja €); parooliga kaitstud lehel krüpteeritud ümbrikud |
 | `js/lukk.js`, `lukk.json`, `.github/scripts/lukk.py`, `.github/scripts/requirements-lukk.txt` | **parooliga kaitse**: brauseri avamisvaade ja dekrüpteerimine, lehe sool ja parooli kontrollväärtus, töövoogude krüpteerimisskript ja selle räsidega lukustatud sõltuvused (vt „Parooliga kaitse“) |
 | `robots.txt` | otsingumootorite robotitele: andme- ja abifailid on blokeeritud; HTML-lehtedel on `noindex, nofollow, noarchive` |
 
-CSS-i või sprite'i muutmisel suurenda HTML-i linkides `?v=` väärtust (GitHub Pages hoiab faile vahemälus 10 min).
+CSS-i, `js/common.js`-i või sprite'i muutmisel suurenda HTML-i linkides `?v=` väärtust (GitHub Pages hoiab faile
+vahemälus 10 min).
 
 Mõlema lehe päises on sama lehtede navigatsioon **Elektriinfo** / **Energia** (aktiivne leht on esile
 tõstetud); elektriinfo lehe päikesekaardil on lisaks link energialehele.
@@ -134,7 +136,9 @@ mõnetunnise viivitusega, seega võib viimane `kwh` rida olla mitu tundi vana. F
 - `frames` on 15-min keskmised võimsused (W), `dateTime` = perioodi algus (Unix s); fail sisaldab
   **tänaseid ja eilseid** kaadreid (eilse päeva 00:00-st, Tallinna aeg) – lehed valivad vaadatava päeva
   ise. Uued ja vanad kaadrid ühendatakse `dateTime`'i järgi, nii et lühem või ebaõnnestunud
-  Solarmani vastus ei kustuta päeva varasemaid kaadreid.
+  Solarmani vastus ei kustuta päeva varasemaid kaadreid. Päeva esimesel 3 tunnil küsitakse Solarmanist ka eilne
+  päev uuesti: keskööle eelnev käivitus näeb mõõtmisi ainult ~23:25-ni, nii et muidu puuduks eilsest viimane pool
+  tundi kuni tund.
 - `frameSeconds` = kaadri pikkus sekundites (900); lehed loevad selle (vaikimisi 900).
 - `meta.framesUntil` = viimase kaadri lõpp (Unix s), kuid mitte hilisem kui viimane mõõtmine `lastUpdateTime`
   (viimane kaader on enamasti pooleli); `meta.warnings` = töövoo hoiatused.
@@ -164,7 +168,8 @@ Energialehe kokkuvõtte perioodivaliku (eile, 7 päeva, kuu) andmed. Faili kirju
   energia müügihinnaga (börsihind ilma KM-ta − `index.html` `CONFIG.hinnad.muugitasu`), päike otse majja
   lõpphinnaga ning akusse ja võrku müügihinnaga. Eurod on 3 komakohaga (summeerimiseks), kWh 2 komakohaga.
 - **Eilne päev** arvutatakse `paike.json`-i kaadritest; kui päev on seal veel poolik (`complete: false`, nt
-  käivitus kell 00:05), arvutatakse see järgmistel käivitustel uuesti. **Varasemad päevad** alates
+  käivitus kell 00:05, kui `paike.json`-is pole veel eilse päeva viimaseid kaadreid), arvutatakse see järgmistel
+  käivitustel uuesti. **Varasemad päevad** alates
   `index.html` `CONFIG.paike.kasutuselAlates` kuust laaditakse Solarmani history-päringuga järk-järgult
   (10 päeva käivituse kohta, uuemad enne; vajab samu `SOLARMAN_*` Secrets'eid mis `uuenda-paike.yml`).
   `meta.pending` = veel laadimata päevi; päev, mille kohta Solarman mõõtmisi ei andnud, on `"noData": true`.
@@ -174,8 +179,9 @@ Energialehe kokkuvõtte perioodivaliku (eile, 7 päeva, kuu) andmed. Faili kirju
 - `loadH` = maja tarbimise tunniprofiil (24 Tallinna kellatundi, kWh tunnis = keskmine kW; alla poole tunni
   mõõtmisi → `null`, kellakeeramise päeval korduv tund on kahe tunni keskmine). Väli on viimase 14 päeva kirjetel
   (vanemad kirjed ilma selleta arvutatakse üks kord uuesti) ja sellest arvutab energialeht tarbimise prognoosi.
-- `complete: false` = kaadrid katavad alla 97 % päevast (kogused on mõõdetud osa summa; leht märgib selle).
-  `src` = `"paike"` või `"solarman"`; poolik `paike`-kirje laaditakse hiljem üks kord Solarmanist uuesti.
+- `complete: false` = kaadrid katavad alla 97 % päevast või päeva viimane 15-min kaader puudub (kogused on mõõdetud
+  osa summa; leht märgib selle). `src` = `"paike"` või `"solarman"`; poolik `paike`-kirje ja `paike`-kirje, milles on
+  päeva perioodidest vähem kaadreid (`kaadrid`), laaditakse hiljem üks kord Solarmanist uuesti.
 - `v` = arvutusreeglite versioon (`PAEVAD_VERSION`), `cfg` = sõrmejälg (tasude sõrmejälg + müügitasu). Kui need
   muutuvad (nt tasu muudeti), arvutatakse päevad Solarmanist järk-järgult uuesti; kuni selleni jääb vana kirje.
 - Kui hinda pole vähemalt 90 % kogusest, jäävad selle sarja eurod kirjest välja (leht näitab perioodi eurosid
@@ -266,10 +272,10 @@ Solarmani välja nimed ja märgid on failis muutmata; lehed tõlgendavad neid ni
   „katkendjoon = tunni keskmine“). Mõõtmiste lõpus on rõngas ja silt „kuni HH:MM“, mis ei jää „praegu“-joone ega
   teise joone alla.
 - Kõik graafikud (hind, kWh, maja 12 kuud, hinnakomponentide osakaal) kasutavad mõlemas lehes sama
-  skriptiplokki „GRAAFIKUTE ÜHISOSA“ (Tallinna aja tunnisildid koos kellakeeramise „03*“-ga, virna ühine
-  y-telje laius, ristjoon, tooltip, inspektor, klaviatuur, teemavahetus, print ja `forced-colors`). Plokk peab
-  jääma mõlemas lehes baidi täpsusega samaks; lõuendi tekst on vähemalt 12 px ja ühelgi graafikul pole kahte
-  y-telge. Kui `js/vendor/chart.umd.min.js` ei laadi, näitab graafikukaev teate ja tabelivaated avanevad.
+  graafikute ühisosa failis `js/common.js` (Tallinna aja tunnisildid koos kellakeeramise „03*“-ga, virna ühine
+  y-telje laius, ristjoon, tooltip, inspektor, klaviatuur, teemavahetus, print ja `forced-colors`); lõuendi tekst
+  on vähemalt 12 px ja ühelgi graafikul pole kahte y-telge. Kui `js/vendor/chart.umd.min.js` ei laadi, näitab
+  graafikukaev teate ja tabelivaated avanevad.
 - Tooltip on tulba kõrval: aeg, börsihind ja hinnaklass, hind koos tasudega, kogused värvivõtmega (ost võrgust
   (võrguarvesti) koos maksumusega, päike ja maja (inverter), aku laadimine) ning võrdlus päeva keskmisega. Puutel ja
   kitsal ekraanil (< 768 px) tooltipi ei kuvata: info on graafiku kohal fikseeritud kõrgusega inspektoris, nii et
@@ -487,13 +493,21 @@ paketi ilma ühegi secret'ita keskkonnas ja ainult `.github/scripts/requirements
 uuendamise juhend on faili alguses). Samm „Ava krüpteeritud andmefailid“ dekrüpteerib failid
 kohapeal, skript töötab tavatekstiga nagu varem, samm „Lukusta andmefailid“ krüpteerib selle töövoo
 kirjutatud failid uuesti. Muutumata fail taastatakse baidi täpsusega (uus nonss annaks iga kord uue sisu ja
-asjatu commit'i), teiste töövoogude failid (nt `paike.json` hindade töövoos) taastatakse algsel kujul.
+asjatu commit'i), teiste töövoogude failid (nt `paike.json` hindade töövoos) taastatakse algsel kujul. Hindade
+töövoog avab `paike.json`-i ainult lugemiseks (`ava … --loe paike.json`): kui see ei avane, jätkab töövoog hoiatusega
+ilma eilse päeva kaadriteta (eilne päev laaditakse siis Solarmanist), mitte ei jää seisma.
 Sool on kõigil failidel sama (`lukk.json`-i oma), et brauser tuletaks võtme ainult üks kord (~0,5 s telefonis).
+`lukk.json`-i kontrollväärtuse nonss tuletatakse soolast, seega on fail sama parooli ja soolaga alati baidi täpsusega
+sama: parooli vahetusel kirjutavad mõlemad töövood sama `lukk.json`-i ja nende samaaegsed commit'id ühenduvad
+konfliktita (varem jäi teise töövoo andmefail konflikti tõttu vana parooli alla).
 
 **Parooli vahetus:** pane uus parool `LEHE_PAROOL`-i ja vana `LEHE_PAROOL_VANA`-sse, käivita mõlemad töövood
-(failid krüpteeritakse uue parooliga, `lukk.json`-i kontrollväärtus uueneb), seejärel kustuta `LEHE_PAROOL_VANA`.
-Brauser märkab vahetust („Parool on vahetatud“) ja küsib uue parooli. Vahetuse ajal, kui üks fail on veel vana
-parooliga, näitab leht selle faili kohta laadimisviga kuni järgmise käivituseni (≤ 30 min).
+(failid krüpteeritakse uue parooliga, `lukk.json`-i kontrollväärtus uueneb) ja kustuta `LEHE_PAROOL_VANA` alles
+siis, kui **mõlemad** töövood on pärast vahetust roheliselt lõppenud (iga roheline käivitus salvestab oma faili uue
+parooliga). Brauser märkab vahetust („Parool on vahetatud“) ja küsib uue parooli. Kui mõni fail on veel vana
+parooliga, näitab leht ainult selle faili kohta laadimisviga (võtit ei unustata ega parooli küsita uuesti) kuni
+seda faili kirjutav töövoog on uuesti käinud (≤ 30 min). Kui `LEHE_PAROOL_VANA` kustutati liiga vara ja töövoog
+„Uuenda päikeseandmed“ jääb veaga seisma („ei avane …“), lisa vana parool ajutiselt tagasi ja käivita töövoog.
 
 **Kaitse mahavõtmine:** kustuta `LEHE_PAROOL`, pane senine parool `LEHE_PAROOL_VANA`-sse, käivita mõlemad
 töövood (failid salvestatakse tavatekstina, `lukk.json` kustub), kustuta `LEHE_PAROOL_VANA`. Kui `LEHE_PAROOL`

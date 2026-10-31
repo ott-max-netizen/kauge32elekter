@@ -390,11 +390,20 @@
     try {
       return await dekrypteeri(voti, umbrik.iv, umbrik.ct);
     } catch (error) {
+      // Kas parool on vahetatud? Kui olemasolev võti avab endiselt värske lukk.json-i kontrollväärtuse, siis mitte: viga
+      // on selles failis (nt jäi see parooli vahetusel vana parooli alla, kuni töövoog selle uuesti salvestab). Siis
+      // võtit ei unustata ega parooli küsita uuesti – muidu küsiks leht õiget parooli igal laadimisel.
+      const info = await laeLukuFail().catch(() => null);
+      const lukuVoti = info && votmed.get(votmeId(info.salt, info.iter));
+      if (lukuVoti && await kontrolliVoti(lukuVoti, info)) {
+        lukuInfo = info;
+        throw new Error('andmefail ei avane kehtiva parooliga (töövoog pole seda veel uue parooliga salvestanud)');
+      }
       // Võti ei sobi: parool on vahetatud (salvestatud võti on vana) – küsi uuesti ja proovi veel üks kord
       votmed.delete(votmeId(umbrik.salt, umbrik.iter));
       parool = null;
       await unustaSalvestatud(false);
-      lukuInfo = await laeLukuFail().catch(() => lukuInfo);
+      lukuInfo = info || lukuInfo;
       voti = await hangiVoti(umbrik.salt, umbrik.iter, 'Parool on vahetatud. Sisesta uus parool.');
       return dekrypteeri(voti, umbrik.iv, umbrik.ct);
     }

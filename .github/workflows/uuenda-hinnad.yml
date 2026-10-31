@@ -103,7 +103,8 @@ jobs:
         env:
           LEHE_PAROOL: ${{ secrets.LEHE_PAROOL }}
           LEHE_PAROOL_VANA: ${{ secrets.LEHE_PAROOL_VANA }}
-        run: '"$LUKK_PY" .github/scripts/lukk.py ava hinnad.json paevad.json paike.json'
+        # paike.json-i kirjutab teine töövoog (siin ainult loetakse eilse päeva kaadreid): kui see ei avane, jätkatakse ilma
+        run: '"$LUKK_PY" .github/scripts/lukk.py ava hinnad.json paevad.json --loe paike.json'
 
       - name: Lae, kontrolli ja filtreeri hinnad ning tarbimine
         env:
@@ -1053,7 +1054,10 @@ jobs:
               if has["load"]:
                   rec["loadH"] = [round(load_h[hr][0] / load_h[hr][1], 2) if hr in load_h and load_h[hr][1] >= 0.5 else None for hr in range(24)]
               rec["kaadrid"] = len(rows)
-              rec["complete"] = hours >= 0.97 * (t1 - t0) / 3600.0
+              # Lõpetatud: kaadrid katavad ≥ 97 % päevast JA päeva viimane 15-min kaader on olemas. Viimase tingimuseta loeti
+              # lõpetatuks ka päev, millest puudus viimane pool tundi (keskööle eelnev paike.json näeb mõõtmisi ~23:25-ni),
+              # ja seda ei arvutatud enam uuesti.
+              rec["complete"] = hours >= 0.97 * (t1 - t0) / 3600.0 and rows[-1]["dateTime"] >= t1 - SOLAR_FRAME_S
               rec["src"] = src
               rec["v"] = PAEVAD_VERSION
               rec["cfg"] = cfg_hash
@@ -1152,12 +1156,22 @@ jobs:
 
               def store(rec):
                   prev = old_days.get(rec["paev"]) or {}
-                  same = {k: v for k, v in prev.items() if k != "updatedAt"} == rec
+                  # batteryGainEur on tuletatud väli (lisatakse väljundile allpool): see ei tähenda kirje muutust
+                  same = {k: v for k, v in prev.items() if k not in ("updatedAt", "batteryGainEur")} == rec
                   rec["updatedAt"] = prev["updatedAt"] if same and prev.get("updatedAt") else utc_now_iso()
                   days[rec["paev"]] = rec
 
               def is_current(rec):
                   return rec.get("v") == PAEVAD_VERSION and rec.get("cfg") == day_hash
+
+              def short_paike(day, rec):
+                  """paike.json-ist arvutatud lõppenud päev, millest puudub kaadreid (poolik või enne viimase kaadri reeglit
+                  lõpetatuks loetud, nt päeva viimane pool tundi puudu): laaditakse üks kord Solarmanist (src -> "solarman")."""
+                  if rec.get("src") != "paike" or day >= yesterday:
+                      return False
+                  d0 = datetime(day.year, day.month, day.day, tzinfo=TZ)
+                  slots = int((d0 + timedelta(days=1)).timestamp() - d0.timestamp()) // SOLAR_FRAME_S
+                  return not rec.get("complete") or (rec.get("kaadrid") or 0) < slots
 
               def needs_profile(day, rec):
                   """Viimaste PROFIIL_PAEVI päeva kirje ilma tunniprofiilita (vanem kirje) arvutatakse üks kord uuesti."""
@@ -1176,13 +1190,14 @@ jobs:
                   if rec and (not prev_y or rec["complete"] or not prev_y.get("complete")):
                       store(rec)
 
-              # Puuduvad, vananenud või ainult osaliselt paike.json-ist arvutatud päevad Solarmanist (uuemad enne). Eilne päev
-              # ainult siis, kui paike.json-is selle kaadreid polnud (osaline eilne täieneb paike.json-ist järgmistel käivitustel).
+              # Puuduvad, vananenud või paike.json-ist poolikult arvutatud päevad Solarmanist (uuemad enne). Eilne päev
+              # ainult siis, kui paike.json-is selle kaadreid polnud (osaline eilne täieneb paike.json-ist järgmistel käivitustel:
+              # uuenda-paike.yml küsib päeva esimestel tundidel ka eilse päeva lõpu).
               todo = []
               day = yesterday
               while day >= first:
                   rec = days.get(day.isoformat())
-                  if not rec or not is_current(rec) or (day < yesterday and not rec.get("complete") and rec.get("src") == "paike") or needs_profile(day, rec):
+                  if not rec or not is_current(rec) or short_paike(day, rec) or needs_profile(day, rec):
                       todo.append(day)
                   day -= timedelta(days=1)
               if todo:
@@ -1194,6 +1209,10 @@ jobs:
                       prices = fetch_nps_prices(datetime(batch[-1].year, batch[-1].month, batch[-1].day, tzinfo=TZ),
                                                 datetime(batch[0].year, batch[0].month, batch[0].day, tzinfo=TZ) + timedelta(days=1), strict=False)
                       batch_prices = {r["timestamp"]: r["price"] for r in prices}
+                      if not prices:
+                          # Ilma hindadeta jääksid kirjed eurodeta, kuid saaksid kehtiva v/cfg ega arvutataks uuesti
+                          paevad_note("Börsihindu ei saanud laadida; varasemad päevakokkuvõtted arvutatakse järgmisel käivitusel", "Eleringi hinnapäring ebaõnnestus")
+                          batch = []
                       for day in batch:
                           frames = solarman_day_frames(token, sid, day)
                           if frames is None:

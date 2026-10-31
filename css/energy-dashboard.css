@@ -120,6 +120,9 @@
 .flow-dots { fill: none; stroke-linecap: round; stroke-dasharray: 0.1 13;
              animation: flow-move var(--flow-dur, 1.6s) linear infinite; }                /* kiirus = kW */
 .flow-dots--rev { animation-direction: reverse; }
+/* Kaart ekraanilt väljas (IntersectionObserver, energy-dashboard.html setupControls): animatsioon seisab, iga kaader
+   joonistaks muidu SVG uuesti */
+.is-offscreen .flow-dots { animation-play-state: paused; }
 @keyframes flow-move { to { stroke-dashoffset: -13.1; } }
 .flow-node__bg { fill: var(--plot); stroke: var(--border); stroke-width: 1; }
 .flow-node__ring { fill: none; stroke-width: 3; stroke-linecap: round; }
