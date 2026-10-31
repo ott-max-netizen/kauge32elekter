@@ -30,12 +30,14 @@ Elering API → GitHub Actions → hinnad.json → GitHub Pages → index.html b
 | `css/common.css` | **ühine disainisüsteem** mõlemale lehele: tokenid (hele ja tume), klaaskaardid ja mesh-taust, bento-ruudustiku alus, komponendid, graafikuraam, olekud, print ja eelistuste varuvariandid |
 | `css/index.css`, `css/energy-dashboard.css` | ainult lehe paigutus (`grid-template-areas`) ja lehepõhised komponendid |
 | `img/icons.svg` | piktogrammide sprite (`<symbol id="i-…">`), mida kasutavad mõlemad lehed |
+| `js/common.js` | **mõlema lehe ühine skriptikood**: Tallinna aeg, vormindamine, hinnaarvutuste abifunktsioonid, DOM-abi ja graafikute ühisosa (Chart.js virn, tooltip, pluginad); laaditakse enne lehe põhiskripti, lehepõhine kood (`CONFIG`, olek, renderdamine) jääb HTML-i |
 | `js/vendor/chart.umd.min.js` | Chart.js 4.5.1 (MIT, `js/vendor/CHART_LICENSE.md`); graafikud joonistatakse sellega, teek on repo sees, sest CSP lubab skripte ainult samalt saidilt |
 | `hinnad.json`, `paike.json`, `paevad.json` | GitHub Actionsi kirjutatud andmefailid (`paevad.json`: inverteri päevakokkuvõtted kWh ja €); parooliga kaitstud lehel krüpteeritud ümbrikud |
 | `js/lukk.js`, `lukk.json`, `.github/scripts/lukk.py`, `.github/scripts/requirements-lukk.txt` | **parooliga kaitse**: brauseri avamisvaade ja dekrüpteerimine, lehe sool ja parooli kontrollväärtus, töövoogude krüpteerimisskript ja selle räsidega lukustatud sõltuvused (vt „Parooliga kaitse“) |
 | `robots.txt` | otsingumootorite robotitele: andme- ja abifailid on blokeeritud; HTML-lehtedel on `noindex, nofollow, noarchive` |
 
-CSS-i või sprite'i muutmisel suurenda HTML-i linkides `?v=` väärtust (GitHub Pages hoiab faile vahemälus 10 min).
+CSS-i, `js/common.js`-i või sprite'i muutmisel suurenda HTML-i linkides `?v=` väärtust (GitHub Pages hoiab faile
+vahemälus 10 min).
 
 Mõlema lehe päises on sama lehtede navigatsioon **Elektriinfo** / **Energia** (aktiivne leht on esile
 tõstetud); elektriinfo lehe päikesekaardil on lisaks link energialehele.
@@ -266,10 +268,10 @@ Solarmani välja nimed ja märgid on failis muutmata; lehed tõlgendavad neid ni
   „katkendjoon = tunni keskmine“). Mõõtmiste lõpus on rõngas ja silt „kuni HH:MM“, mis ei jää „praegu“-joone ega
   teise joone alla.
 - Kõik graafikud (hind, kWh, maja 12 kuud, hinnakomponentide osakaal) kasutavad mõlemas lehes sama
-  skriptiplokki „GRAAFIKUTE ÜHISOSA“ (Tallinna aja tunnisildid koos kellakeeramise „03*“-ga, virna ühine
-  y-telje laius, ristjoon, tooltip, inspektor, klaviatuur, teemavahetus, print ja `forced-colors`). Plokk peab
-  jääma mõlemas lehes baidi täpsusega samaks; lõuendi tekst on vähemalt 12 px ja ühelgi graafikul pole kahte
-  y-telge. Kui `js/vendor/chart.umd.min.js` ei laadi, näitab graafikukaev teate ja tabelivaated avanevad.
+  graafikute ühisosa failis `js/common.js` (Tallinna aja tunnisildid koos kellakeeramise „03*“-ga, virna ühine
+  y-telje laius, ristjoon, tooltip, inspektor, klaviatuur, teemavahetus, print ja `forced-colors`); lõuendi tekst
+  on vähemalt 12 px ja ühelgi graafikul pole kahte y-telge. Kui `js/vendor/chart.umd.min.js` ei laadi, näitab
+  graafikukaev teate ja tabelivaated avanevad.
 - Tooltip on tulba kõrval: aeg, börsihind ja hinnaklass, hind koos tasudega, kogused värvivõtmega (ost võrgust
   (võrguarvesti) koos maksumusega, päike ja maja (inverter), aku laadimine) ning võrdlus päeva keskmisega. Puutel ja
   kitsal ekraanil (< 768 px) tooltipi ei kuvata: info on graafiku kohal fikseeritud kõrgusega inspektoris, nii et
