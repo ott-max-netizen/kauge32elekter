@@ -31,7 +31,9 @@ Elering API → GitHub Actions → hinnad.json → GitHub Pages → index.html b
 | `css/index.css`, `css/energy-dashboard.css` | ainult lehe paigutus (`grid-template-areas`) ja lehepõhised komponendid |
 | `img/icons.svg` | piktogrammide sprite (`<symbol id="i-…">`), mida kasutavad mõlemad lehed |
 | `js/vendor/chart.umd.min.js` | Chart.js 4.5.1 (MIT, `js/vendor/CHART_LICENSE.md`); graafikud joonistatakse sellega, teek on repo sees, sest CSP lubab skripte ainult samalt saidilt |
-| `hinnad.json`, `paike.json`, `paevad.json` | GitHub Actionsi kirjutatud andmefailid (`paevad.json`: inverteri päevakokkuvõtted kWh ja €) |
+| `hinnad.json`, `paike.json`, `paevad.json` | GitHub Actionsi kirjutatud andmefailid (`paevad.json`: inverteri päevakokkuvõtted kWh ja €); parooliga kaitstud lehel krüpteeritud ümbrikud |
+| `js/lukk.js`, `lukk.json`, `.github/scripts/lukk.py` | **parooliga kaitse**: brauseri avamisvaade ja dekrüpteerimine, lehe sool ja parooli kontrollväärtus, töövoogude krüpteerimisskript (vt „Parooliga kaitse“) |
+| `robots.txt` | otsingumootorite robotitele: andme- ja abifailid on blokeeritud; HTML-lehtedel on `noindex, nofollow, noarchive` |
 
 CSS-i või sprite'i muutmisel suurenda HTML-i linkides `?v=` väärtust (GitHub Pages hoiab faile vahemälus 10 min).
 
@@ -455,16 +457,78 @@ GitHub Secretsisse.
 vajutamine ei koormaks Solarmani API-t ega GitHub Pagesi; elektriinfo lehe „Proovi uuesti“
 ootab 15 s.
 
+## Parooliga kaitse
+
+GitHub Pages ei oska parooli küsida ja repo on avalik, seega ainus päriselt turvaline kaitse on
+**andmete krüpteerimine**: töövood kirjutavad `hinnad.json`, `paike.json` ja `paevad.json` repo'sse
+krüpteeritult (AES-256-GCM; võti tuletatakse paroolist PBKDF2-HMAC-SHA256-ga, 600 000 iteratsiooni) ja
+brauser dekrüpteerib need WebCrypto-ga pärast parooli sisestamist. Parool ei jõua kunagi serverisse ega
+repo'sse: see on ainult GitHub Secretsis ja elanike peas. Ilma paroolita näeb külaline ainult avamisvaadet;
+andmefailid on talle juhuslik baidijada. Lehekood (`index.html` koos `CONFIG`-i tariifidega) jääb avalikuks,
+sest see on avalikus repo's niikuinii.
+
+**Sisselülitamine**
+
+1. Vali pikk parool (soovitavalt vähemalt 12 märki või mitmesõnaline lause; parooli alguse ja lõpu tühikud
+   ei loe). Lisa see **Settings → Secrets and variables → Actions → New repository secret** nimega `LEHE_PAROOL`.
+2. Käivita mõlemad töövood käsitsi (**Actions → Uuenda elektrihinnad → Run workflow** ja **Uuenda päikeseandmed
+   → Run workflow**). Need krüpteerivad andmefailid ja loovad `lukk.json`-i (sool ja parooli kontrollväärtus).
+3. Ava leht: see küsib parooli. „Jäta meelde selles seadmes“ hoiab tuletatud võtme (mitte parooli)
+   `localStorage`-is; märkimata unustatakse võti vahelehe sulgemisel (`sessionStorage`). Jaluse „Lukusta leht“
+   unustab võtme kohe.
+
+Kuni `lukk.json`-i pole, töötab leht nagu enne (parooli ei küsita). Krüpteeritud ja krüpteerimata andmefail
+loetakse mõlemad (`Lukk.fetch`), seega üleminek on sujuv ka siis, kui üks töövoog on juba käinud ja teine mitte.
+
+**Kuidas töövoog töötab** (`.github/scripts/lukk.py`): samm „Ava krüpteeritud andmefailid“ dekrüpteerib failid
+kohapeal, skript töötab tavatekstiga nagu varem, samm „Lukusta andmefailid“ krüpteerib selle töövoo
+kirjutatud failid uuesti. Muutumata fail taastatakse baidi täpsusega (uus nonss annaks iga kord uue sisu ja
+asjatu commit'i), teiste töövoogude failid (nt `paike.json` hindade töövoos) taastatakse algsel kujul.
+Sool on kõigil failidel sama (`lukk.json`-i oma), et brauser tuletaks võtme ainult üks kord (~0,5 s telefonis).
+
+**Parooli vahetus:** pane uus parool `LEHE_PAROOL`-i ja vana `LEHE_PAROOL_VANA`-sse, käivita mõlemad töövood
+(failid krüpteeritakse uue parooliga, `lukk.json`-i kontrollväärtus uueneb), seejärel kustuta `LEHE_PAROOL_VANA`.
+Brauser märkab vahetust („Parool on vahetatud“) ja küsib uue parooli. Vahetuse ajal, kui üks fail on veel vana
+parooliga, näitab leht selle faili kohta laadimisviga kuni järgmise käivituseni (≤ 30 min).
+
+**Kaitse mahavõtmine:** kustuta `LEHE_PAROOL`, pane senine parool `LEHE_PAROOL_VANA`-sse, käivita mõlemad
+töövood (failid salvestatakse tavatekstina, `lukk.json` kustub), kustuta `LEHE_PAROOL_VANA`. Kui `LEHE_PAROOL`
+lihtsalt kustutada, jääb töövoog veaga seisma (krüpteeritud faili ei saa avada) ja andmed ei uuene.
+
+**Piirid, mida tasub teada**
+
+- Krüpteerimine kaitseb andmeid alates esimesest krüpteeritud commit'ist. **Varasemad commit'id sisaldavad
+  andmefaile tavatekstina** ja on avalikus repo's kõigile loetavad. Need kaovad ainult repo privaatseks tegemisega
+  (GitHub Pages privaatsest repo'st vajab tasulist plaani) või ajaloo ümberkirjutamisega.
+- Parooli saab proovida piiramatult (failid on avalikud), seega loeb parooli pikkus: PBKDF2 600 000 iteratsiooni
+  teeb ühe katse kalliks, aga lühikese sõnastikusõna murrab see siiski. Lehekülg ise katseid ei piira ega saagi piirata.
+- Salvestatud võti on `*.github.io` ühises brauserisalvestuses nagu otseühenduse võtmedki (vt „Turvalisus“);
+  jagatud seadmes jäta „Jäta meelde“ märkimata.
+- `file://` alt avatud lehel (ilma HTTPS-ita) WebCrypto ei tööta; andmefaile sealt niikuinii ei loeta.
+
+## Otsingumootorid
+
+Mõlemal lehel on `<meta name="robots" content="noindex, nofollow, noarchive">` ja repo juures `robots.txt`.
+`robots.txt` blokeerib andme- ja abifailid (`*.json`, `css/`, `js/`, `img/`, `README.md`, `CHANGELOG.md`), aga jätab
+HTML-lehed tahtlikult robotitele loetavaks: `noindex` toimib ainult siis, kui robot saab lehte lugeda, ja
+`robots.txt`-ga täielikult blokeeritud lehe võib Google siiski ainult aadressina loetleda, kui keegi sellele viitab.
+Robotid näevad HTML-lehel ainult avamisvaadet. GitHub Pages ei luba `X-Robots-Tag` päist ega parooliga kaitset
+serveri poolel. Repo enda lehte (`github.com/…`) indekseerib GitHub ise; seda saab vältida ainult repo privaatseks
+tegemisega.
+
 ## Turvalisus
 
 - API võtmed (Elering, Solarman) on ainult GitHub Actions Secretsis; töövood annavad secret'id
   edasi keskkonnamuutujatena ja kirjutavad andmefailidesse ainult mõõteväärtused.
+- Lehe parool (`LEHE_PAROOL`) on samuti ainult Secretsis; andmefailid avaldatakse krüpteeritult ja
+  avatakse brauseris (vt „Parooliga kaitse“). `js/lukk.js` laaditakse samalt saidilt (CSP lubab).
 - Lehed lisavad sisu ainult `textContent`/`createElement` kaudu (mitte `innerHTML`) ning
   `Content-Security-Policy` meta-silt lubab skripte ja stiile ainult samalt saidilt ning väliseid
   päringuid ainult HTTPS-iga. Uue välise teenuse lisamisel uuenda CSP-d.
-- GitHub Pagesi leht ja avalik repo on kõigile nähtavad: ka `hinnad.json`-i 15-min tarbimine ja
-  `paike.json`-i võimsused. Kõik sama konto `*.github.io` lehed jagavad brauseri salvestusruumi,
-  seega ära salvesta otseühenduse võtmeid jagatud seadmes.
+- GitHub Pagesi leht ja avalik repo on kõigile nähtavad: lehekood on avalik, andmefailid (`hinnad.json`-i
+  15-min tarbimine, `paike.json`-i võimsused) on ilma paroolita loetavad ainult siis, kui parooliga kaitse on
+  välja lülitatud; varasemad commit'id on tavatekstina alles. Kõik sama konto `*.github.io` lehed jagavad brauseri
+  salvestusruumi, seega ära salvesta otseühenduse võtmeid ega lehe võtit („Jäta meelde“) jagatud seadmes.
 
 ## Piirangud
 

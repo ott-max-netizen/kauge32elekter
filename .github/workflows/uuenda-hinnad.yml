@@ -11,6 +11,10 @@
 #   ELERING_EIC           - Mõõtepunkti EIC-kood (nt 38ZEE...)
 #   SOLARMAN_*            - samad mis uuenda-paike.yml-is (paevad.json-i varasemate päevade laadimiseks;
 #                           puudumisel arvutatakse ainult eilne päev paike.json-ist)
+# Valikuline:
+#   LEHE_PAROOL           - lehe parool: hinnad.json ja paevad.json avaldatakse krüpteeritult (.github/scripts/lukk.py),
+#                           brauser dekrüpteerib pärast parooli sisestamist (README „Parooliga kaitse“)
+#   LEHE_PAROOL_VANA      - ainult parooli vahetuse või kaitse mahavõtmise ajaks (eelmine parool)
 
 name: Uuenda elektrihinnad
 
@@ -33,6 +37,7 @@ on:
       - main
     paths:
       - ".github/workflows/uuenda-hinnad.yml"
+      - ".github/scripts/lukk.py"
 
 permissions: {}
 
@@ -71,6 +76,21 @@ jobs:
           # Haru uusim seis, mitte käivituse sündmuse commit: järjekorras oodanud või korratud käivitus alustaks
           # muidu vananenud andmefailidest ja nende push jookseks teise käivituse commit'iga konflikti
           ref: ${{ github.ref_name }}
+
+      # Parooliga kaitse (README „Parooliga kaitse“): andmefailid on repo's krüpteeritud, skript töötab tavatekstiga.
+      # Ilma secret'ita LEHE_PAROOL ei tehta midagi (leht on avalik).
+      - name: Ava krüpteeritud andmefailid
+        env:
+          LEHE_PAROOL: ${{ secrets.LEHE_PAROOL }}
+          LEHE_PAROOL_VANA: ${{ secrets.LEHE_PAROOL_VANA }}
+        run: |
+          if [ -n "${LEHE_PAROOL}${LEHE_PAROOL_VANA}" ]; then
+            # Ubuntu 24.04 süsteemi Python võib pip'i keelata (PEP 668), siis --break-system-packages
+            python3 -c "import cryptography" 2>/dev/null \
+              || python3 -m pip install --quiet --disable-pip-version-check cryptography 2>/dev/null \
+              || python3 -m pip install --quiet --disable-pip-version-check --break-system-packages cryptography
+          fi
+          python3 .github/scripts/lukk.py ava hinnad.json paevad.json paike.json
 
       - name: Lae, kontrolli ja filtreeri hinnad ning tarbimine
         env:
@@ -1230,11 +1250,20 @@ jobs:
           print(f"Korras: {len(ee)} perioodi, {len(maja_elekter)} kuud, viimane {datetime.fromtimestamp(ee[-1]['timestamp'], TZ):%d.%m %H:%M}, kWh kuni {meta['estfeedUntil']}")
           PY
 
+      # Krüpteerib selle töövoo kirjutatud failid (muutumata fail jääb baidi täpsusega samaks, et commit'i ei tekiks),
+      # taastab ainult loetud failid ja hoiab korras lukk.json-i (sool ja parooli kontrollväärtus).
+      - name: Lukusta andmefailid
+        env:
+          LEHE_PAROOL: ${{ secrets.LEHE_PAROOL }}
+        run: python3 .github/scripts/lukk.py lukusta hinnad.json paevad.json
+
       - name: Salvesta muudatus
         run: |
           set -euo pipefail
           git add hinnad.json
           if [ -f paevad.json ]; then git add paevad.json; fi
+          # lukk.json: loodud, uuendatud (parooli vahetus) või kustutatud (kaitse maha võetud)
+          if [ -f lukk.json ] || git ls-files --error-unmatch lukk.json >/dev/null 2>&1; then git add lukk.json; fi
           if git diff --staged --quiet; then
             echo "Hinnad ega tarbimisandmed ei muutunud, uut commit'i ei tehta."
             exit 0

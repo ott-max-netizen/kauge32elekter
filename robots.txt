@@ -1,0 +1,14 @@
+# Kauge 32 elektriinfo on ühistu sisene leht ja ei ole mõeldud otsingumootoritele.
+# HTML-lehed jäävad robotitele loetavaks tahtlikult: nende <meta name="robots" content="noindex, nofollow, noarchive">
+# toimib ainult siis, kui robot saab lehte lugeda (robots.txt-ga blokeeritud lehe võib Google siiski ainult
+# aadressina loetleda). Andmefailid ja abifailid on blokeeritud; andmefailid on lisaks krüpteeritud (vt README).
+User-agent: *
+Disallow: /hinnad.json
+Disallow: /paike.json
+Disallow: /paevad.json
+Disallow: /lukk.json
+Disallow: /css/
+Disallow: /js/
+Disallow: /img/
+Disallow: /README.md
+Disallow: /CHANGELOG.md

@@ -14,6 +14,9 @@
 # Valikuline:
 #   SOLARMAN_STATION_ID  - jaama ID; kui puudub, kasutatakse konto esimest jaama
 #                          (määratuna jääb ära üks päring iga käivituse kohta)
+#   LEHE_PAROOL          - lehe parool: paike.json avaldatakse krüpteeritult (.github/scripts/lukk.py),
+#                          brauser dekrüpteerib pärast parooli sisestamist (README „Parooliga kaitse“)
+#   LEHE_PAROOL_VANA     - ainult parooli vahetuse või kaitse mahavõtmise ajaks (eelmine parool)
 
 name: Uuenda päikeseandmed
 
@@ -30,6 +33,7 @@ on:
       - main
     paths:
       - ".github/workflows/uuenda-paike.yml"
+      - ".github/scripts/lukk.py"
 
 permissions: {}
 
@@ -50,6 +54,21 @@ jobs:
           # Haru uusim seis, mitte käivituse sündmuse commit: järjekorras oodanud või korratud käivitus alustaks
           # muidu vananenud andmefailidest ja nende push jookseks teise käivituse commit'iga konflikti
           ref: ${{ github.ref_name }}
+
+      # Parooliga kaitse (README „Parooliga kaitse“): andmefailid on repo's krüpteeritud, skript töötab tavatekstiga.
+      # Ilma secret'ita LEHE_PAROOL ei tehta midagi (leht on avalik).
+      - name: Ava krüpteeritud andmefailid
+        env:
+          LEHE_PAROOL: ${{ secrets.LEHE_PAROOL }}
+          LEHE_PAROOL_VANA: ${{ secrets.LEHE_PAROOL_VANA }}
+        run: |
+          if [ -n "${LEHE_PAROOL}${LEHE_PAROOL_VANA}" ]; then
+            # Ubuntu 24.04 süsteemi Python võib pip'i keelata (PEP 668), siis --break-system-packages
+            python3 -c "import cryptography" 2>/dev/null \
+              || python3 -m pip install --quiet --disable-pip-version-check cryptography 2>/dev/null \
+              || python3 -m pip install --quiet --disable-pip-version-check --break-system-packages cryptography
+          fi
+          python3 .github/scripts/lukk.py ava paike.json
 
       - name: Lae Solarmani reaalaja andmed ja 15-min kaadrid
         env:
@@ -305,6 +324,13 @@ jobs:
           print(f"Korras: {len(frames)} 15-min kaadrit (tänaseid {sum(1 for f in frames if f['dateTime'] >= day_start)}), viimane mõõtmine {stamp}")
           PY
 
+      # Krüpteerib selle töövoo kirjutatud failid (muutumata fail jääb baidi täpsusega samaks, et commit'i ei tekiks),
+      # taastab ainult loetud failid ja hoiab korras lukk.json-i (sool ja parooli kontrollväärtus).
+      - name: Lukusta andmefailid
+        env:
+          LEHE_PAROOL: ${{ secrets.LEHE_PAROOL }}
+        run: python3 .github/scripts/lukk.py lukusta paike.json
+
       - name: Salvesta muudatus
         run: |
           set -euo pipefail
@@ -313,6 +339,8 @@ jobs:
             exit 0
           fi
           git add paike.json
+          # lukk.json: loodud, uuendatud (parooli vahetus) või kustutatud (kaitse maha võetud)
+          if [ -f lukk.json ] || git ls-files --error-unmatch lukk.json >/dev/null 2>&1; then git add lukk.json; fi
           if git diff --staged --quiet; then
             echo "Päikeseandmed ei muutunud, uut commit'i ei tehta."
             exit 0
