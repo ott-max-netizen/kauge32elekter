@@ -67,7 +67,7 @@ def aesgcm():
     try:
         from cryptography.hazmat.primitives.ciphers.aead import AESGCM
     except ImportError:
-        viga("Python'i pakett 'cryptography' puudub (paigalda: python3 -m pip install cryptography)")
+        viga("Python'i pakett 'cryptography' puudub (töövoo samm „Paigalda krüpteerimise teek“ ebaõnnestus; vt .github/scripts/requirements-lukk.txt)")
     return AESGCM
 
 

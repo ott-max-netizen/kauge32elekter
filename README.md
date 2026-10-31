@@ -32,7 +32,7 @@ Elering API → GitHub Actions → hinnad.json → GitHub Pages → index.html b
 | `img/icons.svg` | piktogrammide sprite (`<symbol id="i-…">`), mida kasutavad mõlemad lehed |
 | `js/vendor/chart.umd.min.js` | Chart.js 4.5.1 (MIT, `js/vendor/CHART_LICENSE.md`); graafikud joonistatakse sellega, teek on repo sees, sest CSP lubab skripte ainult samalt saidilt |
 | `hinnad.json`, `paike.json`, `paevad.json` | GitHub Actionsi kirjutatud andmefailid (`paevad.json`: inverteri päevakokkuvõtted kWh ja €); parooliga kaitstud lehel krüpteeritud ümbrikud |
-| `js/lukk.js`, `lukk.json`, `.github/scripts/lukk.py` | **parooliga kaitse**: brauseri avamisvaade ja dekrüpteerimine, lehe sool ja parooli kontrollväärtus, töövoogude krüpteerimisskript (vt „Parooliga kaitse“) |
+| `js/lukk.js`, `lukk.json`, `.github/scripts/lukk.py`, `.github/scripts/requirements-lukk.txt` | **parooliga kaitse**: brauseri avamisvaade ja dekrüpteerimine, lehe sool ja parooli kontrollväärtus, töövoogude krüpteerimisskript ja selle räsidega lukustatud sõltuvused (vt „Parooliga kaitse“) |
 | `robots.txt` | otsingumootorite robotitele: andme- ja abifailid on blokeeritud; HTML-lehtedel on `noindex, nofollow, noarchive` |
 
 CSS-i või sprite'i muutmisel suurenda HTML-i linkides `?v=` väärtust (GitHub Pages hoiab faile vahemälus 10 min).
@@ -473,14 +473,18 @@ sest see on avalikus repo's niikuinii.
    ei loe). Lisa see **Settings → Secrets and variables → Actions → New repository secret** nimega `LEHE_PAROOL`.
 2. Käivita mõlemad töövood käsitsi (**Actions → Uuenda elektrihinnad → Run workflow** ja **Uuenda päikeseandmed
    → Run workflow**). Need krüpteerivad andmefailid ja loovad `lukk.json`-i (sool ja parooli kontrollväärtus).
-3. Ava leht: see küsib parooli. „Jäta meelde selles seadmes“ hoiab tuletatud võtme (mitte parooli)
-   `localStorage`-is; märkimata unustatakse võti vahelehe sulgemisel (`sessionStorage`). Jaluse „Lukusta leht“
-   unustab võtme kohe.
+3. Ava leht: see küsib parooli. Tuletatud võti (mitte parool) on **mitte-eksporditav** `CryptoKey` ja seda hoitakse
+   brauseri IndexedDB-s (`kauge32-lukk`): „Jäta meelde selles seadmes“ korral püsivalt, märkimata ainult selle
+   vahelehe jaoks (vahelehe sulgemisel ei saa kirjet enam kasutada ja see kustub järgmisel avamisel, hiljemalt 12 h
+   pärast viimast kasutust). Jaluse „Lukusta leht“ unustab kõik selle brauseri võtmed kohe. Varasem
+   `localStorage`/`sessionStorage`-is hoitud võti kolitakse automaatselt üle ja kustutatakse.
 
 Kuni `lukk.json`-i pole, töötab leht nagu enne (parooli ei küsita). Krüpteeritud ja krüpteerimata andmefail
 loetakse mõlemad (`Lukk.fetch`), seega üleminek on sujuv ka siis, kui üks töövoog on juba käinud ja teine mitte.
 
-**Kuidas töövoog töötab** (`.github/scripts/lukk.py`): samm „Ava krüpteeritud andmefailid“ dekrüpteerib failid
+**Kuidas töövoog töötab** (`.github/scripts/lukk.py`): samm „Paigalda krüpteerimise teek“ paigaldab `cryptography`
+paketi ilma ühegi secret'ita keskkonnas ja ainult `.github/scripts/requirements-lukk.txt` räsidega (`pip --require-hashes`;
+uuendamise juhend on faili alguses). Samm „Ava krüpteeritud andmefailid“ dekrüpteerib failid
 kohapeal, skript töötab tavatekstiga nagu varem, samm „Lukusta andmefailid“ krüpteerib selle töövoo
 kirjutatud failid uuesti. Muutumata fail taastatakse baidi täpsusega (uus nonss annaks iga kord uue sisu ja
 asjatu commit'i), teiste töövoogude failid (nt `paike.json` hindade töövoos) taastatakse algsel kujul.
@@ -502,8 +506,14 @@ lihtsalt kustutada, jääb töövoog veaga seisma (krüpteeritud faili ei saa av
   (GitHub Pages privaatsest repo'st vajab tasulist plaani) või ajaloo ümberkirjutamisega.
 - Parooli saab proovida piiramatult (failid on avalikud), seega loeb parooli pikkus: PBKDF2 600 000 iteratsiooni
   teeb ühe katse kalliks, aga lühikese sõnastikusõna murrab see siiski. Lehekülg ise katseid ei piira ega saagi piirata.
-- Salvestatud võti on `*.github.io` ühises brauserisalvestuses nagu otseühenduse võtmedki (vt „Turvalisus“);
-  jagatud seadmes jäta „Jäta meelde“ märkimata.
+- Salvestatud võti on `ott-max-netizen.github.io` ühises IndexedDB-s (kõik selle konto Pages-lehed jagavad seda).
+  Võti on mitte-eksporditav: teise lehe skript (nt XSS-i korral) saaks sellega selles brauseris dekrüpteerida, aga ei
+  saa võtit välja lugeda ega teise seadmesse viia. Jagatud seadmes jäta „Jäta meelde“ märkimata.
+- **Actions'i logid on avaliku repo puhul kõigile nähtavad.** Töövood ei kirjuta logisse mõõteväärtusi (kWh, €,
+  võimsused), ainult kuupäevi, kirjete arve ja olekuid; uue `print`/`warn` lisamisel hoia sama reeglit. Enne
+  2026-10-31 parandust kirjutasid töövood logisse kuude kWh ja €: vanad käivitused saab kustutada **Actions →
+  käivitus → ⋯ → Delete workflow run** (logid kustuvad ka ise säilitusaja möödudes, **Settings → Actions → General →
+  Artifact and log retention**).
 - `file://` alt avatud lehel (ilma HTTPS-ita) WebCrypto ei tööta; andmefaile sealt niikuinii ei loeta.
 
 ## Otsingumootorid
@@ -522,13 +532,17 @@ tegemisega.
   edasi keskkonnamuutujatena ja kirjutavad andmefailidesse ainult mõõteväärtused.
 - Lehe parool (`LEHE_PAROOL`) on samuti ainult Secretsis; andmefailid avaldatakse krüpteeritult ja
   avatakse brauseris (vt „Parooliga kaitse“). `js/lukk.js` laaditakse samalt saidilt (CSP lubab).
+- Töövood: `actions/checkout` on lukustatud commit'i SHA-ga ja `persist-credentials: false`, nii et kirjutusõigusega
+  `GITHUB_TOKEN` antakse ainult commit'i ja push'i sammule. Python'i sõltuvus paigaldatakse räsidega ja eraldi sammus,
+  kus secret'eid pole. Mõõteväärtusi logisse ei kirjutata (logid on avalikud).
 - Lehed lisavad sisu ainult `textContent`/`createElement` kaudu (mitte `innerHTML`) ning
   `Content-Security-Policy` meta-silt lubab skripte ja stiile ainult samalt saidilt ning väliseid
   päringuid ainult HTTPS-iga. Uue välise teenuse lisamisel uuenda CSP-d.
 - GitHub Pagesi leht ja avalik repo on kõigile nähtavad: lehekood on avalik, andmefailid (`hinnad.json`-i
   15-min tarbimine, `paike.json`-i võimsused) on ilma paroolita loetavad ainult siis, kui parooliga kaitse on
   välja lülitatud; varasemad commit'id on tavatekstina alles. Kõik sama konto `*.github.io` lehed jagavad brauseri
-  salvestusruumi, seega ära salvesta otseühenduse võtmeid ega lehe võtit („Jäta meelde“) jagatud seadmes.
+  salvestusruumi, seega ära salvesta otseühenduse võtmeid ega lehe võtit („Jäta meelde“) jagatud seadmes. Lehe võti on
+  mitte-eksporditav (IndexedDB), otseühenduse võtmed aga tavatekstina `localStorage`/`sessionStorage`-is.
 
 ## Piirangud
 

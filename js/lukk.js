@@ -10,13 +10,18 @@
  *                              seni on <div id="lukk"> avamisvaade nähtav ja .app peidetud (html.lukk-ootel)
  *   Lukk.fetch(url, valikud) – nagu fetch(); krüpteeritud ümbriku ({"lukk":1,...}) korral tagastab dekrüpteeritud
  *                              JSON-i Response'i, tavalise faili korral vastuse muutmata kujul
- *   Lukk.lukusta()           – unustab salvestatud võtme ja laeb lehe uuesti (jaluse nupp „Lukusta leht“)
+ *   Lukk.lukusta()           – unustab kõik selle brauseri salvestatud võtmed ja laeb lehe uuesti (jaluse nupp „Lukusta leht“)
  *
  * Failid: lukk.json {lukk, kdf, iter, salt, kontroll:{iv, ct}} – sool ja parooli kontrollväärtus
  *         (kontroll = AES-GCM(võti, "kauge32-lukk")); puudumine (404) tähendab, et lehel pole lukku.
  *         Andmefail  {lukk, kdf, iter, salt, iv, ct}.
- * Võti (mitte parool) hoitakse sessionStorage'is (vaikimisi) või „Jäta meelde“ korral localStorage'is võtme
- * kauge32_lukk all; parool ise jääb lehe sulgemiseni ainult mällu (teise soolaga faili jaoks).
+ * Võti (mitte parool) on mitte-eksporditav CryptoKey (extractable: false) ja seda hoitakse IndexedDB-s
+ * (andmebaas kauge32-lukk, hoidla votmed): „Jäta meelde“ korral kirje „pysiv“, muidu selle vahelehe kirje
+ * „sessioon:<id>“, mille id on vahelehe sessionStorage'is (kauge32_lukk_sessioon). Vahelehe sulgemisel kaob id ja
+ * kirjet ei saa enam kasutada; aegunud sessioonikirjed (12 h viimasest kasutusest) kustutatakse järgmisel avamisel.
+ * Mitte-eksporditavat võtit ei saa ka sama saidi (*.github.io) skript välja lugeda ega teise seadmesse viia, ainult
+ * selles brauseris kasutada. Varasem eksporditud võti (localStorage/sessionStorage kauge32_lukk) kolitakse üle ja
+ * kustutatakse. Parool ise jääb lehe sulgemiseni ainult mällu (teise soolaga faili jaoks).
  * Skript laaditakse <head>-is ilma defer'ita, et globaal Lukk oleks lehe skriptile olemas ja .app saaks
  * peita enne esimest joonistamist.
  */
@@ -24,7 +29,12 @@
   'use strict';
 
   const LUKU_FAIL = 'lukk.json';
-  const SALVESTUS = 'kauge32_lukk';
+  const VANA_SALVESTUS = 'kauge32_lukk';            // varasem eksporditud võti (local-/sessionStorage), kolitakse üle
+  const IDB_NIMI = 'kauge32-lukk';
+  const IDB_POOD = 'votmed';
+  const PYSIV = 'pysiv';
+  const SESSIOON = 'kauge32_lukk_sessioon';         // sessionStorage: selle vahelehe IndexedDB kirje id (mitte võti)
+  const SESSIOONI_AEG_MS = 12 * 3600 * 1000;
   const KONTROLL = 'kauge32-lukk';
   const KDF = 'PBKDF2-SHA256';
   const MIN_ITER = 1000;
@@ -51,12 +61,6 @@
     return out;
   }
 
-  function b64e(bytes) {
-    let bin = '';
-    for (const b of new Uint8Array(bytes)) bin += String.fromCharCode(b);
-    return btoa(bin);
-  }
-
   function onUmbrik(obj) {
     return Boolean(obj) && typeof obj === 'object' && obj.lukk === 1 && typeof obj.ct === 'string' && typeof obj.iv === 'string';
   }
@@ -73,7 +77,7 @@
     const alus = await subtle.importKey('raw', utf8.encode(pw.normalize('NFC')), 'PBKDF2', false, ['deriveKey']);
     return subtle.deriveKey(
       { name: 'PBKDF2', hash: 'SHA-256', salt: b64d(saltB64), iterations: iter },
-      alus, { name: 'AES-GCM', length: 256 }, true, ['decrypt']
+      alus, { name: 'AES-GCM', length: 256 }, false, ['decrypt']
     );
   }
 
@@ -91,36 +95,148 @@
     }
   }
 
-  function salvestus(pysiv) {
-    try { return pysiv ? global.localStorage : global.sessionStorage; } catch (error) { return null; }
+  /* ---------- võtme salvestus (IndexedDB, mitte-eksporditav CryptoKey) ---------- */
+  let dbLubadus = null;
+
+  /** IndexedDB ühendus või null (keelatud, privaatrežiim vms: võtit ei salvestata, parool küsitakse igal laadimisel). */
+  function avaDb() {
+    if (!dbLubadus) {
+      dbLubadus = new Promise(resolve => {
+        try {
+          const req = global.indexedDB.open(IDB_NIMI, 1);
+          req.onupgradeneeded = () => req.result.createObjectStore(IDB_POOD);
+          req.onsuccess = () => resolve(req.result);
+          req.onerror = () => resolve(null);
+          req.onblocked = () => resolve(null);
+        } catch (error) {
+          resolve(null);
+        }
+      });
+    }
+    return dbLubadus;
   }
 
-  function loeSalvestatud() {
-    for (const pysiv of [true, false]) {
+  /** Üks tehing: fn(store) tagastab päringu (või null); täitub päringu tulemusega pärast tehingu lõppu, vea korral undefined. */
+  async function idb(mode, fn) {
+    const db = await avaDb();
+    if (!db) return undefined;
+    return new Promise(resolve => {
       try {
-        const raw = salvestus(pysiv) && salvestus(pysiv).getItem(SALVESTUS);
-        if (raw) {
-          const obj = JSON.parse(raw);
-          if (obj && typeof obj.salt === 'string' && Number.isInteger(obj.iter) && typeof obj.key === 'string') return obj;
-        }
-      } catch (error) { /* salvestusruum keelatud või vigane kirje */ }
+        const tx = db.transaction(IDB_POOD, mode);
+        const req = fn(tx.objectStore(IDB_POOD));
+        tx.oncomplete = () => resolve(req ? req.result : undefined);
+        tx.onerror = () => resolve(undefined);
+        tx.onabort = () => resolve(undefined);
+      } catch (error) {
+        resolve(undefined);
+      }
+    });
+  }
+
+  function sessionStorageVoi() {
+    try { return global.sessionStorage; } catch (error) { return null; }
+  }
+
+  /** Selle vahelehe sessioonikirje id; uue loob ainult siis, kui looUus (salvestamisel). */
+  function sessiooniId(looUus) {
+    const ss = sessionStorageVoi();
+    if (!ss) return null;
+    try {
+      let id = ss.getItem(SESSIOON);
+      if (!id && looUus) {
+        const b = new Uint8Array(16);
+        global.crypto.getRandomValues(b);
+        id = Array.from(b, x => x.toString(16).padStart(2, '0')).join('');
+        ss.setItem(SESSIOON, id);
+      }
+      return id || null;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function kehtivKirje(obj) {
+    return Boolean(obj) && typeof obj.salt === 'string' && Number.isInteger(obj.iter)
+      && Boolean(obj.key) && typeof obj.key === 'object' && obj.key.type === 'secret';
+  }
+
+  /** Kustutab aegunud sessioonikirjed (ka teiste, juba suletud vahelehtede omad). */
+  function koristaAegunud() {
+    const nyyd = Date.now();
+    return idb('readwrite', store => {
+      const req = store.openCursor();
+      req.onsuccess = () => {
+        const c = req.result;
+        if (!c) return;
+        if (String(c.key).startsWith('sessioon:') && !(c.value && c.value.aegub > nyyd)) c.delete();
+        c.continue();
+      };
+      return null;
+    });
+  }
+
+  /** Salvestatud kirje { salt, iter, key, pysiv } (enne püsiv, siis selle vahelehe oma) või null. */
+  async function loeSalvestatud() {
+    await koristaAegunud();
+    const pysiv = await idb('readonly', store => store.get(PYSIV));
+    if (kehtivKirje(pysiv)) return { salt: pysiv.salt, iter: pysiv.iter, key: pysiv.key, pysiv: true };
+    const id = sessiooniId(false);
+    if (id) {
+      const sess = await idb('readonly', store => store.get(`sessioon:${id}`));
+      if (kehtivKirje(sess)) return { salt: sess.salt, iter: sess.iter, key: sess.key, pysiv: false };
     }
     return null;
   }
 
-  function unustaSalvestatud() {
+  /** Varasem eksporditud võti local-/sessionStorage'ist: imporditakse mitte-eksporditavana ja kustutatakse alati. */
+  async function loeVanaSalvestus() {
     for (const pysiv of [true, false]) {
-      try { salvestus(pysiv) && salvestus(pysiv).removeItem(SALVESTUS); } catch (error) { /* ignoreeri */ }
+      let raw = null;
+      try {
+        const s = pysiv ? global.localStorage : global.sessionStorage;
+        raw = s.getItem(VANA_SALVESTUS);
+        s.removeItem(VANA_SALVESTUS);
+      } catch (error) { /* salvestusruum keelatud */ }
+      if (!raw) continue;
+      try {
+        const obj = JSON.parse(raw);
+        if (obj && typeof obj.salt === 'string' && Number.isInteger(obj.iter) && typeof obj.key === 'string') {
+          const key = await subtle.importKey('raw', b64d(obj.key), { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
+          return { salt: obj.salt, iter: obj.iter, key, pysiv };
+        }
+      } catch (error) { /* vigane kirje */ }
     }
+    return null;
+  }
+
+  function kirjutaKirje(voti, info, pysiv) {
+    if (pysiv) return idb('readwrite', store => store.put({ salt: info.salt, iter: info.iter, key: voti }, PYSIV));
+    const id = sessiooniId(true);
+    if (!id) return Promise.resolve();   // sessionStorage keelatud: võti jääb ainult mällu
+    return idb('readwrite', store => store.put(
+      { salt: info.salt, iter: info.iter, key: voti, aegub: Date.now() + SESSIOONI_AEG_MS }, `sessioon:${id}`));
+  }
+
+  /** Unustab selle vahelehe ja püsiva võtme (kõik = true: ka teiste vahelehtede sessioonid). */
+  async function unustaSalvestatud(koik) {
+    for (const s of ['localStorage', 'sessionStorage']) {
+      try { global[s].removeItem(VANA_SALVESTUS); } catch (error) { /* ignoreeri */ }
+    }
+    if (koik) {
+      await idb('readwrite', store => store.clear());
+      return;
+    }
+    const id = sessiooniId(false);
+    await idb('readwrite', store => {
+      store.delete(PYSIV);
+      if (id) store.delete(`sessioon:${id}`);
+      return null;
+    });
   }
 
   async function salvestaVoti(voti, info, pysiv) {
-    unustaSalvestatud();
-    try {
-      const raw = await subtle.exportKey('raw', voti);
-      const s = salvestus(pysiv);
-      if (s) s.setItem(SALVESTUS, JSON.stringify({ salt: info.salt, iter: info.iter, key: b64e(raw) }));
-    } catch (error) { /* salvestusruum keelatud: küsitakse järgmisel laadimisel uuesti */ }
+    await unustaSalvestatud(false);
+    await kirjutaKirje(voti, info, pysiv);
   }
 
   /* ---------- lukk.json ---------- */
@@ -241,10 +357,10 @@
     }
   }
 
-  function lukusta() {
-    unustaSalvestatud();
+  async function lukusta() {
     votmed.clear();
     parool = null;
+    await unustaSalvestatud(true);
     location.reload();
   }
 
@@ -277,7 +393,7 @@
       // Võti ei sobi: parool on vahetatud (salvestatud võti on vana) – küsi uuesti ja proovi veel üks kord
       votmed.delete(votmeId(umbrik.salt, umbrik.iter));
       parool = null;
-      unustaSalvestatud();
+      await unustaSalvestatud(false);
       lukuInfo = await laeLukuFail().catch(() => lukuInfo);
       voti = await hangiVoti(umbrik.salt, umbrik.iter, 'Parool on vahetatud. Sisesta uus parool.');
       return dekrypteeri(voti, umbrik.iv, umbrik.ct);
@@ -320,21 +436,21 @@
       lopetaAvamine();
       return false;
     }
-    const salvestatud = loeSalvestatud();
+    const vana = await loeVanaSalvestus();       // varasem eksporditud võti: kolitakse IndexedDB-sse
+    const salvestatud = (await loeSalvestatud()) || vana;
     if (salvestatud && salvestatud.salt === lukuInfo.salt && salvestatud.iter === lukuInfo.iter) {
-      try {
-        const voti = await subtle.importKey('raw', b64d(salvestatud.key), { name: 'AES-GCM', length: 256 }, true, ['decrypt']);
-        if (await kontrolliVoti(voti, lukuInfo)) {
-          votmed.set(votmeId(lukuInfo.salt, lukuInfo.iter), voti);
-          lopetaAvamine();
-          return true;
-        }
-      } catch (error) { /* vigane salvestatud võti: küsi parool */ }
-      unustaSalvestatud();
+      if (await kontrolliVoti(salvestatud.key, lukuInfo)) {
+        votmed.set(votmeId(lukuInfo.salt, lukuInfo.iter), salvestatud.key);
+        // Ülekolimine või sessioonikirje aegumise edasilükkamine (12 h viimasest kasutusest)
+        if (salvestatud === vana || !salvestatud.pysiv) await kirjutaKirje(salvestatud.key, lukuInfo, salvestatud.pysiv);
+        lopetaAvamine();
+        return true;
+      }
+      await unustaSalvestatud(false);
       await kysiParool('Parool on vahetatud. Sisesta uus parool.');
       return true;
     }
-    if (salvestatud) unustaSalvestatud();
+    if (salvestatud) await unustaSalvestatud(false);
     await kysiParool();
     return true;
   }
