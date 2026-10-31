@@ -12,19 +12,27 @@ Krüptograafia (sama nii siin kui js/lukk.js-is):
   ümbrik    {"lukk":1,"kdf":"PBKDF2-SHA256","iter":600000,"salt":b64,"iv":b64,"ct":b64}
   lukk.json {"lukk":1,"kdf":...,"iter":...,"salt":b64,"kontroll":{"iv":b64,"ct":b64}}
              kontroll = AES-GCM(võti, "kauge32-lukk"): brauser kontrollib sellega parooli enne andmete laadimist.
+             Kontrollväärtuse nonss tuletatakse soolast (kontroll_nonss), seega on lukk.json sama parooli ja soolaga
+             baidi täpsusega sama: parooli vahetusel kirjutavad mõlemad töövood sama faili ja git ühendab nende
+             samaaegsed commit'id konfliktita (juhusliku nonsiga jäi teise töövoo andmefail vana parooli alla).
   Sool on kõigil failidel sama (lukk.json-i oma), et brauser tuletaks võtme ühe korra.
 
 Käsud (töövoo sammud; keskkonnamuutujad LEHE_PAROOL ja valikuline LEHE_PAROOL_VANA):
-  ava FAIL...      Dekrypteerib loetletud failid kohapeal (töövoo skript töötab tavatekstiga) ja jätab
-                   algsed baidid kõrvale ($LUKK_STASH, vaikimisi $RUNNER_TEMP/kauge32-lukk).
+  ava FAIL... [--loe FAIL...]
+                   Dekrypteerib loetletud failid kohapeal (töövoo skript töötab tavatekstiga) ja jätab
+                   algsed baidid kõrvale ($LUKK_STASH, vaikimisi $RUNNER_TEMP/kauge32-lukk). --loe järel on teise
+                   töövoo failid, mida see töövoog ainult loeb: kui neid ei saa avada (nt jäid parooli vahetusel vana
+                   parooli alla ja LEHE_PAROOL_VANA on juba kustutatud), jäävad need krüpteerituks ja töövoog jätkab
+                   hoiatusega (skript näeb ümbrikku, milles pole andmeid) – oma faili viga peatab töövoo.
   lukusta FAIL...  Krüpteerib loetletud (selle töövoo kirjutatud) failid; muud `ava`-ga avatud failid
                    taastatakse algsel kujul, et git'i töökataloog jääks puhtaks. Muutumata fail taastatakse
                    baidi täpsusega (uus nonss annaks iga kord uue sisu ja seega asjatu commit'i).
                    Hoiab korras lukk.json-i: loob puuduva, uuendab kontrollväärtuse parooli vahetusel ja
                    kustutab selle, kui LEHE_PAROOL on eemaldatud (kaitse mahavõtmine).
 
-Parooli vahetus: LEHE_PAROOL = uus, LEHE_PAROOL_VANA = vana → käivita mõlemad töövood → kustuta
-LEHE_PAROOL_VANA. Kaitse mahavõtmine: kustuta LEHE_PAROOL, pane vana parool LEHE_PAROOL_VANA alla,
+Parooli vahetus: LEHE_PAROOL = uus, LEHE_PAROOL_VANA = vana → käivita mõlemad töövood → kui mõlemad on
+roheliselt lõppenud, kustuta LEHE_PAROOL_VANA.
+Kaitse mahavõtmine: kustuta LEHE_PAROOL, pane vana parool LEHE_PAROOL_VANA alla,
 käivita mõlemad töövood (failid salvestatakse tavatekstina, lukk.json kustub), kustuta LEHE_PAROOL_VANA.
 """
 import base64
@@ -96,9 +104,16 @@ def loe_json(path):
         return raw, None
 
 
-def krypteeri(voti, tavatekst):
-    nonss = secrets.token_bytes(NONSS_B)
+def krypteeri(voti, tavatekst, nonss=None):
+    nonss = nonss or secrets.token_bytes(NONSS_B)
     return nonss, aesgcm()(voti).encrypt(nonss, tavatekst, None)
+
+
+def kontroll_nonss(sool):
+    """lukk.json-i kontrollväärtuse nonss soolast (deterministlik, vt mooduli kirjeldus). Sama võti ja nonss
+    krüpteerivad alati sama tavateksti (KONTROLL), seega GCM-i nonsi taaskasutuse ohtu pole; andmefailide nonss
+    on juhuslik (kokkulangevuse tõenäosus 2^-96)."""
+    return hashlib.sha256(b"kauge32-lukk-kontroll|" + sool).digest()[:NONSS_B]
 
 
 def dekrypteeri(voti, nonss, ct):
@@ -163,7 +178,7 @@ def loe_lukk(votmed, pw):
 
 def kirjuta_lukk(votmed, pw, sool):
     voti = votmed.voti(pw, sool, ITER)
-    nonss, ct = krypteeri(voti, KONTROLL)
+    nonss, ct = krypteeri(voti, KONTROLL, kontroll_nonss(sool))
     obj = {"lukk": VERSIOON, "kdf": KDF, "iter": ITER, "salt": b64e(sool), "kontroll": {"iv": b64e(nonss), "ct": b64e(ct)}}
     with open(LUKK_FAIL, "w", encoding="utf-8") as f:
         json.dump(obj, f, separators=(",", ":"))
@@ -184,21 +199,30 @@ def sha(b):
     return hashlib.sha256(b).hexdigest()
 
 
-def cmd_ava(failid):
+def cmd_ava(failid, loetavad=()):
     pw, vana = parool("LEHE_PAROOL"), parool("LEHE_PAROOL_VANA")
     votmed = Votmed()
     stash = stash_dir()
     seis = {}
-    for path in failid:
+    for path in list(failid) + list(loetavad):
         if not os.path.isfile(path):
             continue
         raw, obj = loe_json(path)
         kirje = {"kruptitud": False, "sha": sha(raw)}
+        ainult_loetav = path in loetavad and path not in failid
         if on_umbrik(obj):
+            tavatekst, kasutatud = ava_umbrik(votmed, obj, (pw, vana)) if (pw or vana) else (None, None)
+            if tavatekst is None and ainult_loetav:
+                # Teise töövoo fail: selle viga ei tohi peatada seda töövoogu (hoiatus; fail jääb krüpteerituks)
+                print(f"::warning::{path} ei avane praeguse ega vana parooliga; see töövoog jätkab ilma selle andmeteta "
+                      f"(faili kirjutav töövoog peab selle uue parooliga salvestama, vt README „Parooliga kaitse“).")
+                with open(os.path.join(stash, os.path.basename(path) + ".orig"), "wb") as f:
+                    f.write(raw)
+                seis[path] = kirje
+                continue
             if not pw and not vana:
                 viga(f"{path} on krüpteeritud, kuid secret LEHE_PAROOL puudub. Lisa parool Settings → Secrets → Actions alla "
                      f"(kaitse mahavõtmiseks pane vana parool LEHE_PAROOL_VANA alla, vt README „Parooliga kaitse“).")
-            tavatekst, kasutatud = ava_umbrik(votmed, obj, (pw, vana))
             if tavatekst is None:
                 viga(f"{path} ei avane ei LEHE_PAROOL-i ega LEHE_PAROOL_VANA-ga: parool on vale või fail on rikutud.")
             with open(path, "wb") as f:
@@ -295,7 +319,11 @@ def main(argv):
         return 2
     failid = argv[2:]
     if argv[1] == "ava":
-        cmd_ava(failid)
+        loetavad = []
+        if "--loe" in failid:
+            i = failid.index("--loe")
+            failid, loetavad = failid[:i], failid[i + 1:]
+        cmd_ava(failid, loetavad)
     else:
         cmd_lukusta(failid)
     return 0

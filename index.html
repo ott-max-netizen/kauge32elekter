@@ -16,7 +16,7 @@
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="css/common.css?v=20261031">
 <!-- Lukk (parooliga kaitse, README „Parooliga kaitse“): ilma defer'ita, et globaal Lukk oleks lehe skriptile olemas ja .app peituks enne esimest joonistamist -->
-<script src="js/lukk.js?v=20261031b"></script>
+<script src="js/lukk.js?v=20261031c"></script>
 <link rel="stylesheet" href="css/index.css?v=20261030">
 <script>
 /* Teema enne esimest joonistamist (sama reegel mis applyTheme): <html data-theme> on alati "light" või "dark",
@@ -666,10 +666,11 @@ async function loadDaysData(signal) {
   const file = CONFIG.paike && CONFIG.paike.aktiivne && typeof CONFIG.paike.paevadeFail === 'string'
     ? CONFIG.paike.paevadeFail.trim() : '';
   if (!file || location.protocol === 'file:') return;
-  // Lehel on kasutusel ainult eilne kirje: kui see on lõplik, pole ~100 kB faili igal kontrollil vaja uuesti laadida
-  // (uus päev, poolik kirje või 6 h vanus laadib uuesti).
+  // Lehel on kasutusel ainult eilne kirje, seega pole ~100 kB faili igal kontrollil vaja uuesti laadida: lõplik kirje
+  // laaditakse uuesti 6 h, poolik 30 min pärast (töövoog uueneb iga 30 min järel); puuduv kirje (uus päev) kohe.
   const rec = yesterdayRecord(new Date());
-  if (rec && (rec.complete === true || rec.noData) && Date.now() - state.daysLoadedAt < 6 * HOUR_MS) return;
+  const maxAgeMs = rec && (rec.complete === true || rec.noData) ? 6 * HOUR_MS : 30 * MINUTE_MS;
+  if (rec && Date.now() - state.daysLoadedAt < maxAgeMs) return;
   try {
     const response = await Lukk.fetch(`${file}?v=${Date.now()}`, { signal, cache: 'no-store' });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);

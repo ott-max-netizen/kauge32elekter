@@ -8,7 +8,7 @@ See fail kirjeldab rakenduse `index.html` versioonimuudatusi, arhitektuurilisi k
 
 Kuvatavad numbrid ja tekstid ei muutunud (kontrollitud fikseeritud kella ja sünteetiliste andmetega: hele/tume teema,
 1280/390 px, hõljutus, sakid, teemanupp – kõigi hetktõmmiste tekst ja tooltipid on samad), välja arvatud allpool
-nimetatud vigade parandused. `js/common.js?v=20261031`, `css/energy-dashboard.css?v=20261031`.
+nimetatud vigade parandused. `js/common.js?v=20261031`, `css/energy-dashboard.css?v=20261031`, `js/lukk.js?v=20261031c`.
 
 ### 1. Ühine skriptikood `js/common.js`
 - Mõlemas lehes baidi täpsusega samad 101 tipptaseme deklaratsiooni (~1120 rida kummaski: Tallinna aeg,
@@ -49,6 +49,31 @@ nimetatud vigade parandused. `js/common.js?v=20261031`, `css/energy-dashboard.cs
   `paevad.json`-i commit.
 - Kui Eleringi hinnapäring varasemate päevade jaoks ebaõnnestub, jäetakse partii järgmisele käivitusele (hoiatus
   „Börsihindu ei saanud laadida …“); varem salvestati päevad jäädavalt eurodeta.
+
+### 5. Päevakokkuvõtetest puudus päeva viimane pool tundi kuni tund
+- `uuenda-paike.yml` küsis Solarmanist ainult tänase päeva kaadreid; keskööle eelnev käivitus näeb mõõtmisi ~23:25-ni,
+  seega ei jõudnud eilse päeva viimased kaadrid kunagi `paike.json`-i. `paevad.json`-i eilne kirje (94/96 kaadrit,
+  üle 97 % läve) loeti siiski lõpetatuks ega arvutatud uuesti: igast päevast puudus öine tarbimine viimasel pooltunnil.
+- Nüüd küsib `uuenda-paike.yml` päeva esimesel 3 tunnil ka eilse päeva uuesti, ja `uuenda-hinnad.yml` loeb päeva
+  lõpetatuks ainult siis, kui päeva viimane 15-min kaader on olemas (eilne kirje täieneb ~00:30 käivitusel).
+- Varasemad `paike`-kirjed, milles on päeva perioodidest vähem kaadreid, laaditakse üks kord Solarmanist uuesti
+  (10 päeva käivituse kohta); kui ka Solarmanil puudub päeva lõpp, jääb kirje `complete: false` ega laadita uuesti.
+- Elektriinfo leht laadib pooliku eilse kirje korral `paevad.json`-i uuesti kõige rohkem iga 30 min järel.
+
+### 6. Parooli vahetus ei jäta enam faili vana parooli alla
+- Mõlemad töövood kirjutasid parooli vahetusel `lukk.json`-i juhusliku nonsiga: failid erinesid, teise töövoo push
+  jooksis konflikti ja lõppes siiski roheliselt, selle andmefail jäi vana parooli alla. Pärast `LEHE_PAROOL_VANA`
+  kustutamist jäid seisma selle töövoog ja ka hindade töövoog (mis loeb `paike.json`-i), brauser küsis aga õiget
+  parooli igal laadimisel uuesti.
+- `lukk.py`: kontrollväärtuse nonss tuletatakse soolast, nii et `lukk.json` on sama parooli ja soolaga baidi täpsusega
+  sama ja samaaegsed commit'id ühenduvad konfliktita (olemasolevat `lukk.json`-i ei kirjutata ümber).
+- `lukk.py ava … --loe FAIL`: teise töövoo faili, mida ainult loetakse, avamise viga on hoiatus, mitte töövoo peatus
+  (`uuenda-hinnad.yml` avab nii `paike.json`-i).
+- `js/lukk.js`: kui andmefail ei avane, kuid võti avab endiselt `lukk.json`-i, ei unustata võtit ega küsita parooli
+  uuesti – leht näitab ainult selle faili laadimisviga.
+- README: `LEHE_PAROOL_VANA` kustutatakse alles siis, kui mõlemad töövood on pärast vahetust roheliselt lõppenud.
+- Kontrollitud: kahe töövoo samaaegne parooli vahetus päris git'i repos (vana `lukk.py`: konflikt ja `paike.json`
+  vana parooli all; uus: rebase ja push õnnestuvad, kõik failid avanevad uue parooliga) ning brauseris.
 
 ---
 
