@@ -17,7 +17,7 @@
 <link rel="stylesheet" href="css/common.css?v=20261031">
 <!-- Lukk (parooliga kaitse, README „Parooliga kaitse“): ilma defer'ita, et globaal Lukk oleks lehe skriptile olemas ja .app peituks enne esimest joonistamist -->
 <script src="js/lukk.js?v=20261031b"></script>
-<link rel="stylesheet" href="css/energy-dashboard.css?v=20261023">
+<link rel="stylesheet" href="css/energy-dashboard.css?v=20261031">
 <script>
 /* Teema enne esimest joonistamist (sama reegel ja võti kauge32_theme mis elektriinfo lehel ja applyTheme-is):
    <html data-theme> on alati "light" või "dark", ka „auto“ korral süsteemi eelistuse järgi (css/common.css). */
@@ -445,7 +445,7 @@ const CONFIG = {
 
 /* Tehnilised konstandid — neid ei ole tavakasutuses vaja muuta. Mõlema lehe ühised (TIME_ZONE, API_URL,
    MINUTE_MS, HOUR_MS, DAY_MS) on failis js/common.js. */
-const APP_VERSION = '2.2.0';
+const APP_VERSION = '2.2.1';
 const PRICE_TIMEOUT_MS = 20000;
 const SOLAR_TIMEOUT_MS = 30000;
 const TARIFF_TIMEOUT_MS = 5000;
@@ -486,6 +486,7 @@ const state = {
     refreshFailed: false, // viimane uuendus ebaõnnestus, kuvatakse varasemaid andmeid
     lastUpdated: null,
     meta: null,           // hinnad.json-i meta (andmetoru olek), vt readDataMeta; otsepäringul null
+    signature: null,      // viimati kasutatud vastuse tekst: muutuseta vastus ei suurenda versiooni
     version: 0
   },
   solar: {
@@ -501,6 +502,7 @@ const state = {
   days: {
     list: [],             // paevad.json päevakirjed (vt normalizeDays), kuupäeva järgi kasvavalt
     meta: null,           // paevad.json data.meta ({ from, pending, sellFee, warnings })
+    signature: null,      // viimati kasutatud faili tekst: muutuseta fail ei suurenda versiooni
     version: 0
   },
   period: 'today',        // kokkuvõtte periood: 'today' | 'yesterday' | '7d' | 'month' | 'prevMonth'
@@ -518,10 +520,6 @@ const state = {
   powerView: 'flows',     // alumine graafik: 'flows' (võimsused) | 'grid' (võrguga vahetus, kWh perioodis)
   derived: null,
   chartKey: '',
-  chartItems: [],
-  chartCrosshairs: [],
-  tooltipIndex: null,
-  tooltipPointer: null,   // 'mouse' | 'pen' | 'touch' | 'keyboard': sama periood teisest sisendist joonistatakse uuesti
   flowKey: '',
   daysKey: ''
 };
@@ -744,9 +742,10 @@ function normalizePrices(rawList) {
 async function requestPrices(url, signal) {
   const response = await Lukk.fetch(url, { signal, cache: 'no-store' });   // avab krüpteeritud andmefaili (js/lukk.js); Eleringi vastus läbib muutmata
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const text = await response.text();
   let json;
   try {
-    json = await response.json();
+    json = JSON.parse(text);
   } catch (parseError) {
     throw new Error('Vigane JSON: ' + parseError.message);
   }
@@ -755,6 +754,7 @@ async function requestPrices(url, signal) {
   const result = normalizePrices(json.data.ee);
   if (!result.periods.length) throw new Error('API tagastas tühja andmestiku');
   result.meta = readDataMeta(json.meta); // ainult kohalikus failis (töövoog); Eleringi otsepäringul puudub
+  result.signature = text;               // refreshPrices: sama sisu korral versioon (ja graafikud) ei muutu
   return result;
 }
 
@@ -796,13 +796,17 @@ async function refreshPrices(signal) {
     }
   }
   if (result) {
-    p.periods = result.periods;
-    p.intervalMinutes = result.intervalMinutes;
-    p.meta = result.meta || null;
+    // Töövoog kirjutab hinnad.json-i ainult muutuse korral: muutuseta vastus jätab perioodid ja versiooni samaks
+    if (result.signature !== p.signature) {
+      p.periods = result.periods;
+      p.intervalMinutes = result.intervalMinutes;
+      p.meta = result.meta || null;
+      p.signature = result.signature;
+      p.version += 1;
+    }
     p.lastUpdated = new Date();
     p.error = null;
     p.refreshFailed = !fresh;
-    p.version += 1;
   } else {
     console.error('Börsihindade laadimine ebaõnnestus:', lastError);
     if (p.periods.length) p.refreshFailed = true;
@@ -938,7 +942,12 @@ function calculateFinalPrice(spotExVatCentsKwh, date) {
   const subtotal = spotExVatCentsKwh + Number(fees.marginaal) + network + Number(fees.taastuvenergiaTasu) + Number(fees.aktsiis);
   return { tariff, total: subtotal * (1 + Number(fees.kaibemaks) / 100) };
 }
-function finalCents(period) { return calculateFinalPrice(period.spotExVatCentsKwh, period.start).total; }
+/** Perioodi lõpphind (s/kWh koos tasude ja KM-ga), arvutatakse perioodi kohta üks kord: tariifid loetakse enne esimest
+ *  laadimist (init → loadTariffs) ja perioodid luuakse igal laadimisel uuesti (normalizePrices). */
+function finalCents(period) {
+  if (period.$finalCents === undefined) period.$finalCents = calculateFinalPrice(period.spotExVatCentsKwh, period.start).total;
+  return period.$finalCents;
+}
 /** Võrku müüdud kWh hind: börsihind ilma KM-ta miinus müügitasu. */
 function sellCents(period) { return period.spotExVatCentsKwh - (Number(TARIFFS.hinnad.muugitasu) || 0); }
 
@@ -1226,11 +1235,14 @@ async function refreshDays(signal) {
   try {
     const response = await Lukk.fetch(`${file}?v=${Date.now()}`, { signal, cache: 'no-store' });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const json = await response.json();
+    const text = await response.text();
+    if (text === state.days.signature) return;   // muutuseta fail: päevade graafikut ei ehitata ümber
+    const json = JSON.parse(text);
     if (!json || json.success !== true) throw new Error('success !== true');
     const { days, meta } = normalizeDays(json);
     state.days.list = days;
     state.days.meta = meta;
+    state.days.signature = text;
     state.days.version += 1;
   } catch (error) {
     if (!state.days.list.length) console.info('Päevakokkuvõtteid (paevad.json) pole:', error.message);
@@ -1925,12 +1937,18 @@ function renderStatus() {
   renderRefreshControls();
   byId('layout').classList.toggle('is-refreshing', state.loading && anyLoaded);
 
-  if (state.loading) status.textContent = anyLoaded ? 'Uuendan andmeid…' : 'Andmete laadimine…';
-  else if (state.lastRefresh) {
-    // „järgmine HH:MM“ peidetakse kitsal ekraanil, et päis mahuks
-    const next = state.nextRefreshAt ? el('span', { class: 'status__next', text: ` · järgmine ${formatTime(new Date(state.nextRefreshAt))}` }) : null;
-    setChildren(status, `Uuendatud ${formatTime(state.lastRefresh)}`, next);
-  } else status.textContent = '';
+  // #status on aria-live: sisu vahetatakse ainult muutuse korral (minutitikk ei loe sama teksti uuesti ette)
+  const statusKey = state.loading ? (anyLoaded ? 'Uuendan andmeid…' : 'Andmete laadimine…')
+    : state.lastRefresh ? `Uuendatud ${formatTime(state.lastRefresh)}|${state.nextRefreshAt ? formatTime(new Date(state.nextRefreshAt)) : ''}` : '';
+  if (statusKey !== status.dataset.key) {
+    status.dataset.key = statusKey;
+    if (state.loading) status.textContent = statusKey;
+    else if (state.lastRefresh) {
+      // „järgmine HH:MM“ peidetakse kitsal ekraanil, et päis mahuks
+      const next = state.nextRefreshAt ? el('span', { class: 'status__next', text: ` · järgmine ${formatTime(new Date(state.nextRefreshAt))}` }) : null;
+      setChildren(status, `Uuendatud ${formatTime(state.lastRefresh)}`, next);
+    } else status.textContent = '';
+  }
 
   // Olekupill: ikoon + sõna (värv ei kanna tähendust üksi)
   const [liveKey, liveIcon, liveText] = liveState();
@@ -1959,7 +1977,8 @@ function renderStatus() {
         : `Börsihindade uuendamine ebaõnnestus, kuvatakse kell ${formatTime(state.prices.lastUpdated)} laaditud hindu.`);
       if (state.solar.refreshFailed) lines.push(`Päikeseandmete uuendamine ebaõnnestus, kuvatakse kell ${formatTime(state.solar.lastUpdated)} laaditud andmeid.`);
       if (state.solar.note) lines.push(state.solar.note);
-      if (d && d.solar && !d.solarFresh) lines.push(`Solarmani viimane mõõtmine on ${formatAgo(d.solarAgeMin)} (${formatTime(d.solar.updated)}). Soovitus ei arvesta päikese ja aku hetkeseisu.`);
+      // Ilma minutiti muutuva vanuseta (see on energiavoo märgil): role="alert" teade ei kordu iga minut
+      if (d && d.solar && !d.solarFresh) lines.push(`Solarmani mõõtmised on aegunud (viimane ${describeTime(d.solar.updated, d.now)}). Soovitus ei arvesta päikese ja aku hetkeseisu.`);
       if (TARIFFS.fallback) lines.push('Tariifid loeti energialehe varukoopiast (index.html-i ei õnnestunud lugeda), lõpphind võib erineda elektriinfo lehe omast.');
       const mismatch = tariffMismatches(state.prices.meta);
       if (mismatch.length) lines.push(`Lehe tariifid erinevad hinnad.json-i töövoo omadest (${mismatch.join(', ')}): kontrolli index.html-i CONFIG-i.`);
@@ -1968,7 +1987,12 @@ function renderStatus() {
   banner.hidden = lines.length === 0;
   banner.classList.toggle('banner--warn', !severe);
   byId('banner-icon').setAttribute('href', `${ICON_SPRITE}#i-${severe ? 'x-circle' : 'alert-triangle'}`);
-  message.replaceChildren(...lines.map(text => el('span', { text })));
+  // role="alert": sisu vahetatakse ainult uue teate korral (iga vahetus loetakse ekraanilugejas uuesti ette)
+  const bannerKey = lines.join('\n');
+  if (bannerKey !== banner.dataset.key) {
+    banner.dataset.key = bannerKey;
+    message.replaceChildren(...lines.map(text => el('span', { text })));
+  }
   byId('retry-button').hidden = !severe && !(noPrices && state.prices.error) && !state.prices.refreshFailed && !state.solar.refreshFailed;
 
   // Jalus: andmeallikad ja nende värskus
@@ -2390,7 +2414,8 @@ function renderFlow(d, remeasured = false) {
   // ≥ 1024 px on voo plaat kaks rida kõrge (hind + tunnid kõrval): kõrge geomeetria täidab selle (p 7.1, QA)
   const tall = widthPx >= FLOW_TALL_MIN_PX && Boolean(window.matchMedia && window.matchMedia(FLOW_TALL_QUERY).matches);
   const tallHeight = tall ? flowTallHeight(host.querySelector('.flow-figure--tall')) : 0;
-  const key = [state.solar.version, state.prices.version, Math.floor(d.now.getTime() / (5 * MINUTE_MS)), d.solarFresh, tallinnDateKey(d.now), flowSizeFlag(widthPx, tall), tallHeight].join('|');
+  // Voog sõltub ainult päikeseandmetest ja suurusest (vanus on renderFlowAge-is): muul juhul animatsioon algaks otsast
+  const key = [state.solar.version, d.solarFresh, tallinnDateKey(d.now), flowSizeFlag(widthPx, tall), tallHeight].join('|');
   if (key === state.flowKey && host.firstChild) return;
   state.flowKey = key;
 
@@ -2941,7 +2966,7 @@ function renderDaysPanel(d, view) {
   const days = view.days;
   const last = days[days.length - 1];
   state.daysView = view;
-  const key = [state.period, metric, state.days.version, days.length, last.totals && last.totals.through ? last.totals.through.getTime() : ''].join('|');
+  const key = [state.period, metric, state.days.version, days[0].key, days.length, last.totals && last.totals.through ? last.totals.through.getTime() : ''].join('|');
   if (key === state.daysKey) return;
   state.daysKey = key;
   if (state.daysIndex == null || state.daysIndex >= days.length) state.daysIndex = days.length - 1;
@@ -3640,11 +3665,10 @@ function buildLoadForecast(d, dayStart, dayEnd, fromMs) {
   const info = loadForecastProfile(d.now, dayStart);
   if (!info) return null;
   const segments = [];
-  const p = getTallinnDateParts(dayStart);
-  for (let h = 0; h < 25; h++) {
-    const start = tallinnLocalToUtc(p.year, p.month, p.day, h, 0).getTime();
+  // UTC tundide kaupa: Tallinna nihe on täistundides, seega on iga UTC tund üks kohalik tund ja kellakeeramise
+  // päeval tuleb 23 või 25 tundi (kohaliku kella 0–24 tsükkel jättis 25 h päeval esimese 03:00 tunni välja)
+  for (let start = dayStart.getTime(); start < dayEnd.getTime(); start += HOUR_MS) {
     const end = start + HOUR_MS;
-    if (start >= dayEnd.getTime() || segments.some(sg => sg.hourStart === start)) continue;
     if (end <= fromMs) continue;
     const kw = info.profile[getTallinnDateParts(new Date(start)).hour];
     if (kw == null) continue;
@@ -3973,8 +3997,6 @@ function hideTooltip() {
   tooltip.replaceChildren();
   inspector.hidden = true;
   inspector.textContent = '';
-  state.tooltipIndex = null;
-  state.tooltipPointer = null;
 }
 
 /** Vihje rida (p 5): joonevõti, väärtus (700) ja silt; väärtus on rõhutatud, silt teisene („9,3 kW maja“). */
@@ -3998,8 +4020,6 @@ function showTooltip(index, pointerType = 'mouse', announce = true) {
   if (!slot || !stackEl || !stackEl.$stack) return;
   const tooltip = byId('chart-tooltip');
   const inspector = byId('chart-inspector');
-  state.tooltipIndex = index;
-  state.tooltipPointer = pointerType;
 
   const timeText = formatTimeRange(slot.start, slot.end);
   const lines = [el('strong', { text: timeText })];
@@ -4274,13 +4294,25 @@ function setupControls() {
   };
   if (typeof ResizeObserver === 'function') new ResizeObserver(onResize).observe(byId('layout'));
   else window.addEventListener('resize', onResize);
+  // Energiavoo täppide animatsioon seisab, kui kaart pole ekraanil (css .is-offscreen): stroke-dashoffset'i
+  // animatsioon joonistab SVG-d igal kaadril ka siis, kui seda ei näe
+  if (typeof IntersectionObserver === 'function') {
+    const flowBody = byId('flow-body');
+    new IntersectionObserver(entries => {
+      for (const entry of entries) flowBody.classList.toggle('is-offscreen', !entry.isIntersecting);
+    }).observe(flowBody);
+  }
 
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState !== 'visible' || state.loading) return;
     // Pärast keskööd laaditakse andmed kohe uuesti (uue päeva kaadrid), mitte alles intervalli lõpus
     if (dayChangedSinceRefresh()) { refreshNow({ force: true }); return; }
     const stale = !state.lastRefresh || Date.now() - state.lastRefresh.getTime() > refreshIntervalMs();
-    if (stale) refreshNow();
+    if (stale && refreshCooldownLeftMs() <= 0) { refreshNow(); return; }   // refreshAll joonistab lõpus
+    if (state.prices.loaded || state.solar.loaded) {   // peidetud ajal jäi minutitikk vahele
+      renderAll();
+      updateNowMarkers(Date.now());
+    }
   });
   setupDirectDialog();
 }
@@ -4296,12 +4328,16 @@ function dayChangedSinceRefresh() {
  */
 function startMinuteTick() {
   const tick = () => {
-    if (!state.loading && (state.prices.loaded || state.solar.loaded)) {
-      renderAll();
-      updateNowMarkers(Date.now());
-      if (document.visibilityState === 'visible' && dayChangedSinceRefresh()) refreshNow({ force: true });
+    try {
+      // Peidetud vahelehel ei joonistata (brauser käivitab taimerit edasi); naastes joonistab visibilitychange kohe
+      if (!document.hidden && !state.loading && (state.prices.loaded || state.solar.loaded)) {
+        renderAll();
+        updateNowMarkers(Date.now());
+        if (dayChangedSinceRefresh()) refreshNow({ force: true });
+      }
+    } finally {
+      setTimeout(tick, MINUTE_MS - (Date.now() % MINUTE_MS) + 50);   // ka vea korral: tikk ei tohi seiskuda
     }
-    setTimeout(tick, MINUTE_MS - (Date.now() % MINUTE_MS) + 50);
   };
   setTimeout(tick, MINUTE_MS - (Date.now() % MINUTE_MS) + 50);
 }

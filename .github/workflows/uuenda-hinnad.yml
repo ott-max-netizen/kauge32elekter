@@ -1152,7 +1152,8 @@ jobs:
 
               def store(rec):
                   prev = old_days.get(rec["paev"]) or {}
-                  same = {k: v for k, v in prev.items() if k != "updatedAt"} == rec
+                  # batteryGainEur on tuletatud väli (lisatakse väljundile allpool): see ei tähenda kirje muutust
+                  same = {k: v for k, v in prev.items() if k not in ("updatedAt", "batteryGainEur")} == rec
                   rec["updatedAt"] = prev["updatedAt"] if same and prev.get("updatedAt") else utc_now_iso()
                   days[rec["paev"]] = rec
 
@@ -1194,6 +1195,10 @@ jobs:
                       prices = fetch_nps_prices(datetime(batch[-1].year, batch[-1].month, batch[-1].day, tzinfo=TZ),
                                                 datetime(batch[0].year, batch[0].month, batch[0].day, tzinfo=TZ) + timedelta(days=1), strict=False)
                       batch_prices = {r["timestamp"]: r["price"] for r in prices}
+                      if not prices:
+                          # Ilma hindadeta jääksid kirjed eurodeta, kuid saaksid kehtiva v/cfg ega arvutataks uuesti
+                          paevad_note("Börsihindu ei saanud laadida; varasemad päevakokkuvõtted arvutatakse järgmisel käivitusel", "Eleringi hinnapäring ebaõnnestus")
+                          batch = []
                       for day in batch:
                           frames = solarman_day_frames(token, sid, day)
                           if frames is None:
