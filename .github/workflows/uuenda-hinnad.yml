@@ -38,6 +38,7 @@ on:
     paths:
       - ".github/workflows/uuenda-hinnad.yml"
       - ".github/scripts/lukk.py"
+      - ".github/scripts/requirements-lukk.txt"
 
 permissions: {}
 
@@ -71,11 +72,30 @@ jobs:
       contents: write
     steps:
       - name: Võta repositoorium
-        uses: actions/checkout@v5
+        # Commit'i SHA-ga, mitte sildiga (silti saab ümber tõsta). persist-credentials: false – kirjutusõigusega token ei
+        # jää .git/config-i järgmiste sammude (pip, välised API vastused) jaoks; see antakse ainult sammule „Salvesta muudatus“.
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5.1.0
         with:
+          persist-credentials: false
           # Haru uusim seis, mitte käivituse sündmuse commit: järjekorras oodanud või korratud käivitus alustaks
           # muidu vananenud andmefailidest ja nende push jookseks teise käivituse commit'iga konflikti
           ref: ${{ github.ref_name }}
+
+      # Eraldi samm ilma secret'iteta: paigaldatav kood ei näe parooli. Pakett ainult räsidega (requirements-lukk.txt)
+      # eraldi venv'i; runner'i süsteemi Python'i olemasolev cryptography sobib samuti. Ebaõnnestumine ei peata
+      # töövoogu: lukk.py annab vea ainult siis, kui krüpteerimist päriselt vaja on (LEHE_PAROOL on seadistatud).
+      - name: Paigalda krüpteerimise teek
+        run: |
+          if python3 -c "import cryptography" 2>/dev/null; then
+            echo "LUKK_PY=python3" >> "$GITHUB_ENV"
+          elif python3 -m venv "$RUNNER_TEMP/lukk-venv" \
+              && "$RUNNER_TEMP/lukk-venv/bin/pip" install --quiet --disable-pip-version-check \
+                   --require-hashes --only-binary=:all: -r .github/scripts/requirements-lukk.txt; then
+            echo "LUKK_PY=$RUNNER_TEMP/lukk-venv/bin/python" >> "$GITHUB_ENV"
+          else
+            echo "::warning::cryptography paigaldamine ebaõnnestus; parooliga kaitse korral jääb töövoog veaga seisma"
+            echo "LUKK_PY=python3" >> "$GITHUB_ENV"
+          fi
 
       # Parooliga kaitse (README „Parooliga kaitse“): andmefailid on repo's krüpteeritud, skript töötab tavatekstiga.
       # Ilma secret'ita LEHE_PAROOL ei tehta midagi (leht on avalik).
@@ -83,14 +103,7 @@ jobs:
         env:
           LEHE_PAROOL: ${{ secrets.LEHE_PAROOL }}
           LEHE_PAROOL_VANA: ${{ secrets.LEHE_PAROOL_VANA }}
-        run: |
-          if [ -n "${LEHE_PAROOL}${LEHE_PAROOL_VANA}" ]; then
-            # Ubuntu 24.04 süsteemi Python võib pip'i keelata (PEP 668), siis --break-system-packages
-            python3 -c "import cryptography" 2>/dev/null \
-              || python3 -m pip install --quiet --disable-pip-version-check cryptography 2>/dev/null \
-              || python3 -m pip install --quiet --disable-pip-version-check --break-system-packages cryptography
-          fi
-          python3 .github/scripts/lukk.py ava hinnad.json paevad.json paike.json
+        run: '"$LUKK_PY" .github/scripts/lukk.py ava hinnad.json paevad.json paike.json'
 
       - name: Lae, kontrolli ja filtreeri hinnad ning tarbimine
         env:
@@ -764,7 +777,8 @@ jobs:
                   cur_rec = None
               if cur_rec:
                   store_month(cur_rec)
-                  print(f"Käesolev kuu {cur_rec['kuu']}: {cur_rec['kwh']} kWh, {cur_rec['eur']} €")
+                  # Avaliku repo logi on kõigile nähtav: ainult kuu ja olek, mitte kWh ega € (README „Parooliga kaitse“)
+                  print(f"Käesolev kuu {cur_rec['kuu']}: kirje uuendatud")
 
               # Arvuta eelneva aasta vastav kuu (cur_y - 1, cur_m) + vajadusel eelmised kuud (kuni 12 kuud)
               try:
@@ -838,12 +852,12 @@ jobs:
                       coverage = sum(1 for ts in m_kwh if t_ms <= ts < t_me) / max(1, (t_me - t_ms) // step_s)
                       prev_m = cached_months.get(f"{y:04d}-{m:02d}") or {}
                       if rec and coverage < 0.99 and (prev_m.get("kwh") or 0) > rec["kwh"] + 0.01:
-                          print(f"Kuu {y:04d}-{m:02d}: Estfeedi vastus kattis {coverage:.1%} kuust ({rec['kwh']} kWh, varem {prev_m['kwh']} kWh); varasem kirje jäi alles.")
+                          print(f"Kuu {y:04d}-{m:02d}: Estfeedi vastus kattis {coverage:.1%} kuust ja andis varasemast vähem kWh; varasem kirje jäi alles.")
                           partial_kept.append(f"{y:04d}-{m:02d}")
                           continue
                       if rec:
                           store_month(rec)
-                          print(f"Kuu {rec['kuu']}: {rec['kwh']} kWh, {rec['eur']} € (complete={rec['complete']})")
+                          print(f"Kuu {rec['kuu']}: kirje uuendatud (complete={rec['complete']})")
 
               if empty_kept:
                   ks = sorted(empty_kept)
@@ -1255,9 +1269,11 @@ jobs:
       - name: Lukusta andmefailid
         env:
           LEHE_PAROOL: ${{ secrets.LEHE_PAROOL }}
-        run: python3 .github/scripts/lukk.py lukusta hinnad.json paevad.json
+        run: '"$LUKK_PY" .github/scripts/lukk.py lukusta hinnad.json paevad.json'
 
       - name: Salvesta muudatus
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           git add hinnad.json
@@ -1270,6 +1286,10 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Token ainult selle sammu git'i seadetesse (checkout'i persist-credentials: false)
+          auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          echo "::add-mask::$auth"
+          git config --local http.https://github.com/.extraheader "AUTHORIZATION: basic $auth"
           git commit -m "Uuenda elektrihinnad ja tarbimine"
           for attempt in 1 2 3; do
             if git push origin "HEAD:${GITHUB_REF_NAME}"; then exit 0; fi
