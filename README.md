@@ -501,9 +501,12 @@ lihtsalt kustutada, jääb töövoog veaga seisma (krüpteeritud faili ei saa av
 
 **Piirid, mida tasub teada**
 
-- Krüpteerimine kaitseb andmeid alates esimesest krüpteeritud commit'ist. **Varasemad commit'id sisaldavad
-  andmefaile tavatekstina** ja on avalikus repo's kõigile loetavad. Need kaovad ainult repo privaatseks tegemisega
-  (GitHub Pages privaatsest repo'st vajab tasulist plaani) või ajaloo ümberkirjutamisega.
+- Krüpteerimine kaitseb andmeid alates esimesest krüpteeritud commit'ist. 2026-10-31 kirjutati kõigi harude ajalugu
+  ümber (`git filter-repo --strip-blobs-with-ids`): tavatekstis `hinnad.json`, `paike.json` ja `paevad.json` eemaldati
+  ning ainult andmefaile muutnud boti commit'id kadusid (1864 → 87 commit'i, kood ja kõik koodimuudatused jäid alles).
+  **Vanad commit'id on siiski GitHubis alles** PR-ide kirjutuskaitstud viidete (`refs/pull/1..18/head`) ja vanade
+  SHA-de kaudu, kuni GitHubi tugi need eemaldab (support.github.com → „Remove sensitive data“), ning varasemates
+  forkides ja kloonides. Ära lisa repo'sse kunagi tavatekstis andmefaile: krüpteerimine peab käima töövoos enne commit'i.
 - Parooli saab proovida piiramatult (failid on avalikud), seega loeb parooli pikkus: PBKDF2 600 000 iteratsiooni
   teeb ühe katse kalliks, aga lühikese sõnastikusõna murrab see siiski. Lehekülg ise katseid ei piira ega saagi piirata.
 - Salvestatud võti on `ott-max-netizen.github.io` ühises IndexedDB-s (kõik selle konto Pages-lehed jagavad seda).
