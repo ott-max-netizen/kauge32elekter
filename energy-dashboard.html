@@ -11,10 +11,12 @@
 <meta name="theme-color" content="#0a1018" media="(prefers-color-scheme: dark)">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="robots" content="noindex">
+<meta name="robots" content="noindex, nofollow, noarchive">
 <title>Kauge 32 energia</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="css/common.css?v=20261023">
+<link rel="stylesheet" href="css/common.css?v=20261031">
+<!-- Lukk (parooliga kaitse, README „Parooliga kaitse“): ilma defer'ita, et globaal Lukk oleks lehe skriptile olemas ja .app peituks enne esimest joonistamist -->
+<script src="js/lukk.js?v=20261031"></script>
 <link rel="stylesheet" href="css/energy-dashboard.css?v=20261023">
 <script>
 /* Teema enne esimest joonistamist (sama reegel ja võti kauge32_theme mis elektriinfo lehel ja applyTheme-is):
@@ -32,6 +34,22 @@
 <script src="js/vendor/chart.umd.min.js?v=4.5.1" defer></script>
 </head>
 <body>
+<!-- Lukk (js/lukk.js): parooliga kaitstud andmefailide avamisvaade; nähtav ainult siis, kui lehel on lukk.json -->
+<div id="lukk" class="lukk" role="dialog" aria-modal="true" aria-labelledby="lukk-pealkiri" hidden>
+  <form class="lukk__card" id="lukk-form" novalidate>
+    <p class="lukk__brand"><svg class="icon" aria-hidden="true" focusable="false"><use href="img/icons.svg?v=20261023#i-bolt"></use></svg>Kauge 32</p>
+    <h2 id="lukk-pealkiri" class="lukk__title">Leht on parooliga kaitstud</h2>
+    <p id="lukk-tekst" class="lukk__text">Sisesta ühistu parool, et näha maja elektri- ja päikeseandmeid.</p>
+    <div class="lukk__field">
+      <label for="lukk-parool">Parool</label>
+      <input id="lukk-parool" name="parool" type="password" autocomplete="current-password" spellcheck="false" autocapitalize="off" required>
+    </div>
+    <label class="lukk__check" for="lukk-pea-meeles"><input id="lukk-pea-meeles" name="peaMeeles" type="checkbox"> Jäta meelde selles seadmes</label>
+    <p id="lukk-viga" class="notice notice--error" role="alert" hidden></p>
+    <button type="submit" class="btn lukk__btn" id="lukk-ava">Ava</button>
+    <p class="lukk__hint">Parooli ei saadeta kuhugi: andmed on serveris krüpteeritud ja avatakse ainult selles brauseris. Märkimata unustatakse võti vahelehe sulgemisel.</p>
+  </form>
+</div>
 <div class="app">
   <header class="app-header">
     <div class="brand">
@@ -252,7 +270,7 @@
     <p id="footer-data" class="app-footer__data" hidden></p>
     <div class="app-footer__meta">
       <p id="footer-sources">Andmeid pole veel laaditud</p>
-      <p><button type="button" class="link-btn" id="direct-open">Solarmani otseühendus</button> · <span id="footer-version"></span></p>
+      <p><span id="lukk-lukusta-wrap" hidden><button type="button" class="link-btn" id="lukk-lukusta">Lukusta leht</button> · </span><button type="button" class="link-btn" id="direct-open">Solarmani otseühendus</button> · <span id="footer-version"></span></p>
     </div>
   </footer>
 </div>
@@ -424,7 +442,7 @@ const CONFIG = {
 };
 
 /* Tehnilised konstandid — neid ei ole tavakasutuses vaja muuta. */
-const APP_VERSION = '2.1.0';
+const APP_VERSION = '2.2.0';
 const TIME_ZONE = 'Europe/Tallinn';
 const API_URL = 'https://dashboard.elering.ee/api/nps/price';
 const PRICE_TIMEOUT_MS = 20000;
@@ -836,7 +854,7 @@ function normalizePrices(rawList) {
 }
 
 async function requestPrices(url, signal) {
-  const response = await fetch(url, { signal, cache: 'no-store' });
+  const response = await Lukk.fetch(url, { signal, cache: 'no-store' });   // avab krüpteeritud andmefaili (js/lukk.js); Eleringi vastus läbib muutmata
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   let json;
   try {
@@ -1338,7 +1356,7 @@ async function fetchSolarDirect(cred, signal) {
 /** GitHub Actionsi kirjutatud paike.json samast domeenist. */
 async function fetchSolarFile(signal) {
   const file = String(CONFIG.solarman.andmefail || '').trim();
-  const response = await fetch(`${file}?v=${Date.now()}`, { signal, cache: 'no-store' });
+  const response = await Lukk.fetch(`${file}?v=${Date.now()}`, { signal, cache: 'no-store' });
   if (response.status === 404) throw Object.assign(new Error('HTTP 404'), { missing: true });
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   let json;
@@ -1376,7 +1394,7 @@ async function refreshDays(signal) {
   const file = String(CONFIG.paevadeFail || '').trim();
   if (!file || location.protocol === 'file:') return;
   try {
-    const response = await fetch(`${file}?v=${Date.now()}`, { signal, cache: 'no-store' });
+    const response = await Lukk.fetch(`${file}?v=${Date.now()}`, { signal, cache: 'no-store' });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const json = await response.json();
     if (!json || json.success !== true) throw new Error('success !== true');
@@ -5457,8 +5475,13 @@ async function init() {
   startMinuteTick();
 }
 
-if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
-else init();
+/** Parooliga kaitstud lehel (lukk.json) käivitub init() alles pärast parooli sisestamist (js/lukk.js). */
+function start() {
+  Lukk.valmis().then(init, error => console.error('Lukk: lehe avamine ebaõnnestus', error));
+}
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
+else start();
 </script>
 </body>
 </html>
