@@ -4,6 +4,36 @@ See fail kirjeldab rakenduse `index.html` versioonimuudatusi, arhitektuurilisi k
 
 ---
 
+## [3.2.0] ja energy-dashboard.html [2.2.0] — 2026-10-31
+
+Parooliga kaitse ja otsingumootorite indekseerimise keeld. `APP_VERSION` `3.2.0` / `2.2.0`, `css/common.css?v=20261031`,
+uus `js/lukk.js?v=20261031`. Andme- ja arvutusloogika ei muutunud; muutus ainult andmefailide laadimine
+(`fetch` → `Lukk.fetch`) ja lehe käivitus (`init()` pärast `Lukk.valmis()`).
+
+### 1. Parooliga kaitse krüpteerimisega (README „Parooliga kaitse“)
+- `.github/scripts/lukk.py`: töövoogude sammud „Ava krüpteeritud andmefailid“ ja „Lukusta andmefailid“ mõlemas
+  töövoos. Andmefailid avaldatakse ümbrikuna `{"lukk":1,"kdf":"PBKDF2-SHA256","iter":600000,"salt","iv","ct"}`
+  (AES-256-GCM, võti paroolist PBKDF2-HMAC-SHA256-ga). `lukk.json` hoiab soola ja parooli kontrollväärtust
+  (`AES-GCM(võti, "kauge32-lukk")`). Secret `LEHE_PAROOL`; `LEHE_PAROOL_VANA` parooli vahetuseks või kaitse
+  mahavõtmiseks. Ilma secret'ita käitub kõik nagu enne.
+- Muutumata andmefail taastatakse baidi täpsusega (juhuslik nonss annaks muidu iga käivitusega asjatu commit'i);
+  teise töövoo failid (nt `paike.json` hindade töövoos) taastatakse algsel kujul, et `git pull --rebase` töötaks.
+  `lukk.json` lisatakse commit'i (loodud, uuendatud või kustutatud).
+- `js/lukk.js` (globaal `Lukk`, laaditakse `<head>`-is ilma `defer`'ita): `Lukk.valmis()` näitab avamisvaadet
+  `<div id="lukk">`, kuni parool on sisestatud (`lukk.json` 404 = lukku pole, leht avaneb kohe); `Lukk.fetch()`
+  dekrüpteerib ümbriku ja tagastab tavalise `Response`'i, krüpteerimata fail ja Eleringi vastus lähevad läbi muutmata;
+  vale või vahetatud parooli korral küsitakse uuesti. Võti (mitte parool) hoitakse `sessionStorage`-is või
+  „Jäta meelde selles seadmes“ korral `localStorage`-is (`kauge32_lukk`); jaluse „Lukusta leht“ unustab võtme.
+  `html.lukk-ootel .app { visibility: hidden }` seatakse enne esimest joonistamist, `.app` on lukus olles `inert`.
+- `css/common.css` jaotis 29 „Lukk“: täisekraani kiht lehe tokenitega (hele, tume, sunnitud värvid, print peidetud).
+
+### 2. Otsingumootorid
+- `<meta name="robots" content="noindex, nofollow, noarchive">` mõlemal lehel (varem `noindex`).
+- `robots.txt`: andme- ja abifailid blokeeritud, HTML-lehed tahtlikult loetavad, et `noindex` jõuaks robotini
+  (README „Otsingumootorid“).
+
+---
+
 ## [3.1.0] ja energy-dashboard.html [2.1.0] — 2026-10-30
 
 Prognoos päevatüübi järgi, elektriinfo lehe „Eile“ rida ja müügitasu `index.html`-i CONFIG-is. `APP_VERSION` `3.1.0` / `2.1.0`, `css/index.css?v=20261030`. Kuu- ja päevakirjeid ümber ei arvutata (tasude ja müügitasu väärtused ning sõrmejäljed ei muutunud).

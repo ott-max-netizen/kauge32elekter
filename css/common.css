@@ -1156,3 +1156,54 @@ a { color: var(--focus); text-underline-offset: 2px; }
   .legend__swatch, .line-key, .mode-strip__run, .meter, .meter__fill, .card--hero, .verdict, .status-dot,
   .state-pill, .badge, .live-pill, .tab__badge { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
+
+/* ---------- 29. Lukk: parooliga kaitstud lehe avamisvaade (js/lukk.js, README „Parooliga kaitse“) ----------
+   Läbipaistmatu täisekraanikiht lehe tokenitega (hele ja tume); rakendus on all peidetud (html.lukk-ootel
+   seatakse <head>-is enne esimest joonistamist, .app on lisaks inert), kuni parool on sisestatud. */
+html.lukk-ootel .app { visibility: hidden; }
+.lukk {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: var(--s4);
+  overflow: auto;
+  background: var(--bg-mesh), var(--bg);
+}
+.lukk[hidden] { display: none; }
+.lukk__card {
+  display: grid;
+  gap: var(--s3);
+  width: min(420px, 100%);
+  padding: var(--s5) var(--s4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.18);
+}
+.lukk__brand { display: flex; align-items: center; gap: 6px; margin: 0; font-size: var(--fs-micro); font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+.lukk__brand .icon { width: 16px; height: 16px; }
+.lukk__title { margin: 0; font-size: var(--fs-result); font-weight: 800; line-height: 1.2; }
+.lukk__text, .lukk__hint { margin: 0; color: var(--muted); font-size: var(--fs-small); }
+.lukk__hint { font-size: var(--fs-micro); }
+.lukk__field { min-width: 0; }
+.lukk__field label { display: block; margin: 0 0 4px; font-size: var(--fs-small); font-weight: 600; }
+.lukk__field input {
+  width: 100%;
+  min-height: var(--tap);
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-tile);
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+}
+.lukk__field input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.lukk__check { display: flex; align-items: flex-start; gap: var(--s2); font-size: var(--fs-small); font-weight: 600; cursor: pointer; }
+.lukk__check input { flex: none; width: 20px; height: 20px; margin: 1px 0 0; accent-color: var(--text); }
+.lukk__btn { width: 100%; }
+.lukk .notice { margin: 0; }
+@media (forced-colors: active) { .lukk__card { border: 1px solid CanvasText; } }
+@media print { .lukk { display: none; } }
