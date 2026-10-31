@@ -4,6 +4,31 @@ See fail kirjeldab rakenduse `index.html` versioonimuudatusi, arhitektuurilisi k
 
 ---
 
+## Turvaparandused — 2026-10-31
+
+Lehe ja andmete loogika ei muutunud; `js/lukk.js?v=20261031b`.
+
+### 1. Actions'i logides pole mõõteväärtusi
+- Avaliku repo logid on kõigile nähtavad ja lekitasid krüpteeritud andmeid: `uuenda-hinnad.yml` ei prindi enam kuude
+  kWh-d ja €-sid (jooksev kuu, varasemad kuud, osalise Estfeedi vastuse võrdlus), `uuenda-paike.yml` ei kirjuta
+  `gridPower` hoiatusse reaalaja võimsust. Logisse jäävad ainult kuupäevad, arvud ja olekud.
+
+### 2. Lehe võti mitte-eksporditavana IndexedDB-s
+- `js/lukk.js`: võti tuletatakse `extractable: false` ja hoitakse IndexedDB-s (`kauge32-lukk`/`votmed`): kirje `pysiv`
+  („Jäta meelde“) või `sessioon:<id>` (id vahelehe `sessionStorage`-is, kirje aegub 12 h pärast viimast kasutust ja
+  koristatakse järgmisel avamisel). Sama saidi skript ei saa võtit enam välja lugeda. Vana eksporditud võti
+  (`localStorage`/`sessionStorage` `kauge32_lukk`) kolitakse üle ja kustutatakse; parooli uuesti küsida pole vaja.
+  „Lukusta leht“ kustutab kõik selle brauseri kirjed. IndexedDB puudumisel jääb võti ainult mällu.
+
+### 3. Töövoogude tarneahel
+- `cryptography` paigaldatakse uues sammus „Paigalda krüpteerimise teek“, kus secret'eid pole, eraldi venv'i ja ainult
+  `.github/scripts/requirements-lukk.txt` räsidega (`--require-hashes --only-binary=:all:`); runner'i süsteemi
+  `cryptography` sobib samuti. `lukk.py` käivitatakse `$LUKK_PY`-ga.
+- `actions/checkout` commit'i SHA-ga (v5.1.0) ja `persist-credentials: false`; token antakse ainult sammule
+  „Salvesta muudatus“ (`http.extraheader`, maskitud).
+
+---
+
 ## [3.2.0] ja energy-dashboard.html [2.2.0] — 2026-10-31
 
 Parooliga kaitse ja otsingumootorite indekseerimise keeld. `APP_VERSION` `3.2.0` / `2.2.0`, `css/common.css?v=20261031`,

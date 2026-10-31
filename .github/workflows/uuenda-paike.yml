@@ -34,6 +34,7 @@ on:
     paths:
       - ".github/workflows/uuenda-paike.yml"
       - ".github/scripts/lukk.py"
+      - ".github/scripts/requirements-lukk.txt"
 
 permissions: {}
 
@@ -49,11 +50,30 @@ jobs:
       contents: write
     steps:
       - name: Võta repositoorium
-        uses: actions/checkout@v5
+        # Commit'i SHA-ga, mitte sildiga (silti saab ümber tõsta). persist-credentials: false – kirjutusõigusega token ei
+        # jää .git/config-i järgmiste sammude (pip, välised API vastused) jaoks; see antakse ainult sammule „Salvesta muudatus“.
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5.1.0
         with:
+          persist-credentials: false
           # Haru uusim seis, mitte käivituse sündmuse commit: järjekorras oodanud või korratud käivitus alustaks
           # muidu vananenud andmefailidest ja nende push jookseks teise käivituse commit'iga konflikti
           ref: ${{ github.ref_name }}
+
+      # Eraldi samm ilma secret'iteta: paigaldatav kood ei näe parooli. Pakett ainult räsidega (requirements-lukk.txt)
+      # eraldi venv'i; runner'i süsteemi Python'i olemasolev cryptography sobib samuti. Ebaõnnestumine ei peata
+      # töövoogu: lukk.py annab vea ainult siis, kui krüpteerimist päriselt vaja on (LEHE_PAROOL on seadistatud).
+      - name: Paigalda krüpteerimise teek
+        run: |
+          if python3 -c "import cryptography" 2>/dev/null; then
+            echo "LUKK_PY=python3" >> "$GITHUB_ENV"
+          elif python3 -m venv "$RUNNER_TEMP/lukk-venv" \
+              && "$RUNNER_TEMP/lukk-venv/bin/pip" install --quiet --disable-pip-version-check \
+                   --require-hashes --only-binary=:all: -r .github/scripts/requirements-lukk.txt; then
+            echo "LUKK_PY=$RUNNER_TEMP/lukk-venv/bin/python" >> "$GITHUB_ENV"
+          else
+            echo "::warning::cryptography paigaldamine ebaõnnestus; parooliga kaitse korral jääb töövoog veaga seisma"
+            echo "LUKK_PY=python3" >> "$GITHUB_ENV"
+          fi
 
       # Parooliga kaitse (README „Parooliga kaitse“): andmefailid on repo's krüpteeritud, skript töötab tavatekstiga.
       # Ilma secret'ita LEHE_PAROOL ei tehta midagi (leht on avalik).
@@ -61,14 +81,7 @@ jobs:
         env:
           LEHE_PAROOL: ${{ secrets.LEHE_PAROOL }}
           LEHE_PAROOL_VANA: ${{ secrets.LEHE_PAROOL_VANA }}
-        run: |
-          if [ -n "${LEHE_PAROOL}${LEHE_PAROOL_VANA}" ]; then
-            # Ubuntu 24.04 süsteemi Python võib pip'i keelata (PEP 668), siis --break-system-packages
-            python3 -c "import cryptography" 2>/dev/null \
-              || python3 -m pip install --quiet --disable-pip-version-check cryptography 2>/dev/null \
-              || python3 -m pip install --quiet --disable-pip-version-check --break-system-packages cryptography
-          fi
-          python3 .github/scripts/lukk.py ava paike.json
+        run: '"$LUKK_PY" .github/scripts/lukk.py ava paike.json'
 
       - name: Lae Solarmani reaalaja andmed ja 15-min kaadrid
         env:
@@ -288,8 +301,10 @@ jobs:
           grid_frames = [f for f in new_frames if abs(f.get("gridPower") or 0) >= GRID_WARN_W or
                          ("wirePower" in f and "purchasePower" in f and abs(f["wirePower"] - f["purchasePower"]) >= GRID_WARN_W)]
           if grid_frames or abs(real_time.get("gridPower") or 0) >= GRID_WARN_W:
-              warn(f"Solarman: gridPower ≠ 0 või wirePower ≠ purchasePower ({len(grid_frames)} kaadris, realTime gridPower "
-                   f"{real_time.get('gridPower')} W) – võimalik müük võrku; kontrolli märgikokkulepet (README „Piirangud“)")
+              # Avaliku repo logi on kõigile nähtav: ainult kaadrite arv, mitte võimsused (README „Parooliga kaitse“)
+              warn(f"Solarman: gridPower ≠ 0 või wirePower ≠ purchasePower ({len(grid_frames)} kaadris"
+                   f"{', ka realTime-is' if abs(real_time.get('gridPower') or 0) >= GRID_WARN_W else ''}) – võimalik müük võrku; "
+                   f"kontrolli märgikokkulepet (README „Piirangud“)")
 
           data_out = {"realTime": real_time, "frames": frames, "frameSeconds": FRAME_S}
           if last_update:
@@ -329,9 +344,11 @@ jobs:
       - name: Lukusta andmefailid
         env:
           LEHE_PAROOL: ${{ secrets.LEHE_PAROOL }}
-        run: python3 .github/scripts/lukk.py lukusta paike.json
+        run: '"$LUKK_PY" .github/scripts/lukk.py lukusta paike.json'
 
       - name: Salvesta muudatus
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           if [ ! -f paike.json ]; then
@@ -347,6 +364,10 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Token ainult selle sammu git'i seadetesse (checkout'i persist-credentials: false)
+          auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          echo "::add-mask::$auth"
+          git config --local http.https://github.com/.extraheader "AUTHORIZATION: basic $auth"
           git commit -m "Uuenda päikeseandmed"
           for attempt in 1 2 3; do
             if git push origin "HEAD:${GITHUB_REF_NAME}"; then exit 0; fi
