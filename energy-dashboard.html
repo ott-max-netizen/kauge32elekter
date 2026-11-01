@@ -17,7 +17,7 @@
 <link rel="stylesheet" href="css/common.css?v=20261031">
 <!-- Lukk (parooliga kaitse, README „Parooliga kaitse“): ilma defer'ita, et globaal Lukk oleks lehe skriptile olemas ja .app peituks enne esimest joonistamist -->
 <script src="js/lukk.js?v=20261031c"></script>
-<link rel="stylesheet" href="css/energy-dashboard.css?v=20261031">
+<link rel="stylesheet" href="css/energy-dashboard.css?v=20261101">
 <script>
 /* Teema enne esimest joonistamist (sama reegel ja võti kauge32_theme mis elektriinfo lehel ja applyTheme-is):
    <html data-theme> on alati "light" või "dark", ka „auto“ korral süsteemi eelistuse järgi (css/common.css). */
@@ -155,7 +155,8 @@
       </div>
     </section>
 
-    <!-- 7. Täna kokku: perioodivalik kehtib kõigele allpool; kogusummad tabelina; mitme päeva korral päevade graafik (p 6.9) -->
+    <!-- 7. Täna kokku: perioodivalik kehtib kõigele allpool (päevad, 4 viimast kuud, eelmine ja see aasta; sildid JS-ist);
+         kogusummad tabelina; mitme päeva korral päevade graafik, aasta korral kuude graafik (p 6.9) -->
     <section class="card" id="section-results" aria-labelledby="h-results" aria-busy="true">
       <div class="card__head">
         <h2 id="h-results" class="card__title"><svg class="icon" aria-hidden="true" focusable="false"><use href="img/icons.svg?v=20261023#i-calendar"></use></svg><span id="results-title" data-testid="results-title">Täna kokku</span></h2>
@@ -166,8 +167,12 @@
         <input type="radio" name="period" id="period-today" value="today" checked><label for="period-today">Täna</label>
         <input type="radio" name="period" id="period-yesterday" value="yesterday"><label for="period-yesterday">Eile</label>
         <input type="radio" name="period" id="period-7d" value="7d"><label for="period-7d">7 päeva</label>
+        <input type="radio" name="period" id="period-month-3" value="month-3"><label for="period-month-3">3 kuud tagasi</label>
+        <input type="radio" name="period" id="period-month-2" value="month-2"><label for="period-month-2">2 kuud tagasi</label>
+        <input type="radio" name="period" id="period-month-1" value="month-1"><label for="period-month-1">Eelmine kuu</label>
         <input type="radio" name="period" id="period-month" value="month"><label for="period-month">See kuu</label>
-        <input type="radio" name="period" id="period-prevMonth" value="prevMonth"><label for="period-prevMonth">Eelmine kuu</label>
+        <input type="radio" name="period" id="period-year-1" value="year-1"><label for="period-year-1">Eelmine aasta</label>
+        <input type="radio" name="period" id="period-year" value="year"><label for="period-year">See aasta</label>
       </fieldset>
       <div class="card__body" id="results-body">
         <span class="skeleton skeleton--block" aria-hidden="true"></span>
@@ -197,17 +202,18 @@
         </div>
         <div id="days-legend" class="legend" role="group" aria-label="Päevade graafiku selgitus"></div>
         <details class="table-view" id="days-table">
-          <summary><svg class="icon" aria-hidden="true" focusable="false"><use href="img/icons.svg?v=20261023#i-table"></use></svg>Tabelivaade (päeva kaupa)<span class="table-view__hint" aria-hidden="true">keri →</span><svg class="icon" aria-hidden="true" focusable="false"><use href="img/icons.svg?v=20261023#i-chevron-down"></use></svg></summary>
+          <summary><svg class="icon" aria-hidden="true" focusable="false"><use href="img/icons.svg?v=20261023#i-table"></use></svg><span id="days-table-title">Tabelivaade (päeva kaupa)</span><span class="table-view__hint" aria-hidden="true">keri →</span><svg class="icon" aria-hidden="true" focusable="false"><use href="img/icons.svg?v=20261023#i-chevron-down"></use></svg></summary>
           <div class="table-scroll" id="days-table-body"></div>
         </details>
       </div>
     </section>
 
-    <!-- 8. Päeva ülevaade: hind → vood / vahetus → režiimiriba → aku laetus, ühine ajatelg (p 6.2, 6.4–6.8) -->
+    <!-- 8. Päeva ülevaade (eile, täna, homme): hind → vood / vahetus → režiimiriba → aku laetus, ühine ajatelg (p 6.2, 6.4–6.8) -->
     <section class="card" id="section-chart" aria-labelledby="h-chart" aria-busy="true">
       <div class="card__head">
         <h2 id="h-chart" class="card__title">Päeva ülevaade</h2>
         <div class="tabs" role="tablist" aria-label="Päeva valik">
+          <button type="button" role="tab" id="tab-yesterday" class="tab" data-day="yesterday" aria-selected="false" aria-controls="chart-panel" tabindex="-1">Eile</button>
           <button type="button" role="tab" id="tab-today" class="tab" data-day="today" aria-selected="true" aria-controls="chart-panel">Täna</button>
           <button type="button" role="tab" id="tab-tomorrow" class="tab" data-day="tomorrow" aria-selected="false" aria-controls="chart-panel" tabindex="-1">Homme</button>
         </div>
@@ -393,7 +399,8 @@ const CONFIG = {
   kohalikAndmefail: "hinnad.json",
 
   // Päevakokkuvõtted (inverteri kWh ja € päeva kaupa), mille kirjutab töövoog uuenda-hinnad.yml. Kokkuvõtte kaardi
-  // perioodivalik (eile, 7 päeva, kuu) kasutab seda faili. Tühi ("") lülitab perioodivaliku välja.
+  // perioodivalik (eile, 7 päeva, kuud, aastad) kasutab seda faili. Tühi ("") lülitab selle välja: alles jäävad „Täna“
+  // ja aastate ost võrgust, mis tuleb hinnad.json-i võrguarvesti kuusummadest (majaElekter).
   paevadeFail: "paevad.json",
 
   // Varuvariant börsihindadele: CORS-proksi, mille lõppu lisatakse Eleringi API aadress.
@@ -445,7 +452,7 @@ const CONFIG = {
 
 /* Tehnilised konstandid — neid ei ole tavakasutuses vaja muuta. Mõlema lehe ühised (TIME_ZONE, API_URL,
    MINUTE_MS, HOUR_MS, DAY_MS) on failis js/common.js. */
-const APP_VERSION = '2.2.1';
+const APP_VERSION = '2.3.0';
 const PRICE_TIMEOUT_MS = 20000;
 const SOLAR_TIMEOUT_MS = 30000;
 const TARIFF_TIMEOUT_MS = 5000;
@@ -486,6 +493,7 @@ const state = {
     refreshFailed: false, // viimane uuendus ebaõnnestus, kuvatakse varasemaid andmeid
     lastUpdated: null,
     meta: null,           // hinnad.json-i meta (andmetoru olek), vt readDataMeta; otsepäringul null
+    maja: null,           // hinnad.json-i majaElekter (võrguarvesti kuusummad, Estfeed): Map "AAAA-KK" -> kirje, vt normalizeMaja
     signature: null,      // viimati kasutatud vastuse tekst: muutuseta vastus ei suurenda versiooni
     version: 0
   },
@@ -505,9 +513,9 @@ const state = {
     signature: null,      // viimati kasutatud faili tekst: muutuseta fail ei suurenda versiooni
     version: 0
   },
-  period: 'today',        // kokkuvõtte periood: 'today' | 'yesterday' | '7d' | 'month' | 'prevMonth'
-  daysMetric: 'solar',    // päevade graafiku näitaja: 'solar' | 'load' | 'grid' | 'battery' | 'price'
-  daysIndex: null,        // päevade graafikul valitud päev (indeks)
+  period: 'today',        // kokkuvõtte periood (PERIODS): 'today' | 'yesterday' | '7d' | 'month-3' … 'month' | 'year-1' | 'year'
+  daysMetric: 'solar',    // päevade/kuude graafiku näitaja: 'solar' | 'load' | 'grid' | 'battery' | 'price'
+  daysIndex: null,        // päevade/kuude graafikul valitud päev või kuu (indeks)
   loading: false,
   lastRefresh: null,
   lastRefreshStartedAt: 0, // viimase värskenduse algus (ms), ooteaja arvutamiseks
@@ -515,7 +523,7 @@ const state = {
   nextRefreshAt: null,
   refreshTimer: null,
   cooldownTimer: null,
-  selectedDay: 'today',   // 'today' | 'tomorrow'
+  selectedDay: 'today',   // päeva ülevaade: 'yesterday' | 'today' | 'tomorrow'
   chartResolution: null,  // 15 | 60; null = vaikimisi (telefonis 1 h, laiemal ekraanil 15 min)
   powerView: 'flows',     // alumine graafik: 'flows' (võimsused) | 'grid' (võrguga vahetus, kWh perioodis)
   derived: null,
@@ -754,8 +762,31 @@ async function requestPrices(url, signal) {
   const result = normalizePrices(json.data.ee);
   if (!result.periods.length) throw new Error('API tagastas tühja andmestiku');
   result.meta = readDataMeta(json.meta); // ainult kohalikus failis (töövoog); Eleringi otsepäringul puudub
+  result.maja = normalizeMaja(json.data.majaElekter);   // samuti ainult kohalikus failis
   result.signature = text;               // refreshPrices: sama sisu korral versioon (ja graafikud) ei muutu
   return result;
+}
+
+/**
+ * hinnad.json data.majaElekter (võrguarvesti ehk Estfeedi kuusummad, arve alus; README „Andmefail“) -> Map "AAAA-KK" ->
+ * { key, year, month, kwh, eur, kwhToDate, eurToDate, complete, noData }. Vigased kirjed jäetakse välja; null, kui välja pole.
+ */
+function normalizeMaja(list) {
+  if (!Array.isArray(list)) return null;
+  const months = new Map();
+  for (const row of list) {
+    const match = row && typeof row === 'object' ? /^(\d{4})-(\d{2})$/.exec(String(row.kuu || '')) : null;
+    if (!match || Number(match[2]) < 1 || Number(match[2]) > 12) continue;
+    const kwh = finiteOrNull(row.kwh);
+    const eur = finiteOrNull(row.eur);
+    if (kwh == null || eur == null) continue;
+    months.set(row.kuu, {
+      key: row.kuu, year: Number(match[1]), month: Number(match[2]), kwh, eur,
+      kwhToDate: finiteOrNull(row.kwhToDate), eurToDate: finiteOrNull(row.eurToDate),
+      complete: row.complete !== false, noData: row.noData === true
+    });
+  }
+  return months;
 }
 
 /** Andmeallikad eelistuse järjekorras: kohalik fail, otsepäring, varuproksi (nagu index.html-is). */
@@ -801,6 +832,8 @@ async function refreshPrices(signal) {
       p.periods = result.periods;
       p.intervalMinutes = result.intervalMinutes;
       p.meta = result.meta || null;
+      // Otsepäringu vastuses kuusummasid pole: varem loetud jäävad alles (need muutuvad ainult kohaliku faili uuenedes)
+      if (result.maja) p.maja = result.maja;
       p.signature = result.signature;
       p.version += 1;
     }
@@ -1699,6 +1732,7 @@ function currentInverterMode(d) {
 function derive() {
   const now = new Date();
   const all = state.prices.periods;
+  const yesterday = getDayPrices(all, now, -1);   // hinnad.json algab eilsest 00:00-st (päeva ülevaate „Eile“)
   const today = getDayPrices(all, now, 0);
   const tomorrowRaw = getDayPrices(all, now, 1);
   const tomorrow = isDayComplete(tomorrowRaw, now, 1) ? tomorrowRaw : [];
@@ -1712,13 +1746,16 @@ function derive() {
   const dayStartMs = getTallinnDayStart(now, 0).getTime();
   const dayEndMs = getTallinnDayStart(now, 1).getTime();
   const series = solar ? solar.series.filter(s => s.t >= dayStartMs && s.t < dayEndMs && s.t <= now.getTime()) : [];
+  // Eilsed kaadrid (paike.json sisaldab eilset päeva 00:00-st): päeva ülevaate „Eile“ vaheleht
+  const yesterdayStartMs = getTallinnDayStart(now, -1).getTime();
+  const yesterdaySeries = solar ? solar.series.filter(s => s.t >= yesterdayStartMs && s.t < dayStartMs) : [];
   return {
-    now, all, today, tomorrow, current, future, horizonEnd,
+    now, all, yesterday, today, tomorrow, current, future, horizonEnd,
     todayAvg: calculateWeightedAverage(today),
     hasTomorrow: tomorrow.length > 0,
     tomorrowStatus: getTomorrowStatus(now, tomorrow.length > 0, tomorrowRaw),
     best2h: findBestWindow(future, now, 120, horizonEnd),
-    solar, solarAgeMin, solarFresh, series,
+    solar, solarAgeMin, solarFresh, series, yesterdaySeries,
     totals: solar ? computeDayTotals(series, all, now, solar.frameSeconds, measuredEndOf(solar, now)) : null,
     flows: solar ? allocateFlows(solar.now) : null
   };
@@ -2593,8 +2630,12 @@ function resultBlock(kind, title, value, caption, rows) {
 }
 
 const monthNameFormatter = new Intl.DateTimeFormat('et-EE', { timeZone: TIME_ZONE, month: 'long' });
+const monthShortFormatter = new Intl.DateTimeFormat('et-EE', { timeZone: TIME_ZONE, month: 'short' });   // „aug“, „sept“
 const dayShortFormatter = new Intl.DateTimeFormat('et-EE', { timeZone: TIME_ZONE, weekday: 'short', day: 'numeric', month: 'numeric' });
-const PERIODS = ['today', 'yesterday', '7d', 'month', 'prevMonth'];
+/* Perioodivaliku järjekord = lüliti järjekord: päevad, 4 viimast kalendrikuud (vanim enne), eelmine ja see aasta. */
+const PERIODS = ['today', 'yesterday', '7d', 'month-3', 'month-2', 'month-1', 'month', 'year-1', 'year'];
+const MONTHS_BACK = new Map([['month', 0], ['month-1', 1], ['month-2', 2], ['month-3', 3]]);   // mitu kuud tagasi
+const YEARS_BACK = new Map([['year', 0], ['year-1', 1]]);                                      // mitu aastat tagasi
 
 /** "AAAA-KK-PP" -> selle Tallinna päeva algus. */
 function dateFromKey(key) {
@@ -2602,50 +2643,239 @@ function dateFromKey(key) {
   return tallinnLocalToUtc(y, m, dd);
 }
 
-/** Perioodi päevad (kuupäevavõtmed kasvavalt), sõnad ja kas tänane (pooleli) päev kuulub perioodi. */
-function periodRange(period, now) {
-  const key = offset => tallinnDateKey(getTallinnDayStart(now, offset));
-  const p = getTallinnDateParts(now);
-  const monthKeys = (y, m, lastDay) => Array.from({ length: lastDay }, (_, i) => `${y}-${String(m).padStart(2, '0')}-${String(i + 1).padStart(2, '0')}`);
-  if (period === 'yesterday') return { keys: [key(-1)], includeToday: false, title: 'Eile kokku', word: 'eile' };
-  if (period === '7d') return { keys: [-7, -6, -5, -4, -3, -2, -1].map(key), includeToday: false, title: '7 päeva kokku', word: 'nende 7 päeva jooksul' };
-  if (period === 'month') {
-    const name = monthNameFormatter.format(now);
-    return { keys: monthKeys(p.year, p.month, p.day - 1), includeToday: true, title: `${capitalize(name)} kokku`, word: `${name}is` };
-  }
-  if (period === 'prevMonth') {
-    const prev = getTallinnDateParts(new Date(getTallinnDayStart(now, -p.day + 1).getTime() - HOUR_MS));
-    const name = monthNameFormatter.format(dateFromKey(`${prev.year}-${String(prev.month).padStart(2, '0')}-01`));
-    return { keys: monthKeys(prev.year, prev.month, prev.day), includeToday: false, title: `${capitalize(name)} kokku`, word: `${name}is` };
-  }
-  return { keys: [], includeToday: true, title: 'Täna kokku', word: 'täna' };
+/** Kalendrikuu päevade arv (kuu 1–12; ainult kalender, ajavööndit pole). */
+function daysInMonth(year, month) { return new Date(Date.UTC(year, month, 0)).getUTCDate(); }
+
+/** Kalendrikuu nihkega (−1 = eelmine kuu): { year, month }. */
+function shiftMonth(year, month, delta) {
+  const index = year * 12 + month - 1 + delta;
+  return { year: Math.floor(index / 12), month: index % 12 + 1 };
 }
 
-/** Kas perioodil on päevakirjeid (paevad.json)? „Täna“ on alati olemas. */
-function periodAvailable(period, now) {
-  if (period === 'today') return true;
-  const keys = new Set(periodRange(period, now).keys);
-  return state.days.list.some(r => keys.has(r.paev) && !r.noData);
+/** Kuu nimi kuuvõtmest "AAAA-KK" („august“). */
+function monthNameOf(key) { return monthNameFormatter.format(dateFromKey(`${key}-01`)); }
+
+/** Kuu nimi seesütlevas käändes („augustis“, „septembris“; mitte nimi + „is“, mis annaks „oktooberis“). */
+const MONTH_INESSIVE = ['jaanuaris', 'veebruaris', 'märtsis', 'aprillis', 'mais', 'juunis', 'juulis', 'augustis', 'septembris', 'oktoobris', 'novembris', 'detsembris'];
+
+/** Kuupäev „1.6.2026“ päevavõtmest "AAAA-KK-PP". */
+function formatDayKey(key) {
+  const [y, m, dd] = key.split('-').map(Number);
+  return `${dd}.${m}.${y}`;
 }
 
 /**
- * Kokkuvõtte vaade: { title, hint, word, totals, days, notes }. „Täna“ = computeDayTotals (paike.json); muud
- * perioodid = paevad.json päevakirjed (+ „See kuu“ korral tänane pooleli päev). days: päevade graafiku read.
+ * Perioodi päevad (kuupäevavõtmed kasvavalt), pealkiri, lüliti silt, sõna („augustis“, „2026. aastal“), graafiku samm
+ * (unit: 'day' | 'month') ja kas tänane (pooleli) päev kuulub perioodi. Kuud ja aastad on Tallinna kalendri järgi.
+ */
+function periodRange(period, now) {
+  const key = offset => tallinnDateKey(getTallinnDayStart(now, offset));
+  const p = getTallinnDateParts(now);
+  const pad = n => String(n).padStart(2, '0');
+  const monthKeys = (y, m, lastDay) => Array.from({ length: lastDay }, (_, i) => `${y}-${pad(m)}-${pad(i + 1)}`);
+  if (period === 'yesterday') return { keys: [key(-1)], includeToday: false, title: 'Eile kokku', word: 'eile', unit: 'day' };
+  if (period === '7d') return { keys: [-7, -6, -5, -4, -3, -2, -1].map(key), includeToday: false, title: '7 päeva kokku', word: 'nende 7 päeva jooksul', unit: 'day' };
+  if (MONTHS_BACK.has(period)) {
+    // Jooksev kuu: lõppenud päevad + tänane pooleli päev; varasemad kuud tervikuna
+    const back = MONTHS_BACK.get(period);
+    const { year, month } = shiftMonth(p.year, p.month, -back);
+    const label = capitalize(monthNameOf(`${year}-${pad(month)}`));   // nupul ainult kuu; eelmise aasta kuu pealkirjas aastaga
+    return { keys: monthKeys(year, month, back ? daysInMonth(year, month) : p.day - 1), includeToday: back === 0,
+      title: `${label}${year !== p.year ? ` ${year}` : ''} kokku`, label, word: MONTH_INESSIVE[month - 1], unit: 'day' };
+  }
+  if (YEARS_BACK.has(period)) {
+    // See aasta: 1. jaanuarist eilseni + tänane pooleli päev; eelmine aasta tervikuna
+    const year = p.year - YEARS_BACK.get(period);
+    const current = year === p.year;
+    const keys = [];
+    for (let m = 1; m <= (current ? p.month : 12); m++) keys.push(...monthKeys(year, m, current && m === p.month ? p.day - 1 : daysInMonth(year, m)));
+    return { keys, includeToday: current, title: `${year} kokku`, label: String(year), word: `${year}. aastal`, unit: 'month', year };
+  }
+  return { keys: [], includeToday: true, title: 'Täna kokku', word: 'täna', unit: 'day' };
+}
+
+/**
+ * Kas perioodil on andmeid? „Täna“ on alati olemas; muud perioodid vajavad päevakirjeid (paevad.json). Jooksev kuu ja
+ * aasta piisab ka tänasest mõõtmisest (kuu 1. päeval nupp ei kao; ainult siis, kui paevad.json on olemas), aasta ka
+ * võrguarvesti kuusummadest (hinnad.json majaElekter: nt aasta enne päikeseparki, millest päevakirjeid pole).
+ */
+function periodAvailable(period, d) {
+  if (period === 'today') return true;
+  const range = periodRange(period, d.now);
+  const keys = new Set(range.keys);
+  if (state.days.list.some(r => keys.has(r.paev) && !r.noData)) return true;
+  if (range.includeToday && state.days.list.length && d.totals && d.totals.through) return true;
+  return YEARS_BACK.has(period) && meterMonths(range.year, d.now).some(m => m.rec && !m.rec.noData);
+}
+
+/**
+ * Aasta päevad kuude kaupa (aasta vaate graafik ja tabel): kuu summa sumTotals-iga; pooleli = tänane päev on kuus.
+ * Kuud enne esimest ja pärast viimast andmetega kuud (nt enne päevakokkuvõtete algust) jäetakse välja.
+ */
+function monthItems(days) {
+  const groups = new Map();
+  for (const day of days) {
+    const key = day.key.slice(0, 7);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(day);
+  }
+  const items = [...groups].map(([key, list]) => {
+    const used = list.filter(x => x.totals);
+    const partialDay = list.find(x => x.partial);
+    const totals = used.length ? sumTotals(used.map(x => x.totals)) : null;
+    if (totals && partialDay) totals.through = partialDay.totals.through;   // „täna kuni HH:MM“ ja graafiku ümberehitus
+    const missingDays = list.filter(x => x.missing).length;
+    const gapDays = list.filter(x => x.incomplete).length;
+    return { key, unit: 'month', date: dateFromKey(`${key}-01`), totals, partial: Boolean(partialDay), missingDays, gapDays,
+      incomplete: Boolean(totals) && (missingDays > 0 || gapDays > 0), missing: !totals && missingDays > 0,
+      noData: !totals && !missingDays && list.some(x => x.noData) };
+  });
+  const has = x => x.totals || x.missingDays > 0;
+  const first = items.findIndex(has);
+  if (first < 0) return [];
+  let last = items.length - 1;
+  while (!has(items[last])) last--;
+  return items.slice(first, last + 1);
+}
+
+/** Aasta kalendrikuud võrguarvesti kuusummaga: jaanuarist kuni praeguse kuuni (varasem aasta: detsembrini). */
+function meterMonths(year, now) {
+  const p = getTallinnDateParts(now);
+  if (year == null || year > p.year) return [];
+  const maja = state.prices.maja;
+  return Array.from({ length: year === p.year ? p.month : 12 }, (_, i) => {
+    const key = `${year}-${String(i + 1).padStart(2, '0')}`;
+    return { key, rec: maja ? maja.get(key) || null : null, ongoing: year === p.year && i + 1 === p.month };
+  });
+}
+
+/**
+ * Aasta ost võrgust võrguarvesti järgi (hinnad.json majaElekter, arve alus): kWh ja € summa, kuud, puuduvad kuud ja
+ * see aasta võrdluses „aasta varem sama ajani“ (lõppenud kuud tervikuna, jooksev kuu kwhToDate-iga; ainult kui
+ * eelmise aasta kõik vastavad kuud on olemas). null, kui kuusummasid pole. Inverteri mõõtmistega seda ei liideta.
+ */
+function buildMeterSummary(year, now) {
+  const months = meterMonths(year, now);
+  const used = months.filter(m => m.rec && !m.rec.noData);
+  if (!used.length) return null;
+  const kwh = used.reduce((a, m) => a + m.rec.kwh, 0);
+  const eur = used.reduce((a, m) => a + m.rec.eur, 0);
+  let prev = null;
+  if (year === getTallinnDateParts(now).year) {
+    let prevKwh = 0;
+    let prevEur = 0;
+    const ok = used.every(m => {
+      const r = state.prices.maja.get(`${year - 1}${m.key.slice(4)}`);
+      if (!r || r.noData) return false;
+      const k = m.ongoing ? r.kwhToDate : r.kwh;
+      const e = m.ongoing ? r.eurToDate : r.eur;
+      if (k == null || e == null) return false;
+      prevKwh += k;
+      prevEur += e;
+      return true;
+    });
+    if (ok && prevKwh > 0) prev = { year: year - 1, kwh: prevKwh, eur: prevEur };
+  }
+  const meta = state.prices.meta;
+  return {
+    year, months, used, kwh, eur, prev,
+    ongoing: used.find(m => m.ongoing) || null,
+    until: meta ? metaDate(meta.estfeedUntil) : null,
+    missing: months.filter(m => !m.rec || m.rec.noData),
+    preliminary: used.filter(m => !m.ongoing && !m.rec.complete)
+  };
+}
+
+/** Lõikeaeg võrguarvesti jooksva kuu kohta: „kuni 06:15“, „kuni eile 23:45“ või vanemal juhul kuupäevaga. */
+function meterUntilText(until, now) {
+  if (!until) return '';
+  if (until.getTime() > getTallinnDayStart(now, -1).getTime()) return describeUntil(until, now);
+  return `kuni ${dateShortFormatter.format(new Date(until.getTime() - 1))} ${formatTime(until)}`;
+}
+
+/**
+ * Aasta vaate plokk „Ost võrgust AAAA“ (võrguarvesti, Estfeed): kogus, kulu, keskmine hind, aasta varem sama ajani ja
+ * kuude tabel. withInverter: kas ülal on ka inverteri summad (siis selgitus, et need on eraldi mõõtmine).
+ */
+function buildMeterPanel(m, now, withInverter) {
+  const first = m.used[0];
+  const last = m.used[m.used.length - 1];
+  const span = first === last ? monthNameOf(first.key) : `${monthNameOf(first.key)}–${monthNameOf(last.key)}`;
+  const until = m.ongoing ? meterUntilText(m.until, now) : '';
+  const avg = m.kwh > 0.5 ? m.eur / m.kwh * 100 : null;
+  const diff = m.prev ? m.kwh / m.prev.kwh - 1 : null;
+  const cell = (label, value, sub, testid) => el('div', { class: 'bill__cell' }, [
+    el('p', { class: 'stat__label', text: label }),
+    el('p', { class: 'bill__value', 'data-testid': testid, text: value }),
+    sub ? el('p', { class: 'stat__time', text: sub }) : null
+  ]);
+  const notes = ['Ost võrgust võrguarvesti 15-min näitude järgi (Eleringi andmeladu Estfeed) – see on arve alus. Kulu on hinnang: sel ajal kehtinud börsihind koos tasude ja käibemaksuga.'];
+  if (withInverter) notes.push('Ülal olevad plokid on inverteri mõõtmised (ost erineb võrguarvestist ~2 %); neid numbreid ei liideta.');
+  if (m.missing.length) notes.push(`Võrguarvesti andmed puuduvad: ${m.missing.map(x => monthNameOf(x.key)).join(', ')}.`);
+  if (m.preliminary.length) notes.push(`${capitalize(m.preliminary.map(x => monthNameOf(x.key)).join(', '))} on esialgne (lõppenud kuu arvutatakse kuu esimestel päevadel üle).`);
+  if (m.prev) notes.push(`Võrdlus: ${m.prev.year} samad kuud${m.ongoing ? `, ${monthNameOf(m.ongoing.key)} sama kuupäeva ja kellaajani` : ''}.`);
+  const dash = '—';
+  const rows = m.months.map(x => {
+    const r = x.rec && !x.rec.noData ? x.rec : null;
+    const label = `${capitalize(monthNameOf(x.key))}${x.ongoing ? ' (pooleli)' : r && !r.complete ? ' (esialgne)' : ''}`;
+    return el('tr', {}, [
+      el('th', { scope: 'row', text: label }),
+      el('td', { text: r ? numberFormat.d1.format(r.kwh) : dash }),
+      el('td', { text: r ? numberFormat.d2.format(r.eur) : dash }),
+      el('td', { text: r && r.kwh > 0.5 ? numberFormat.d2.format(r.eur / r.kwh * 100) : dash })
+    ]);
+  });
+  return el('section', { class: 'bill', 'aria-labelledby': 'bill-title' }, [
+    el('div', {}, [
+      el('h3', { class: 'bill__title', id: 'bill-title' }, [iconEl('grid'), `Ost võrgust ${m.year}`]),
+      el('p', { class: 'bill__source', 'data-testid': 'bill-source', text: ['võrguarvesti (Estfeed)', span + (until ? `, ${monthNameOf(last.key)} ${until}` : ''), 'arve alus'].join(' · ') })
+    ]),
+    el('div', { class: 'bill__row' }, [
+      cell('Ostetud', formatKwh(m.kwh), m.used.length === 1 ? '1 kuu' : `${m.used.length} kuud`, 'bill-kwh'),
+      cell('Kulu koos tasudega', approxEur(m.eur), 'hinnang', 'bill-eur'),
+      avg != null ? cell('Keskmine hind', numberFormat.d2.format(avg), 's/kWh koos tasudega', 'bill-avg') : null,
+      m.prev ? cell(`${m.prev.year} sama ajani`, formatKwh(m.prev.kwh), approxEur(m.prev.eur), 'bill-prev') : null,
+      diff != null && Math.abs(diff) >= 0.005
+        ? el('p', { class: `bill__badge${diff < 0 ? ' is-good' : ''}`, 'data-testid': 'bill-diff',
+          text: `${formatPercentAbs(diff * 100)} ${diff < 0 ? 'vähem' : 'rohkem'} kui ${m.prev.year}` })
+        : null
+    ]),
+    el('p', { class: 'table-note', text: notes.join(' ') }),
+    el('details', { class: 'table-view' }, [
+      el('summary', {}, [iconEl('table'), 'Kuude kaupa', el('span', { class: 'table-view__hint', 'aria-hidden': 'true', text: 'keri →' }), iconEl('chevron-down')]),
+      el('div', { class: 'table-scroll' }, el('table', { class: 'data-table' }, [
+        el('caption', { class: 'visually-hidden', text: `Ost võrgust ${m.year} kuu kaupa (võrguarvesti)` }),
+        el('thead', {}, el('tr', {}, [['Kuu'], ['Ostetud', 'kWh'], ['Kulu', '≈ €'], ['Keskmine', 's/kWh']]
+          .map(([text, sub]) => el('th', { scope: 'col' }, [text, sub ? el('span', { class: 'th-sub', text: sub }) : null])))),
+        el('tbody', {}, rows)
+      ]))
+    ])
+  ]);
+}
+
+/**
+ * Kokkuvõtte vaade: { title, hint, word, unit, totals, days, notes, meter }. „Täna“ = computeDayTotals (paike.json);
+ * muud perioodid = paevad.json päevakirjed (+ jooksva kuu ja aasta korral tänane pooleli päev). days: graafiku read
+ * (päevad; aasta korral kuud, monthItems). meter: aasta korral võrguarvesti summa (buildMeterSummary) või null.
  */
 function buildPeriodView(d, period) {
   const range = periodRange(period, d.now);
   if (period === 'today') {
     const t = d.totals;
-    return { ...range, totals: t, days: null, hint: t && t.through ? `kuni ${formatTime(t.through)} (inverter)` : '', notes: [] };
+    return { ...range, totals: t, days: null, hint: t && t.through ? `kuni ${formatTime(t.through)} (inverter)` : '', notes: [], meter: null };
   }
   const byKey = new Map(state.days.list.map(r => [r.paev, r]));
-  const from = state.days.meta && typeof state.days.meta.from === 'string' ? state.days.meta.from : null;
+  // Päevakokkuvõtete algus (töövoo meta.from, vanemas failis esimene kirje): varasemad päevad pole „puudu“, neid lihtsalt pole
+  const from = state.days.meta && typeof state.days.meta.from === 'string' ? state.days.meta.from
+    : state.days.list.length ? state.days.list[0].paev : null;
   const days = range.keys.map(key => {
     const rec = byKey.get(key);
     const usable = rec && !rec.noData;
-    return { key, date: dateFromKey(key), totals: usable ? sumTotals([rec]) : null, partial: false, incomplete: usable && !rec.complete, missing: !rec && (!from || key >= from), noData: Boolean(rec && rec.noData) };
+    return { key, date: dateFromKey(key), totals: usable ? sumTotals([rec]) : null, partial: false, incomplete: usable && !rec.complete,
+      missing: !rec && from != null && key >= from, noData: Boolean(rec && rec.noData) };
   });
-  if (range.includeToday && d.totals && d.totals.through) {
+  // Tänane pooleli päev ainult koos päevakirjetega: ilma paevad.json-ita on aasta vaates ainult võrguarvesti summa
+  if (range.includeToday && state.days.list.length && d.totals && d.totals.through) {
     days.push({ key: tallinnDateKey(d.now), date: getTallinnDayStart(d.now, 0), totals: d.totals, partial: true, incomplete: false, missing: false, noData: false });
   }
   const used = days.filter(x => x.totals);
@@ -2663,15 +2893,25 @@ function buildPeriodView(d, period) {
   const incomplete = days.filter(x => x.incomplete).length;
   if (missing) notes.push(`${missing} päeva andmed pole veel laaditud${state.days.meta && state.days.meta.pending ? ' (laaditakse järk-järgult)' : ''}.`);
   if (incomplete) notes.push(`${incomplete} päeval on inverteri mõõtmistes auke; nende päevade kogused on mõõdetud osa summa.`);
-  return { ...range, totals, days, hint, notes };
+  const meter = YEARS_BACK.has(period) ? buildMeterSummary(range.year, d.now) : null;
+  if (range.unit === 'month') {
+    // Aasta: inverteri summad algavad päevakokkuvõtete algusest (päikesepargi kasutuselevõtt), varasemaid kuid neis pole
+    if (from && from > range.keys[0]) {
+      notes.unshift(used.length
+        ? `Inverteri päevakokkuvõtted algavad ${formatDayKey(from)}: aku, päikese ja maja tarbimise summad on sellest päevast.`
+        : `Inverteri päevakokkuvõtted algavad ${formatDayKey(from)}: ${range.year}. aasta kohta aku, päikese ja maja tarbimise mõõtmisi pole.`);
+    }
+    if (!used.length && meter) hint = `${monthNameOf(meter.used[0].key)}–${monthNameOf(meter.used[meter.used.length - 1].key)} (võrguarvesti)`;
+  }
+  return { ...range, totals, days: range.unit === 'month' ? monthItems(days) : days, hint, notes, meter };
 }
 
 function renderResults(d) {
   const host = byId('results-body');
   const hint = byId('results-hint');
   const toggle = byId('period-toggle');
-  // Perioodivalik ainult siis, kui päevakirjeid on (paevad.json); kadunud perioodi asemel „Täna“
-  const available = PERIODS.filter(period => periodAvailable(period, d.now));
+  // Perioodivalik ainult siis, kui päevakirjeid või (aasta) kuusummasid on; kadunud perioodi asemel „Täna“
+  const available = PERIODS.filter(period => periodAvailable(period, d));
   toggle.hidden = available.length < 2;
   if (!available.includes(state.period)) state.period = 'today';
   for (const period of PERIODS) {
@@ -2679,9 +2919,9 @@ function renderResults(d) {
     input.disabled = !available.includes(period);
     input.nextElementSibling.hidden = !available.includes(period);
     input.checked = period === state.period;
+    const label = periodRange(period, d.now).label;   // kuu nimi („August“) või aasta („2025“)
+    if (label && input.nextElementSibling.textContent !== label) input.nextElementSibling.textContent = label;
   }
-  byId('period-month').nextElementSibling.textContent = capitalize(monthNameFormatter.format(d.now));
-  byId('period-prevMonth').nextElementSibling.textContent = capitalize(periodRange('prevMonth', d.now).title.replace(' kokku', ''));
 
   const view = buildPeriodView(d, state.period);
   byId('results-title').textContent = view.title;
@@ -2694,9 +2934,12 @@ function renderResults(d) {
     return;
   }
   const t = view.totals;
+  const notesEl = view.notes.length ? el('p', { class: 'notice' }, [iconEl('info'), view.notes.join(' ')]) : null;
   if (!t || (state.period === 'today' && !t.through)) {
-    hint.textContent = '';
-    host.replaceChildren(el('p', { class: 'placeholder', text: state.period === 'today' ? 'Tänaseid inverteri mõõtmisi pole veel.' : 'Selle perioodi päevakokkuvõtteid pole veel.' }));
+    // Aasta ilma inverteri päevadeta (nt enne päikeseparki): ainult võrguarvesti summa
+    hint.textContent = view.meter ? view.hint : '';
+    if (view.meter) setChildren(host, buildMeterPanel(view.meter, d.now, false), notesEl);
+    else host.replaceChildren(el('p', { class: 'placeholder', text: state.period === 'today' ? 'Tänaseid inverteri mõõtmisi pole veel.' : 'Selle perioodi päevakokkuvõtteid pole veel.' }));
     renderSums(null);
     renderDaysPanel(d, null);
     return;
@@ -2727,7 +2970,8 @@ function renderResults(d) {
   setChildren(host,
     el('div', { class: 'results' }, blocks),
     buildEnergyPrice(t, view.word),
-    view.notes.length ? el('p', { class: 'notice' }, [iconEl('info'), view.notes.join(' ')]) : null
+    view.meter ? buildMeterPanel(view.meter, d.now, true) : null,
+    notesEl
   );
   renderSums(view);
   renderDaysPanel(d, view.days && view.days.length >= 2 ? view : null);
@@ -2801,7 +3045,7 @@ function buildEnergyPrice(t, word = 'täna') {
   ]);
 }
 
-/* ---------- Päevade graafik (mitme päeva periood, p 6.9) ---------- */
+/* ---------- Päevade graafik (mitme päeva periood; aasta vaates kuu kaupa, p 6.9) ---------- */
 const DAY_METRICS = {
   solar: { unit: 'kWh', series: [{ key: 'pvKwh', color: 'var(--solar)', name: 'päikesetoodang', dir: 1 }] },
   load: { unit: 'kWh', series: [{ key: 'loadKwh', color: 'var(--home)', name: 'maja tarbimine', dir: 1 }] },
@@ -2818,9 +3062,15 @@ function dayMetricValue(t, key) {
   return t[key];
 }
 
-/** Valitud päeva rida inspektoris ja ekraanilugejale. */
+/** Graafiku rea (päev või aasta vaates kuu) nimi: „E 20.10“ või „August 2026“. */
+function dayItemLabel(day) {
+  if (day.unit === 'month') return `${capitalize(monthNameOf(day.key))} ${day.key.slice(0, 4)}`;
+  return capitalize(dayShortFormatter.format(day.date));
+}
+
+/** Valitud päeva (aasta vaates kuu) rida inspektoris ja ekraanilugejale. */
 function describeDay(day, metric) {
-  const label = capitalize(dayShortFormatter.format(day.date));
+  const label = dayItemLabel(day);
   if (!day.totals) return `${label}: ${day.noData ? 'mõõtmisi pole' : 'andmed puuduvad'}`;
   const t = day.totals;
   const kwh = v => (v != null ? formatKwh(v) : '—');
@@ -2835,7 +3085,12 @@ function describeDay(day, metric) {
       return [market != null ? `keskmine ostuhind ${formatCents(market)}` : null, paid != null ? `maja maksis ${formatCents(paid)}` : null];
     })()
   }[metric].filter(Boolean);
-  const suffix = day.partial && t.through ? ` (täna kuni ${formatTime(t.through)})` : day.incomplete ? ' (mõõtmistes auke)' : '';
+  let suffix = day.partial && t.through ? ` (täna kuni ${formatTime(t.through)})` : day.incomplete ? ' (mõõtmistes auke)' : '';
+  if (day.unit === 'month') {
+    const notes = [day.partial ? (t.through ? `pooleli, täna kuni ${formatTime(t.through)}` : 'pooleli') : null,
+      day.missingDays ? `${day.missingDays} päeva andmed puuduvad` : null, day.gapDays ? `${day.gapDays} päeval mõõtmistes auke` : null].filter(Boolean);
+    suffix = notes.length ? ` (${notes.join(', ')})` : '';
+  }
   return `${label}${suffix}: ${parts.join(' · ')}`;
 }
 
@@ -2843,6 +3098,13 @@ function describeDay(day, metric) {
 const WEEKDAY_LETTER = ['P', 'E', 'T', 'K', 'N', 'R', 'L'];
 function dayTick(days, i, plotWidth) {
   const day = days[i];
+  if (day.unit === 'month') {
+    // Aasta vaade: kuu lühinimi („aug“); kitsal graafikul iga teine kuu (viimane alati)
+    const step = plotWidth / days.length < 40 ? 2 : 1;
+    const last = days.length - 1;
+    const shown = step === 1 || i === last || (i % step === 0 && last - i >= step);
+    return shown ? `${monthShortFormatter.format(day.date)}${day.incomplete && !day.partial ? '*' : ''}` : '';
+  }
   const p = getTallinnDateParts(day.date);
   const date = day.partial ? 'täna' : `${p.day}.${p.month}${day.incomplete ? '*' : ''}`;
   if (days.length <= 7) return [WEEKDAY_LETTER[p.weekday], date];
@@ -2944,7 +3206,8 @@ function renderDaysLegend(days, metric) {
   if (dimDays.length) {
     // Võtme toon = sari, mis tuhmil päeval graafikul on (Võrk: tavaliselt ost, mitte müük)
     const dimSeries = spec.series.find(sr => dimDays.some(day => (dayMetricValue(day.totals, sr.key) || 0) > 0.05)) || spec.series[0];
-    items.push(legendItem(swatch('legend__swatch--partial', metric === 'price' ? 'var(--home)' : dimSeries.color), 'tuhmim = pooleli või mõõtmistes auke'));
+    items.push(legendItem(swatch('legend__swatch--partial', metric === 'price' ? 'var(--home)' : dimSeries.color),
+      days[0].unit === 'month' ? 'tuhmim = pooleli kuu või puudulike päevadega' : 'tuhmim = pooleli või mõõtmistes auke'));
   }
   if (days.some(day => !day.totals)) items.push(legendItem(swatch('legend__swatch--missing'), 'andmed puuduvad'));
   const legend = byId('days-legend');
@@ -2971,28 +3234,31 @@ function renderDaysPanel(d, view) {
   state.daysKey = key;
   if (state.daysIndex == null || state.daysIndex >= days.length) state.daysIndex = days.length - 1;
   const stack = byId('days-stack');
-  if (stack) stack.setAttribute('aria-label', `${view.title}: ${DAY_METRICS[metric].series.map(sr => sr.name).join(', ')} päeva kaupa. Nooleklahvidega saab päevi valida.`);
+  const months = view.unit === 'month';
+  if (stack) stack.setAttribute('aria-label', `${view.title}: ${DAY_METRICS[metric].series.map(sr => sr.name).join(', ')} ${months ? 'kuu' : 'päeva'} kaupa. Nooleklahvidega saab ${months ? 'kuid' : 'päevi'} valida.`);
+  byId('days-table-title').textContent = `Tabelivaade (${months ? 'kuu' : 'päeva'} kaupa)`;
   buildDaysChart(days, metric);
   byId('days-inspector').textContent = describeDay(days[state.daysIndex], metric);
   renderDaysLegend(days, metric);
   renderDaysTable(days);
 }
 
-/** Tabelivaade päeva kaupa (ligipääsetav alternatiiv päevade graafikule). */
+/** Tabelivaade päeva (aasta vaates kuu) kaupa: ligipääsetav alternatiiv päevade graafikule. */
 function renderDaysTable(days) {
   const dash = '—';
   const n1 = v => (v != null ? numberFormat.d1.format(v) : dash);
   const n2 = v => (v != null ? numberFormat.d2.format(v) : dash);
-  const header = [['Päev'], ['Päike', 'kWh'], ['Maja', 'kWh'], ['Ost', 'kWh'], ['Müük', 'kWh'], ['Laetud', 'kWh'], ['Tühjendatud', 'kWh'], ['Võrgu netokulu', '≈ €'], ['Aku tulu', '≈ €'], ['Maja maksis', 's/kWh']];
+  const months = days[0].unit === 'month';
+  const header = [[months ? 'Kuu' : 'Päev'], ['Päike', 'kWh'], ['Maja', 'kWh'], ['Ost', 'kWh'], ['Müük', 'kWh'], ['Laetud', 'kWh'], ['Tühjendatud', 'kWh'], ['Võrgu netokulu', '≈ €'], ['Aku tulu', '≈ €'], ['Maja maksis', 's/kWh']];
   const rows = days.map(day => {
     const t = day.totals;
-    const cells = [capitalize(dayShortFormatter.format(day.date)) + (day.partial ? ' (pooleli)' : '')];
+    const cells = [dayItemLabel(day) + (day.partial ? ' (pooleli)' : '')];
     if (t) cells.push(n1(t.pvKwh), n1(t.loadKwh), n1(t.importKwh), n1(t.exportKwh), n1(t.chargeKwh), n1(t.dischargeKwh), n2(t.netGridEur), t.batteryGainEur != null ? formatSigned2(t.batteryGainEur) : dash, n2(dayMetricValue(t, 'paid')));
     else cells.push(...Array(9).fill(dash));
     return el('tr', {}, cells.map((text, i) => (i === 0 ? el('th', { scope: 'row', text }) : el('td', { text }))));
   });
   byId('days-table-body').replaceChildren(el('table', { class: 'data-table' }, [
-    el('caption', { class: 'visually-hidden', text: 'Päevakokkuvõtted inverteri mõõtmistest' }),
+    el('caption', { class: 'visually-hidden', text: `${months ? 'Kuude' : 'Päevade'} kokkuvõtted inverteri mõõtmistest` }),
     el('thead', {}, el('tr', {}, header.map(([text, sub]) => el('th', { scope: 'col' }, [text, sub ? el('span', { class: 'th-sub', text: sub }) : null])))),
     el('tbody', {}, rows)
   ]));
@@ -3206,16 +3472,16 @@ function aggregateHourlySeries(series) {
  * perioodi ost ja müük kWh-des (mõõdetud osa: kaader kuni järgmise kaadri või viimase mõõtmiseni) ja režiimid.
  */
 function buildChartSlots(d, offset, series, resolution = 15) {
-  const dayPeriods = offset === 0 ? d.today : d.tomorrow;
+  const dayPeriods = offset === 0 ? d.today : offset < 0 ? d.yesterday : d.tomorrow;
   const periods = resolution === 60 && dayPeriods.some(p => p.durationMinutes < 60) ? aggregateHourlyPeriods(dayPeriods) : dayPeriods;
   const stepMs = (resolution === 60 ? 3600 : FRAME_SECONDS) * 1000;
   let slots;
   if (periods.length) {
     slots = periods.map(p => ({ start: p.start, end: p.end, period: p }));
-  } else if (offset === 0 && series.length) {
+  } else if (offset <= 0 && series.length) {
     slots = [];
-    const start = getTallinnDayStart(d.now, 0).getTime();
-    const end = getTallinnDayStart(d.now, 1).getTime();
+    const start = getTallinnDayStart(d.now, offset).getTime();
+    const end = getTallinnDayStart(d.now, offset + 1).getTime();
     for (let t = start; t < end; t += stepMs) slots.push({ start: new Date(t), end: new Date(Math.min(end, t + stepMs)), period: null });
   } else {
     return [];
@@ -3397,11 +3663,12 @@ function fitEndLabels() {
 }
 
 /* ---------- energy-dashboard.html · Päeva ülevaade: hind, vood/vahetus, režiim, laetus (p 6.2, 6.4–6.7) ---------- */
-function buildDayStack({ slots, series, dayStartMs, dayEndMs, nowMs, isToday, currentTs, avg, best, modeRuns, powerView, resolution, forecast, frameMs }) {
+function buildDayStack({ slots, series, dayStartMs, dayEndMs, nowMs, isToday, measuredDay, currentTs, avg, best, modeRuns, powerView, resolution, forecast, frameMs }) {
   if (!T) return null;
   const items = slots.map(s => ({ startMs: s.start.getTime(), endMs: s.end.getTime() }));
   const hasPrices = slots.some(s => s.period);
-  const hasPower = isToday && series.some(s => s.pvKw != null || s.loadKw != null || s.gridKw != null || s.batteryKw != null);
+  // Inverteri mõõtmised on eilsel ja tänasel päeval (measuredDay), homme ainult hinnad ja prognoos
+  const hasPower = measuredDay && series.some(s => s.pvKw != null || s.loadKw != null || s.gridKw != null || s.batteryKw != null);
   const showSoc = hasPower && series.some(s => s.soc != null);
   const showLower = hasPower || forecast.length > 0;
   const currentIndex = currentTs == null ? -1 : slots.findIndex(s => s.period && s.period.timestamp === currentTs);
@@ -3721,49 +3988,60 @@ function renderChartEmpty(text, kind) {
     : [iconEl(kind === 'clock' ? 'clock' : 'info'), el('p', { text })]));
 }
 
+const DAY_TABS = { yesterday: { offset: -1, word: 'Eile' }, today: { offset: 0, word: 'Täna' }, tomorrow: { offset: 1, word: 'Homme' } };
+
 function renderChart(d) {
   const notice = byId('chart-notice');
-  const isToday = state.selectedDay !== 'tomorrow';
-  const offset = isToday ? 0 : 1;
+  const tab = DAY_TABS[state.selectedDay] || DAY_TABS.today;
+  const offset = tab.offset;
+  const isToday = offset === 0;
+  const measuredDay = offset <= 0;   // eile ja täna: inverteri mõõtmised; homme: hinnad ja tarbimise prognoos
   const dayStart = getTallinnDayStart(d.now, offset);
   const dayEnd = getTallinnDayStart(d.now, offset + 1);
-  byId('chart-day-label').textContent = `${isToday ? 'Täna' : 'Homme'}, ${dateLongFormatter.format(dayStart)}`;
+  byId('chart-day-label').textContent = `${tab.word}, ${dateLongFormatter.format(dayStart)}`;
   updateTomorrowTab(d);
   if (!state.prices.loaded && !state.solar.loaded) return;
 
-  // Ainult valitud päeva kaadrid (derive: tänased kuni praeguse hetkeni), et keskööl ei jääks eilseid jooni
-  const series = isToday ? d.series : [];
+  // Ainult valitud päeva kaadrid (derive: tänased kuni praeguse hetkeni, eilsed 00:00–24:00), et keskööl ei segunaks päevad
+  const series = isToday ? d.series : offset < 0 ? d.yesterdaySeries : [];
   const resolution = getChartResolution();
   // Osalised homsed hinnad (p 10): derive jätab mittetäieliku päeva tühjaks, graafik joonistab olemasolevad perioodid
   // ja puuduvad on katkendkontuuriga (kMissing, legendis „andmed puuduvad“); teade jääb kaevu alla
-  const partial = !isToday && d.tomorrowStatus.state === 'partial';
+  const partial = offset === 1 && d.tomorrowStatus.state === 'partial';
   const slots = buildChartSlots(partial ? { ...d, tomorrow: getDayPrices(d.all, d.now, 1) } : d, offset, series, resolution);
   const hasPrices = slots.some(s => s.period);
   const hasPower = slots.some(s => s.pvKw != null || s.loadKw != null || s.gridKw != null || s.batteryKw != null);
-  // Maja tarbimise prognoos: täna praegusest hetkest päeva lõpuni, homme terve päev (ainult „Energiavood“ vaates)
-  const forecast = buildLoadForecast(d, dayStart, dayEnd, isToday ? d.now.getTime() : dayStart.getTime());
+  // Maja tarbimise prognoos: täna praegusest hetkest päeva lõpuni, homme terve päev (ainult „Energiavood“ vaates); eile on mõõtmised
+  const forecast = measuredDay && !isToday ? null : buildLoadForecast(d, dayStart, dayEnd, isToday ? d.now.getTime() : dayStart.getTime());
   for (const slot of slots) {
     const sg = forecast ? forecast.segments.find(x => x.hourStart <= slot.start.getTime() && slot.start.getTime() < x.hourStart + HOUR_MS) : null;
     slot.forecastKw = sg && slot.end.getTime() > (isToday ? d.now.getTime() : 0) ? sg.kw : null;
   }
-  updateChartControls(d, isToday, hasPower, resolution);
+  const frameMs = (d.solar ? d.solar.frameSeconds : FRAME_SECONDS) * 1000;
+  updateChartControls(d, measuredDay, hasPower, series.length > 0, resolution);
   renderCurrentMode(d, isToday);
-  renderChartStats(d, isToday, forecast);
+  renderChartStats(d, offset, forecast, series);
   const forecastText = forecastNote(forecast, isToday, d);
   byId('chart-forecast').hidden = !forecastText;
   byId('chart-forecast-text').textContent = forecastText;
 
   const notes = [];
   if (!hasPrices) {
-    if (!isToday) notes.push(state.prices.periods.length ? tomorrowNotice(d.tomorrowStatus) : (state.prices.error || 'Hinnaandmed pole saadaval.'));
-    else notes.push(state.prices.error || 'Tänased börsihinnad puuduvad andmetes.');
+    if (offset === 1) notes.push(state.prices.periods.length ? tomorrowNotice(d.tomorrowStatus) : (state.prices.error || 'Hinnaandmed pole saadaval.'));
+    else notes.push(state.prices.error || `${isToday ? 'Tänased' : 'Eilsed'} börsihinnad puuduvad andmetes.`);
   } else if (partial) notes.push(tomorrowNotice(d.tomorrowStatus));
   if (isToday && !hasPower) notes.push(d.solar ? 'Tänaseid päikesetoodangu graafikuandmeid veel pole.' : (state.solar.error ? 'Päikeseandmed pole saadaval.' : ''));
-  if (!isToday && hasPrices && !forecast) notes.push('Päikesetoodangu graafik on ainult tänase päeva kohta.');
+  if (offset < 0 && !hasPower) notes.push(d.solar ? 'Eilseid inverteri mõõtmisi andmefailis pole.' : (state.solar.error ? 'Päikeseandmed pole saadaval.' : ''));
+  if (offset < 0 && hasPower) {
+    // Kesköö järel jõuavad eilse päeva viimased kaadrid faili hiljem (README „paike.json“): lõikeaeg on teates
+    const lastEnd = Math.min(series[series.length - 1].t + frameMs, dayEnd.getTime());
+    if (lastEnd < dayEnd.getTime()) notes.push(`Eilsed inverteri mõõtmised on kuni ${formatTime(new Date(lastEnd))}.`);
+  }
+  if (offset === 1 && hasPrices && !forecast) notes.push('Päikesetoodangu graafik on ainult eilse ja tänase päeva kohta (mõõtmised).');
   const noteText = notes.filter(Boolean).join(' ');
   // Hinnavea korral (andmeid pole) hoiatus/viga, mitte neutraalne teade (p 10): kaevus ilma graafikuta viga, graafiku all hoiatus
   const priceError = !hasPrices && !state.prices.periods.length && Boolean(state.prices.error);
-  const warn = priceError || partial || (!isToday && !hasPrices && ['late', 'partial'].includes(d.tomorrowStatus.state));
+  const warn = priceError || partial || (offset === 1 && !hasPrices && ['late', 'partial'].includes(d.tomorrowStatus.state));
 
   if (!slots.length || (!hasPrices && !hasPower && !forecast)) {
     // Tühi päev: teade on kaevus (sama kõrgusega plot-pind); legend, plaadid ja tabel peidetud (L-019)
@@ -3771,9 +4049,9 @@ function renderChart(d) {
     state.chartKey = '';
     state.chartSlots = [];
     notice.hidden = true;
-    renderChartEmpty(noteText || 'Graafiku andmed puuduvad.', priceError ? 'error' : warn ? 'warn' : !isToday ? 'clock' : 'info');
+    renderChartEmpty(noteText || 'Graafiku andmed puuduvad.', priceError ? 'error' : warn ? 'warn' : offset === 1 ? 'clock' : 'info');
     renderChartLegend();
-    renderChartTable([], d, isToday);
+    renderChartTable([], d, isToday, series);
     return;
   }
   notice.hidden = !noteText;
@@ -3783,14 +4061,14 @@ function renderChart(d) {
   if (!T) {   // Chart.js ei laadinud: kaevus on teade (setupCharts), kõik väärtused on tabelivaates
     state.chartSlots = slots;
     renderChartLegend();
-    renderChartTable(slots, d, isToday);
+    renderChartTable(slots, d, isToday, series);
     return;
   }
 
   // Praegune periood: 1 h vaates tunniperiood, mis sisaldab praegust 15-min perioodi
   const currentSlot = d.current ? slots.find(sl => sl.period && sl.start <= d.current.start && d.current.start < sl.end) : null;
   const currentTs = currentSlot ? currentSlot.period.timestamp : null;
-  const powerView = isToday && hasPower ? state.powerView : 'flows';
+  const powerView = measuredDay && hasPower ? state.powerView : 'flows';
   const stackEl = byId('day-stack');
   const key = [state.selectedDay, state.prices.version, state.solar.version, currentTs, Math.floor(d.now.getTime() / (5 * MINUTE_MS)),
     tallinnDateKey(d.now), d.best2h ? d.best2h.start.getTime() : '', resolution, powerView, state.days.version].join('|');
@@ -3803,10 +4081,10 @@ function renderChart(d) {
   const avg = calculateWeightedAverage(slots.filter(s => s.period).map(s => s.period));
   const hourly = resolution === 60;
   const stackSeries = hourly ? aggregateHourlySeries(series) : series;
-  const modeRuns = isToday ? buildModeRuns(d) : [];
+  const modeRuns = measuredDay ? buildModeRuns(series, frameMs, isToday ? measuredEndOf(d.solar, d.now) : dayEnd.getTime()) : [];
   const lowerForecast = forecast && powerView === 'flows' ? forecast.segments : [];
   // Kõiki alumise paneeli sarju ei saa peita (nt teisel päeval on alles ainult peidetud prognoos)
-  const measured = isToday && stackSeries.some(s => s.pvKw != null || s.loadKw != null || s.gridKw != null || s.batteryKw != null);
+  const measured = measuredDay && stackSeries.some(s => s.pvKw != null || s.loadKw != null || s.gridKw != null || s.batteryKw != null);
   const present = powerView === 'flows' ? [
     ...(measured ? ['maja', 'päike'] : []),
     ...(measured && stackSeries.some(s => s.gridKw != null) ? ['võrk'] : []),
@@ -3820,19 +4098,20 @@ function renderChart(d) {
   byId('chart-empty').hidden = true;
   stackEl.hidden = false;   // nähtav enne ehitamist: Chart.js mõõdab hosti suurust
   state.chartSlots = slots;
+  const best = offset >= 0 ? d.best2h : null;   // odavaim aken on tulevikus: eilsel päeval seda pole
   const view = buildDayStack({
-    slots, series: stackSeries, dayStartMs, dayEndMs, nowMs, isToday, currentTs, avg, best: d.best2h, modeRuns, powerView, resolution,
-    forecast: lowerForecast, frameMs: (hourly ? 3600 : (d.solar ? d.solar.frameSeconds : FRAME_SECONDS)) * 1000
+    slots, series: stackSeries, dayStartMs, dayEndMs, nowMs, isToday, measuredDay, currentTs, avg, best, modeRuns, powerView, resolution,
+    forecast: lowerForecast, frameMs: hourly ? HOUR_MS : frameMs
   });
   fitEndLabels();
-  stackEl.setAttribute('aria-label', `${dayAriaSummary({ slots, series: stackSeries, avg, best: d.best2h, nowMs, dayStartMs, dayEndMs, powerView,
+  stackEl.setAttribute('aria-label', `${dayAriaSummary({ slots, series: stackSeries, avg, best, nowMs, dayStartMs, dayEndMs, powerView,
     forecast: lowerForecast, modeRuns, hasPower: view.hasPower, showSoc: view.showSoc, lastMeasured: isToday && d.solar ? d.solar.updated : null })} Nooleklahvidega või sõrmega libistades saab perioode ükshaaval vaadata.`);
   const items = slots.map(s => ({ startMs: s.start.getTime(), endMs: s.end.getTime() }));
   const exchange = view.hasPower && powerView === 'grid';
   renderChartLegend({
     hasPrices: view.hasPrices, isToday, avg, avgInLegend: !view.avgLabelShown,
     hasPast: isToday && slots.some(s => s.period && s.period.timestamp !== currentTs && s.end.getTime() <= nowMs),
-    best: Boolean(d.best2h) && Math.min(dayEndMs, d.best2h.end.getTime()) > Math.max(dayStartMs, d.best2h.start.getTime()),
+    best: Boolean(best) && Math.min(dayEndMs, best.end.getTime()) > Math.max(dayStartMs, best.start.getTime()),
     missing: view.hasPrices && gapRanges(items, dayStartMs, dayEndMs).length > 0,
     lower: exchange
       ? { view: 'grid', unit: hourly ? '1 h' : '15 min', imp: slots.some(s => s.importKwh > 0.005), exp: slots.some(s => s.exportKwh > 0.005) }
@@ -3849,19 +4128,20 @@ function renderChart(d) {
   // Ümberehitusel jääb sama kellaaeg valituks (chartStack): tooltip ja inspektor ilma uue ettelugemiseta
   if (view.stack.active != null && view.stack.pointer) showTooltip(view.stack.active, view.stack.pointer, false);
   else hideTooltip();
-  renderChartTable(slots, d, isToday);
+  renderChartTable(slots, d, isToday, series);
 }
 
-/** Režiimiriba lõigud: järjestikused sama režiimiga tänased 15-min kaadrid (lõpp kuni viimase mõõtmiseni). */
-function buildModeRuns(d) {
-  if (!d.solar || !d.series.length) return [];
-  const frameMs = d.solar.frameSeconds * 1000;
-  const measuredEndMs = measuredEndOf(d.solar, d.now);
+/**
+ * Režiimiriba lõigud: valitud päeva (täna või eile) järjestikused sama režiimiga 15-min kaadrid; lõpp kuni viimase
+ * mõõtmiseni (täna measuredEndOf, eile päeva lõpp).
+ */
+function buildModeRuns(series, frameMs, measuredEndMs) {
+  if (!series.length) return [];
   const runs = [];
-  d.series.forEach((s, i) => {
+  series.forEach((s, i) => {
     const mode = inverterMode(s);
     if (!mode) return;
-    const next = d.series[i + 1];
+    const next = series[i + 1];
     const end = Math.min(s.t + frameMs, next ? next.t : Infinity, measuredEndMs);
     if (end <= s.t) return;
     const last = runs[runs.length - 1];
@@ -3871,13 +4151,16 @@ function buildModeRuns(d) {
   return runs;
 }
 
-/** Sammu ja alumise graafiku lülitid: samm, kui hinnad on 15-min (või on tänased kaadrid); vaade ainult „Täna“ vahelehel. */
-function updateChartControls(d, isToday, hasPower, resolution) {
+/**
+ * Sammu ja alumise graafiku lülitid: samm, kui hinnad on 15-min (või on päeva kaadrid); vaade („Energiavood“ /
+ * „Võrguga vahetus“) mõõdetud päeval („Eile“, „Täna“).
+ */
+function updateChartControls(d, measuredDay, hasPower, hasSeries, resolution) {
   const resToggle = byId('resolution-toggle');
-  resToggle.hidden = !((state.prices.periods.length && state.prices.intervalMinutes < 60) || (isToday && d.series.length));
+  resToggle.hidden = !((state.prices.periods.length && state.prices.intervalMinutes < 60) || (measuredDay && hasSeries));
   byId('res-60').checked = resolution === 60;
   byId('res-15').checked = resolution === 15;
-  byId('power-view-toggle').hidden = !(isToday && hasPower);
+  byId('power-view-toggle').hidden = !(measuredDay && hasPower);
   byId('view-flows').checked = state.powerView !== 'grid';
   byId('view-grid').checked = state.powerView === 'grid';
 }
@@ -3899,35 +4182,42 @@ function renderCurrentMode(d, isToday) {
 }
 
 /**
- * Hinnaplaadid (ka „Homme“ vahelehel); „Täna“ lisaks võimsuspaneelist suurim tarbimine, mida ükski kaart ei näita,
- * „Homme“ tarbimise prognoos (kui paevad.json-is on piisavalt päevi). Madalaim/keskmine/kõrgeim on ainult siin (L-063).
+ * Hinnaplaadid (ka „Eile“ ja „Homme“ vahelehel); „Täna“ ja „Eile“ lisaks võimsuspaneelist suurim tarbimine, mida ükski
+ * kaart ei näita, „Homme“ tarbimise prognoos (kui paevad.json-is on piisavalt päevi). Madalaim/keskmine/kõrgeim on
+ * ainult siin (L-063). series: valitud päeva inverteri kaadrid.
  */
-function renderChartStats(d, isToday, forecast = null) {
+function renderChartStats(d, offset, forecast = null, series = []) {
   const host = byId('chart-stats');
-  const periods = isToday ? d.today : d.tomorrow;
+  const periods = offset === 0 ? d.today : offset < 0 ? d.yesterday : d.tomorrow;
   host.hidden = !periods.length;
   if (!periods.length) { host.replaceChildren(); return; }
   const { min, max } = getMinMax(periods);
   const avg = calculateWeightedAverage(periods);
-  const peakLoad = isToday && d.totals ? d.totals.peakLoad : null;
-  const forecastTile = !isToday && forecast
-    ? statTile('Tarbimise prognoos', `≈ ${formatKwh(forecast.kwh)}`, forecast.eur != null ? `≈ ${formatEur(forecast.eur)} võrgust ostes` : forecastBasis(forecast))
+  const peakLoad = offset === 0 ? (d.totals ? d.totals.peakLoad : null)
+    : offset < 0 ? series.reduce((m, s) => (s.loadKw != null && (!m || s.loadKw > m.kw) ? { kw: s.loadKw, t: new Date(s.t) } : m), null) : null;
+  const forecastTile = offset === 1 && forecast
+    ? statTile('Tarbimise prognoos', `≈ ${formatKwh(forecast.kwh)}`, forecast.eur != null ? `≈ ${formatEur(forecast.eur)} võrgust ostes` : forecastBasis(forecast))
     : null;
+  const word = offset < 0 ? 'eile' : offset === 0 ? 'täna' : 'homme';
+  const adjective = offset < 0 ? 'Eilne' : offset === 0 ? 'Tänane' : 'Homne';
   host.classList.toggle('stats--4', Boolean(peakLoad || forecastTile));
   host.classList.toggle('stats--3', !(peakLoad || forecastTile));
-  host.setAttribute('aria-label', `${isToday ? 'Tänane' : 'Homne'} madalaim, keskmine ja kõrgeim börsihind, s/kWh${peakLoad ? ', ning tänane suurim tarbimine' : forecastTile ? ', ning homne tarbimise prognoos' : ''}`);
+  host.setAttribute('aria-label', `${adjective} madalaim, keskmine ja kõrgeim börsihind, s/kWh${peakLoad ? `, ning ${adjective.toLowerCase()} suurim tarbimine` : forecastTile ? ', ning homne tarbimise prognoos' : ''}`);
   setChildren(host,
     // Väärtuse toon = selle hinna kategooria (sildipaari -fg, mitte seeria toon)
     testTile('day-min', 'Madalaim', numberFormat.d2.format(min.spotIncVatCentsKwh), `kell ${formatTime(min.start)}`, `stat__value--cat-${getPriceCategory(min.spotIncVatCentsKwh)}`),
-    testTile('day-avg', 'Keskmine', numberFormat.d2.format(avg), isToday ? 'täna' : 'homme'),
+    testTile('day-avg', 'Keskmine', numberFormat.d2.format(avg), word),
     testTile('day-max', 'Kõrgeim', numberFormat.d2.format(max.spotIncVatCentsKwh), `kell ${formatTime(max.start)}`, `stat__value--cat-${getPriceCategory(max.spotIncVatCentsKwh)}`),
     peakLoad ? testTile('peak-load', 'Suurim tarbimine', formatKw1(peakLoad.kw), `kell ${formatTime(peakLoad.t)} (inverter)`) : null,
     forecastTile
   );
 }
 
-/** Tabelivaade: sama info tunni kaupa (ligipääsetav alternatiiv graafikule). Võimsused on tunni keskmised: kW = kWh tunnis. */
-function renderChartTable(slots, d, isToday) {
+/**
+ * Tabelivaade: sama info tunni kaupa (ligipääsetav alternatiiv graafikule). Võimsused on tunni keskmised: kW = kWh tunnis.
+ * series: valitud päeva inverteri kaadrid (tunni valdav režiim).
+ */
+function renderChartTable(slots, d, isToday, series = []) {
   const host = byId('chart-table-body');
   const details = byId('chart-table');
   const note = byId('chart-table-note');
@@ -3943,7 +4233,7 @@ function renderChartTable(slots, d, isToday) {
     const values = list.map(pick).filter(v => v != null);
     return values.length ? values.reduce((a, b) => a + b, 0) / values.length : null;
   };
-  const showPower = isToday && slots.some(s => s.pvKw != null || s.loadKw != null || s.gridKw != null || s.batteryKw != null);
+  const showPower = slots.some(s => s.pvKw != null || s.loadKw != null || s.gridKw != null || s.batteryKw != null);
   note.hidden = !showPower;
   note.textContent = showPower ? 'Võimsused on inverteri mõõtmiste tunni keskmised (kW = kWh tunnis). Võrk: + ost, − müük; aku: + laeb, − tühjeneb.' : '';
   const nowHour = Math.floor(d.now.getTime() / HOUR_MS);
@@ -3954,7 +4244,7 @@ function renderChartTable(slots, d, isToday) {
   const kw = v => (v != null ? numberFormat.d1.format(v) : dash);
   const modeOf = hourKey => {
     const counts = new Map();
-    for (const s of d.series) {
+    for (const s of series) {
       const mode = Math.floor(s.t / HOUR_MS) === hourKey ? inverterMode(s) : null;
       if (mode) counts.set(mode, (counts.get(mode) || 0) + 1);
     }
@@ -4139,7 +4429,7 @@ async function refreshNow({ force = false } = {}) {
 }
 
 function selectDay(day) {
-  if (day !== 'today' && day !== 'tomorrow') return;
+  if (!DAY_TABS[day]) return;
   state.selectedDay = day;
   for (const tab of document.querySelectorAll('.tab')) {
     const selected = tab.dataset.day === day;

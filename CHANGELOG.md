@@ -4,6 +4,58 @@ See fail kirjeldab rakenduse `index.html` versioonimuudatusi, arhitektuurilisi k
 
 ---
 
+## energy-dashboard.html [2.3.0] ja [3.2.2] — 2026-11-01 · kuu- ja aastavaated, „Eile“ päeva ülevaates
+
+Omaniku soovid: „Täna kokku“ perioodivalikusse eelmise ja käesoleva aasta vaade ning kolm eelmist kuud (lisaks jooksvale
+kuule); „Päeva ülevaade“ kaardile vaheleht „Eile“. `APP_VERSION` `2.3.0` / `3.2.2`, `css/energy-dashboard.css?v=20261101`.
+Töövood, andmefailide lepingud ja arvutusreeglid (`computeDayTotals`, `sumTotals`, `finishTotals`) ei muutunud.
+
+### 1. Perioodivalik: neli viimast kuud ja kaks aastat (`periodRange`, `periodAvailable`, `buildPeriodView`)
+- Lüliti: *Täna*, *Eile*, *7 päeva*, neli viimast kalendrikuud vanimast uusimani (1.11.2026: *August*, *September*,
+  *Oktoober*, *November*) ning *2025* ja *2026*. Väärtused `month-3` … `month`, `year-1`, `year` (endine `prevMonth` =
+  `month-1`); sildid tulevad JS-ist, HTML-is on varutekstid. Kuu summa on endiselt `paevad.json`-i päevakirjete summa.
+- Jooksev kuu ja aasta on nähtavad ka kuu/aasta 1. päeval (ainult tänane pooleli päev, kui `paevad.json` on olemas);
+  varem peideti „See kuu“ nupp 1. kuupäeval.
+- **Aasta** (`unit: 'month'`): inverteri summad päevakokkuvõtete algusest (`meta.from`, 1.6.2026) koos märkusega
+  „Inverteri päevakokkuvõtted algavad 1.6.2026: …“; päevade graafik ja tabel on **kuu kaupa** (`monthItems`; kuu lühinimi
+  teljel, inspektoris „August 2026“, tabelis „Kuu“, pooleli ja puudulike päevadega kuu tuhmim).
+- **„Ost võrgust AAAA“** (`buildMeterSummary`, `buildMeterPanel`): aasta ost võrgust võrguarvesti kuusummadest
+  (`hinnad.json` `data.majaElekter`, mida energialeht nüüd ka loeb – `normalizeMaja`, `state.prices.maja`; Eleringi
+  otsepäringul jäävad varem loetud kuud alles): kWh, ≈ € koos tasudega, keskmine s/kWh, allikas ja lõikeaeg
+  (`meta.estfeedUntil`), puuduvad ja esialgsed kuud, tabel „Kuude kaupa“ ning jooksval aastal „2025 sama ajani“ (lõppenud
+  kuud tervikuna, jooksev kuu `kwhToDate`/`eurToDate`; ainult kui eelmise aasta kõik vastavad kuud on olemas).
+  2025 kohta inverteri mõõtmisi pole (park alates 06.2026), seega on 2025 vaates ainult see plokk ja märkus. Võrguarvesti
+  ja inverteri numbreid ei liideta (reegel 6); plokis on selgitus, et inverteri ost erineb võrguarvestist ~2 %.
+- Kui päevakokkuvõtete failis `meta.from`-i pole, loetakse algus esimesest kirjest (varem loeti siis kõik varasemad
+  päevad „puuduvaks“).
+- Parandus: kuu seesütlev kääne tabelist (`MONTH_INESSIVE`: „septembris“, „oktoobris“; varem nimi + „is“ →
+  „oktooberis“).
+- `index.html`: päikesekaardi „Eile“ rea link „Perioodid energialehel (eile, 7 päeva, kuud, aastad)“.
+
+### 2. Päeva ülevaade: vaheleht „Eile“ (`DAY_TABS`, `renderChart`)
+- Vahelehed *Eile*, *Täna*, *Homme* (nooleklahvid, `aria-selected`, rulliv `tabindex` nagu enne). Eile = eilne päev
+  00:00–24:00: hinnad `hinnad.json`-ist (fail algab eilsest 00:00-st), inverteri kaadrid `paike.json`-ist
+  (`derive().yesterday`, `yesterdaySeries`); hinnapaneel, *Energiavood* / *Võrguga vahetus*, režiimiriba, aku laetus,
+  „1 h / 15 min“, tooltip/inspektor ja tunnitabel koos režiimiga. „Praegu“-joont, praegust perioodi, möödunud perioodide
+  tuhmistust, odavaimat akent, joonte otsasilte ja prognoosi eilsel päeval pole.
+- Plaadid: eilne madalaim, keskmine, kõrgeim börsihind ja suurim tarbimine (inverter). Teated: „Eilsed börsihinnad
+  puuduvad andmetes“, „Eilseid inverteri mõõtmisi andmefailis pole“, kesköö järel „Eilsed inverteri mõõtmised on kuni
+  HH:MM“ (päeva viimased kaadrid jõuavad faili hiljem).
+- Üldistatud: `buildChartSlots` (päev −1), `buildModeRuns(series, frameMs, measuredEndMs)`, `updateChartControls`,
+  `renderChartStats(d, offset, …)`, `renderChartTable(…, series)`, `buildDayStack` (`measuredDay`).
+
+### 3. Kujundus
+- `.bill` (energialehe CSS, jaotis 7) jagab „Maja energiahind“ ploki pinda, rida, väärtuse suurust ja märki;
+  ülaserv `--grid` (ost võrgust); sunnitud värvide ja printimise reeglid. Uusi tokeneid pole.
+
+### 4. Kontroll
+- Playwright fikseeritud kellaga (1.11.2026 10:30, 20.11.2026 16:00 homsete hindadega, 1.1.2027) ja sünteetiliste
+  krüpteerimata andmefailidega: 1280 px hele ja 390 px tume teema; kõik perioodid ja vahelehed, puudutus, nooleklahvid;
+  ilma `paevad.json`-ita jäävad alles ainult *Täna* ja aastate võrguarvesti plokk. Konsoolis ainult oodatud `lukk.json`
+  404 (lukku pole), horisontaalset kerimist pole.
+
+---
+
 ## [3.2.1] ja energy-dashboard.html [2.2.1] — 2026-10-31 · koodi ülevaatus ja optimeerimine
 
 Kuvatavad numbrid ja tekstid ei muutunud (kontrollitud fikseeritud kella ja sünteetiliste andmetega: hele/tume teema,
@@ -652,4 +704,4 @@ Versioon `2.0.0` (defineeritud konstandina `APP_VERSION = '2.0.0'` failis `index
 9. **Navigatsioon:** Mõlemal lehel peab olema link teisele lehele.
 10. **Ekraanilugeja teated:** Live-region (`aria-live`) uueneb ainult klaviatuuri ja fookuse rajalt (graafikul püsiv peidetud `#chart-announcer`). Hiire ja sõrme liigutus uuendab ainult nähtavat inspektorit, muidu tekiks iga liigutusega teadete tulv.
 11. **Kujundus:** värvid ainult tokenitena ja tokenid ainult failis `css/common.css` (hele `:root`, tume `[data-theme="dark"]` ja `prefers-color-scheme`, ainult ekraanil). Põhimõtted: Bento Grid (`.layout` nimetatud alad, telefonis DOM-järjekord), klaaskaardid läbipaistmatute sisepindadega (tekst ≥ 4,5:1 halvimal komposiitpinnal, märgid ≥ 3:1 graafikupinnal), üks hero-number vaate kohta, ainus liikumine energiavoo täpid. Roheline = „Väga odav“, olek „korras“ ja soodne muutus, energialehel ka aku – mitte valik ega aktsent; valik/aktsent = `--focus`; mõõdetud seeria joon ei kasuta hinnaklassi tooni. Graafikud ainult Chart.js-iga ühisploki pluginatega: kaksiktelge ei tehta (eri suurused eraldi paneelil), igal graafikul legend, tabelikaksik ja `aria-label`, lõuenditekst ≥ 12 px, tulbad läbipaistmatu seguna. Piktogrammid on 24×24 stroke-SVG sprite'ist (`currentColor`, `aria-hidden`), mitte emojid. kW ja kWh ühe komakohaga, € kahega, € hinnangud „≈“-ga (märk, „€“ ja ühikud numbriga mittekatkeva tühikuga).
-12. **Andmefailide lepingud:** `hinnad.json` `meta`, `paike.json` `data.meta`/`frameSeconds`/eilsed kaadrid ja `paevad.json` on kirjeldatud README-s. Päevakokkuvõtte reeglid töövoos (`compute_day_record`) ja energialehel (`computeDayTotals`) peavad jääma samaks; reeglite muutmisel suurenda `PAEVAD_VERSION`-it; lehed peavad toimima ka vanema failiga (väli puudub → käitu nagu varem). `meta.pricesOk: false` = hinnaridades on auk või tunnine samm (hinnad ise on värsked; ebaõnnestunud päring faili ei kirjuta), `estfeedOk: false` = Estfeedi päring ebaõnnestus. Töövoog ei kirjuta kunagi varem mõõdetud kWh-d ega kuukirjet tühja või osalise vastuse põhjal väiksemaks.
+12. **Andmefailide lepingud:** `hinnad.json` `meta`, `paike.json` `data.meta`/`frameSeconds`/eilsed kaadrid ja `paevad.json` on kirjeldatud README-s. Päevakokkuvõtte reeglid töövoos (`compute_day_record`) ja energialehel (`computeDayTotals`) peavad jääma samaks; reeglite muutmisel suurenda `PAEVAD_VERSION`-it; lehed peavad toimima ka vanema failiga (väli puudub → käitu nagu varem). `meta.pricesOk: false` = hinnaridades on auk või tunnine samm (hinnad ise on värsked; ebaõnnestunud päring faili ei kirjuta), `estfeedOk: false` = Estfeedi päring ebaõnnestus. Töövoog ei kirjuta kunagi varem mõõdetud kWh-d ega kuukirjet tühja või osalise vastuse põhjal väiksemaks. Energialeht loeb `majaElekter`-i (võrguarvesti kuusummad) ainult aasta kokkuvõtte „Ost võrgust AAAA“ plokis; seda ei liideta inverteri summadega.

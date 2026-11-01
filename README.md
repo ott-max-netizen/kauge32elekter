@@ -26,7 +26,7 @@ Elering API → GitHub Actions → hinnad.json → GitHub Pages → index.html b
 | Fail | Sisu |
 |---|---|
 | `index.html` | **Elektriinfo**: börsihind, odavaim aeg, päikesekaart, maja lõpphind ja üldelekter (HTML ja JS) |
-| `energy-dashboard.html` | **Energia**: päikesepark, akupank, energiavoog, soovitus, „Täna kokku“ (kWh ja €), päeva graafik ja päevade graafik |
+| `energy-dashboard.html` | **Energia**: päikesepark, akupank, energiavoog, soovitus, „Täna kokku“ (kWh ja €; perioodid päevast aastani), päeva graafik (eile, täna, homme) ja päevade/kuude graafik |
 | `css/common.css` | **ühine disainisüsteem** mõlemale lehele: tokenid (hele ja tume), klaaskaardid ja mesh-taust, bento-ruudustiku alus, komponendid, graafikuraam, olekud, print ja eelistuste varuvariandid |
 | `css/index.css`, `css/energy-dashboard.css` | ainult lehe paigutus (`grid-template-areas`) ja lehepõhised komponendid |
 | `img/icons.svg` | piktogrammide sprite (`<symbol id="i-…">`), mida kasutavad mõlemad lehed |
@@ -87,7 +87,7 @@ mõnetunnise viivitusega, seega võib viimane `kwh` rida olla mitu tundi vana. F
  }}
 ```
 
-2. Käesoleva aasta ja eelneva aasta vastavate kuude kokkuarvutatud tarbimist (`kwh`) ja kogumaksumust (`eur` koos võrgutasude, aktsiisi ja käibemaksuga) massiivis `data.majaElekter`.
+2. Käesoleva aasta ja eelneva aasta vastavate kuude kokkuarvutatud tarbimist (`kwh`) ja kogumaksumust (`eur` koos võrgutasude, aktsiisi ja käibemaksuga) massiivis `data.majaElekter`. Seda loevad elektriinfo lehe „Maja üldelekter“ ja energialehe aasta kokkuvõte („Ost võrgust AAAA“).
 
 `timestamp` on perioodi algus (Unix sekundites, UTC), `price` on börsihind €/MWh ilma käibemaksuta ja `kwh` on perioodi ost võrgust kilovatt-tundides (Estfeed, liitumispunkti arvesti).
 
@@ -147,7 +147,7 @@ mõnetunnise viivitusega, seega võib viimane `kwh` rida olla mitu tundi vana. F
 
 ## Päevakokkuvõtted (`paevad.json`)
 
-Energialehe kokkuvõtte perioodivaliku (eile, 7 päeva, kuu) andmed. Faili kirjutab töövoog `uuenda-hinnad.yml`
+Energialehe kokkuvõtte perioodivaliku (eile, 7 päeva, kuud, aastad) andmed. Faili kirjutab töövoog `uuenda-hinnad.yml`
 (sama käivitus mis `hinnad.json`; eurode reeglid ja perioodikohased tasud on seal ühes kohas):
 
 ```json
@@ -410,13 +410,18 @@ Elering API      → GitHub Actions (uuenda-hinnad.yml) → hinnad.json ┴→ G
   tabelikaksik, kus iga tunni real on ka hinnaklassi sõna.
 - **Päeva graafik** (Chart.js-i virn ühise ajateljega: hinnapaneel, alumine paneel, inverteri režiimiriba ja aku
   laetuse paneel; lüliti „1 h / 15 min“: telefonis vaikimisi 1 h, laiemal ekraanil 15 min):
-  - **Inverteri režiimi riba** (ainult „Täna“): iga 15-min kaader on *laeb võrgust*, *laeb päikesest*, *aku kasutus*,
+  - **Vahelehed „Eile“, „Täna“, „Homme“.** *Eile* näitab eilset päeva 00:00–24:00 mõõtmistena: hinnad `hinnad.json`-ist
+    (fail algab eilsest 00:00-st) ja inverteri kaadrid `paike.json`-ist (fail sisaldab eilseid kaadreid), samad paneelid,
+    režiimiriba, lülitid ja tabel mis „Täna“; „praegu“-joont, möödunud perioodide tuhmistust, odavaimat akent ja
+    prognoosi pole. Plaatidel eilne madalaim, keskmine ja kõrgeim börsihind ning suurim tarbimine (inverter). Kui eilse
+    päeva viimased kaadrid pole veel failis (kesköö järel), on graafiku all „Eilsed inverteri mõõtmised on kuni HH:MM“.
+  - **Inverteri režiimi riba** („Täna“ ja „Eile“): iga 15-min kaader on *laeb võrgust*, *laeb päikesest*, *aku kasutus*,
     *müük võrku* või *aku ootel* (alla 0,2 kW). Režiim on tuletatud mõõtmistest (laadimise allikas = suurem osa
     energiavoost), mitte inverteri plaan; riba kohal „Inverter praegu: Aku kasutus · alates 17:30“ (vananenud
     mõõtmisel „Inverter (mõõdetud 14:59): …“).
   - **Hinnapaneel:** börsihinna tulbad, **ostuhind** (lõpphind koos tasudega, pidev joon), **müügihind**
     (punktiir), päeva keskmine ja odavaim 2 h aken (lõpphinna järgi).
-  - **Alumine paneel** (lüliti ainult „Täna“): *Energiavood* – päike, maja, ost võrgust (katkendjoon), aku võimsus
+  - **Alumine paneel** (lüliti „Täna“ ja „Eile“): *Energiavood* – päike, maja, ost võrgust (katkendjoon), aku võimsus
     (+ laeb / − tühjeneb) ja **aku laetus** (omaette paneel 0–100 % režiimiriba all, reservijoon 20 %,
     kaksiktelge pole); *Võrguga vahetus* – ost allapoole
     ja müük ülespoole kWh-des perioodi kohta (mõõdetud osa; tooltipis ka ≈ €).
@@ -432,12 +437,24 @@ Elering API      → GitHub Actions (uuenda-hinnad.yml) → hinnad.json ┴→ G
   - **Päeva kogusummad** (avatav plokk graafiku all): päike, maja, ost, müük, aku laetud ja tühjendatud – kWh,
     ≈ € ja keskmine s/kWh.
 - **Kokkuvõtte periood** (lüliti kaardi ülaosas, nähtav siis, kui `paevad.json` on olemas): *Täna* (`paike.json`,
-  kuni viimase mõõtmiseni), *Eile*, *7 päeva* (eilsega lõppevad 7 päeva), *jooksev kuu* (kuu algusest koos tänase
-  poolelioleva päevaga) ja *eelmine kuu* (sildid on kuu nimed). Perioodi summad on päevade summad; eurod ainult
-  siis, kui igal päeval on eurod olemas. Aku laetuse muutus on perioodi esimese ja viimase päeva järgi. Puuduvad
-  või aukudega päevad on kaardil märkusena. Mitme päeva perioodil on all **päevade graafik** (Chart.js; näitajad *Päike*,
+  kuni viimase mõõtmiseni), *Eile*, *7 päeva* (eilsega lõppevad 7 päeva), **neli viimast kalendrikuud** – kolm eelmist
+  kuud tervikuna ja jooksev kuu (kuu algusest koos tänase poolelioleva päevaga; nähtav ka kuu 1. päeval) – ning
+  **eelmine ja see aasta** (1. jaanuarist; see aasta koos tänase poolelioleva päevaga). Sildid on kuu nimed ja aastad
+  (nt 1.11.2026: *August*, *September*, *Oktoober*, *November*, *2025*, *2026*); eelmise aasta kuu pealkirjas on aasta
+  („Detsember 2026 kokku“). Perioodi summad on päevade summad; eurod ainult siis, kui igal päeval on eurod olemas. Aku
+  laetuse muutus on perioodi esimese ja viimase päeva järgi. Puuduvad või aukudega päevad on kaardil märkusena; nupp on
+  peidetud, kui perioodil andmeid pole. Mitme päeva perioodil on all **päevade graafik** (Chart.js; näitajad *Päike*,
   *Tarbimine*, *Võrk* – ost alla, müük üles, *Aku* – laetud üles, tühjendatud alla, *Energiahind* – keskmine
   ostuhind ja maja maksis s/kWh), valitud päeva rida graafiku kohal (hiir, puudutus, nooleklahvid) ja tabelivaade.
+- **Aasta vaade:** inverteri plokid on päevakokkuvõtete summa alates `paevad.json` `meta.from`-ist (päikesepargi
+  kasutuselevõtt, 1.6.2026); varasemaid kuid neis pole ja kaardil on märkus „Inverteri päevakokkuvõtted algavad …“.
+  Graafik ja tabel on **kuu kaupa** (pooleli kuu ja puudulike päevadega kuu on tuhmimad). Lisaks on plokk **„Ost
+  võrgust AAAA“** võrguarvesti (Estfeed) kuusummadest (`hinnad.json` `data.majaElekter`, arve alus): kogus, kulu
+  koos tasudega (≈, hinnang), keskmine hind, allikas ja lõikeaeg („võrguarvesti (Estfeed) · jaanuar–november, november
+  kuni 06:30 · arve alus“), puuduvad ja esialgsed kuud ning tabel „Kuude kaupa“. Jooksval aastal on ka võrdlus
+  **„aasta varem sama ajani“** (eelmise aasta samad kuud, jooksev kuu `kwhToDate`/`eurToDate`-iga; ainult siis, kui
+  kõik vastavad kuud on olemas). Aastal, millest inverteri mõõtmisi pole (2025), on kaardil ainult see plokk.
+  Võrguarvesti ja inverteri numbreid ei liideta (vt „Mõõtmiste loogika“).
 - **Täna kokku** (inverter, kuni viimase mõõtmiseni; eurod on hinnang perioodi hinnaga):
   - **Aku:** tulu = tühjendamise väärtus (lõpphinnaga) − laadimise kulu (päikesest laetud osa müügihinnaga, ülejäänu
     lõpphinnaga) ± laetuse muutus (laetuse vahe × mahutavus tänase keskmise laadimishinnaga; laadimiseta päeval maja
