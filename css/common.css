@@ -3,7 +3,7 @@
    Bento-ruudustik, klaasikaardid, komponendid ja graafikute raam. Disainispetsifikatsioon p 2–8 ja p 10.
 
    - Tokenid on AINULT selles failis (README reegel 11). Lehefailid (css/index.css, css/energy-dashboard.css)
-     sisaldavad ainult oma paigutust (grid-template-areas) ja lehepõhiseid komponente.
+     sisaldavad ainult oma paigutust (grid-template-areas) ja lehepõhiseid komponente!
    - Tokenid, mida Chart.js loeb (chartTokens), on puhtad #rrggbb väärtused; aliased lahendab getComputedStyle.
    - Tume komplekt kehtib ainult ekraanil (@media screen): prinditakse alati heledate tokenitega.
      Mõlemad lehed seavad <head>-is data-theme="light|dark"; meediapäringu plokk on JS-ita varuvariant.
