@@ -455,8 +455,13 @@ Elering API      → GitHub Actions (uuenda-hinnad.yml) → hinnad.json ┴→ G
   *Tarbimine*, *Võrk* – ost alla, müük üles, *Aku* – laetud üles, tühjendatud alla, *Energiahind* – keskmine
   ostuhind ja maja maksis s/kWh), valitud päeva rida graafiku kohal (hiir, puudutus, nooleklahvid) ja tabelivaade.
 - **Aasta vaade:** inverteri plokid on päevakokkuvõtete summa alates `paevad.json` `meta.from`-ist (päikesepargi
-  kasutuselevõtt, 1.6.2026); varasemaid kuid neis pole ja kaardil on märkus „Inverteri päevakokkuvõtted algavad …“.
-  Graafik ja tabel on **kuu kaupa** (pooleli kuu ja puudulike päevadega kuu on tuhmimad). Lisaks on plokk **„Ost
+  kasutuselevõtt, 1.6.2026). **Kuud enne seda** (2026 jaanuar–mai, kogu 2025) on omaniku otsusel võrguarvesti
+  kuusummadest (`hinnad.json` `majaElekter`): päikest ja akut veel polnud, seega päike, müük ja aku on 0 ning maja
+  tarbimine = ost võrgust (kWh ja € koos tasudega). Nii on aasta kogutarbimine kogu aasta kohta, tootmine ja aku tulevad
+  inverterist. Sama kuu kohta eri allikate arve ei liideta (võrguarvesti kuud on täielikult enne inverteri esimest päeva).
+  Pealkirja vihjes on mõlemad allikad („jaan–mai (võrguarvesti) · 1.6–1.11 · 151 päeva (inverter)“), märkuses ja
+  kogusummade tabeli selgituses samuti; graafikul ja tabelis on need kuud märgitud „(võrguarvesti)“. Graafik ja tabel on
+  **kuu kaupa** (pooleli kuu ja puudulike päevadega kuu on tuhmimad). Lisaks on plokk **„Ost
   võrgust AAAA“** võrguarvesti (Estfeed) kuusummadest (`hinnad.json` `data.majaElekter`, arve alus): kogus, kulu
   koos tasudega (≈, hinnang), keskmine hind, allikas ja lõikeaeg („võrguarvesti (Estfeed) · jaanuar–november, november
   kuni 06:30 · arve alus“), puuduvad ja esialgsed kuud ning tabel „Kuude kaupa“. Jooksval aastal on ka võrdlus

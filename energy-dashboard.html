@@ -179,7 +179,7 @@
       </div>
       <details class="table-view" id="results-sums" hidden>
         <summary><svg class="icon" aria-hidden="true" focusable="false"><use href="img/icons.svg?v=20261023#i-table"></use></svg>Kogusummad tabelina<span id="sums-until" class="table-view__sub" data-testid="sums-until"></span><span class="table-view__hint" aria-hidden="true">keri →</span><svg class="icon" aria-hidden="true" focusable="false"><use href="img/icons.svg?v=20261023#i-chevron-down"></use></svg></summary>
-        <p class="table-note">Inverteri 15-min mõõtmiste summad. Eurod on hinnang (≈): ost, maja tarbimine ja aku tühjendamine selle perioodi hinnaga koos tasudega, müük ja päikesest laetud energia müügihinnaga.</p>
+        <p class="table-note" id="sums-note">Inverteri 15-min mõõtmiste summad. Eurod on hinnang (≈): ost, maja tarbimine ja aku tühjendamine selle perioodi hinnaga koos tasudega, müük ja päikesest laetud energia müügihinnaga.</p>
         <div class="table-scroll" id="sums-body"></div>
       </details>
       <div class="days-panel" id="days-panel" hidden>
@@ -457,7 +457,7 @@ const CONFIG = {
 
 /* Tehnilised konstandid — neid ei ole tavakasutuses vaja muuta. Mõlema lehe ühised (TIME_ZONE, API_URL,
    MINUTE_MS, HOUR_MS, DAY_MS) on failis js/common.js. */
-const APP_VERSION = '2.3.0';
+const APP_VERSION = '2.3.1';
 const PRICE_TIMEOUT_MS = 20000;
 const SOLAR_TIMEOUT_MS = 30000;
 const TARIFF_TIMEOUT_MS = 5000;
@@ -2755,6 +2755,15 @@ function meterMonths(year, now) {
 }
 
 /**
+ * Võrguarvesti kuu kirje kokkuvõtte väljadeks kuul enne päikeseparki ja akut (omaniku otsus 1.11.2026): maja tarbimine =
+ * ost võrgust (arvesti kWh ja € koos tasudega), päike, müük ja aku 0. Sobib sumTotals-i sisendiks nagu päevakirje.
+ */
+function meterMonthTotals(rec) {
+  return { pvKwh: 0, pvEur: 0, loadKwh: rec.kwh, loadEur: rec.eur, importKwh: rec.kwh, importEur: rec.eur, exportKwh: 0, exportEur: 0,
+    chargeKwh: 0, chargeEur: 0, dischargeKwh: 0, dischargeEur: 0, socStart: null, socEnd: null };
+}
+
+/**
  * Aasta ost võrgust võrguarvesti järgi (hinnad.json majaElekter, arve alus): kWh ja € summa, kuud, puuduvad kuud ja
  * see aasta võrdluses „aasta varem sama ajani“ (lõppenud kuud tervikuna, jooksev kuu kwhToDate-iga; ainult kui
  * eelmise aasta kõik vastavad kuud on olemas). null, kui kuusummasid pole. Inverteri mõõtmistega seda ei liideta.
@@ -2800,9 +2809,9 @@ function meterUntilText(until, now) {
 
 /**
  * Aasta vaate plokk „Ost võrgust AAAA“ (võrguarvesti, Estfeed): kogus, kulu, keskmine hind, aasta varem sama ajani ja
- * kuude tabel. withInverter: kas ülal on ka inverteri summad (siis selgitus, et need on eraldi mõõtmine).
+ * kuude tabel. sources: ülal olevate plokkide allikad ({ meterSpan, inverterFrom }, buildPeriodView) või null (plokke pole).
  */
-function buildMeterPanel(m, now, withInverter) {
+function buildMeterPanel(m, now, sources) {
   const first = m.used[0];
   const last = m.used[m.used.length - 1];
   const span = first === last ? monthNameOf(first.key) : `${monthNameOf(first.key)}–${monthNameOf(last.key)}`;
@@ -2815,7 +2824,13 @@ function buildMeterPanel(m, now, withInverter) {
     sub ? el('p', { class: 'stat__time', text: sub }) : null
   ]);
   const notes = ['Ost võrgust võrguarvesti 15-min näitude järgi (Eleringi andmeladu Estfeed) – see on arve alus. Kulu on hinnang: sel ajal kehtinud börsihind koos tasude ja käibemaksuga.'];
-  if (withInverter) notes.push('Ülal olevad plokid on inverteri mõõtmised (ost erineb võrguarvestist ~2 %); neid numbreid ei liideta.');
+  if (sources && sources.meterSpan && sources.inverterFrom) {
+    notes.push(`Ülal olevates plokkides on ${sources.meterSpan} samad võrguarvesti kuusummad, alates ${sources.inverterFrom} inverteri mõõtmised (inverteri ost erineb võrguarvestist ~2 %).`);
+  } else if (sources && sources.meterSpan) {
+    notes.push('Ülal olevad plokid on samad võrguarvesti kuusummad (päikest ja akut polnud).');
+  } else if (sources && sources.inverterFrom) {
+    notes.push('Ülal olevad plokid on inverteri mõõtmised (ost erineb võrguarvestist ~2 %); neid numbreid ei liideta.');
+  }
   if (m.missing.length) notes.push(`Võrguarvesti andmed puuduvad: ${m.missing.map(x => monthNameOf(x.key)).join(', ')}.`);
   if (m.preliminary.length) notes.push(`${capitalize(m.preliminary.map(x => monthNameOf(x.key)).join(', '))} on esialgne (lõppenud kuu arvutatakse kuu esimestel päevadel üle).`);
   if (m.prev) notes.push(`Võrdlus: ${m.prev.year} samad kuud${m.ongoing ? `, ${monthNameOf(m.ongoing.key)} sama kuupäeva ja kellaajani` : ''}.`);
@@ -2884,31 +2899,48 @@ function buildPeriodView(d, period) {
     days.push({ key: tallinnDateKey(d.now), date: getTallinnDayStart(d.now, 0), totals: d.totals, partial: true, incomplete: false, missing: false, noData: false });
   }
   const used = days.filter(x => x.totals);
-  const totals = used.length ? sumTotals(used.map(x => x.totals)) : null;
+  // Aasta: kuud enne inverteri andmete algust (meta.from = päikesepargi kasutuselevõtu kuu) – päikest ja akut veel polnud
+  // (omaniku otsus 1.11.2026): päike ja aku 0, maja tarbimine = ost võrgust võrguarvesti kuusummast (meterMonthTotals).
+  // Sama kuu kohta eri allikate arve ei liideta: need kuud on täielikult enne inverteri esimest päeva.
+  const startMonth = range.unit === 'month' && from ? from.slice(0, 7) : null;
+  const preItems = startMonth ? meterMonths(range.year, d.now).filter(m => m.key < startMonth).map(m => {
+    const rec = m.rec && !m.rec.noData ? m.rec : null;
+    return { key: m.key, unit: 'month', meter: true, date: dateFromKey(`${m.key}-01`), totals: rec ? sumTotals([meterMonthTotals(rec)]) : null,
+      partial: false, incomplete: false, missing: !m.rec, noData: Boolean(m.rec && m.rec.noData), missingDays: 0, gapDays: 0 };
+  }) : [];
+  const preUsed = preItems.filter(x => x.totals);
+  const totals = used.length || preUsed.length ? sumTotals([...preUsed, ...used].map(x => x.totals)) : null;
   const first = used[0];
   const last = used[used.length - 1];
   const fmtDay = x => dateShortFormatter.format(x.date);
+  const fmtMonths = list => (list.length === 1 ? monthShortFormatter.format(list[0].date)
+    : `${monthShortFormatter.format(list[0].date)}–${monthShortFormatter.format(list[list.length - 1].date)}`);
   let hint = '';
   if (first) {
     hint = first === last ? `${fmtDay(first)} (inverter)` : `${fmtDay(first)}–${fmtDay(last)} · ${used.length} päeva (inverter)`;
     if (last.partial && last.totals.through) hint += ` · täna kuni ${formatTime(last.totals.through)}`;
   }
+  if (preUsed.length) hint = `${fmtMonths(preUsed)} (võrguarvesti)${hint ? ` · ${hint}` : ''}`;
   const notes = [];
   const missing = days.filter(x => x.missing).length;
   const incomplete = days.filter(x => x.incomplete).length;
   if (missing) notes.push(`${missing} päeva andmed pole veel laaditud${state.days.meta && state.days.meta.pending ? ' (laaditakse järk-järgult)' : ''}.`);
   if (incomplete) notes.push(`${incomplete} päeval on inverteri mõõtmistes auke; nende päevade kogused on mõõdetud osa summa.`);
   const meter = YEARS_BACK.has(period) ? buildMeterSummary(range.year, d.now) : null;
+  // Allikad aasta vaates: kuud võrguarvestist (enne päikeseparki) ja/või inverteri päevad (kogusummade tabel, võrguarvesti plokk)
+  let sources = null;
   if (range.unit === 'month') {
-    // Aasta: inverteri summad algavad päevakokkuvõtete algusest (päikesepargi kasutuselevõtt), varasemaid kuid neis pole
-    if (from && from > range.keys[0]) {
-      notes.unshift(used.length
-        ? `Inverteri päevakokkuvõtted algavad ${formatDayKey(from)}: aku, päikese ja maja tarbimise summad on sellest päevast.`
-        : `Inverteri päevakokkuvõtted algavad ${formatDayKey(from)}: ${range.year}. aasta kohta aku, päikese ja maja tarbimise mõõtmisi pole.`);
+    const span = preItems.length ? `${monthNameOf(preItems[0].key)}–${monthNameOf(preItems[preItems.length - 1].key)}` : '';
+    sources = { meterSpan: preUsed.length ? span : '', inverterFrom: used.length && from ? formatDayKey(from) : '' };
+    if (preItems.length) {
+      notes.unshift(`${capitalize(preItems.length === 12 ? `${range.year}. aasta` : span)}: päikest ja akut veel polnud – päike ja aku on 0, maja tarbimine = ost võrgust võrguarvesti (Estfeed) kuusummast.${used.length ? ` Inverteri mõõtmised alates ${formatDayKey(from)}.` : ''}`);
+    } else if (from && from > range.keys[0]) {
+      // Päevakokkuvõtted algavad aasta esimese kuu keskel: sellele eelnevaid päevi summades pole
+      notes.unshift(`Inverteri päevakokkuvõtted algavad ${formatDayKey(from)}: aku, päikese ja maja tarbimise summad on sellest päevast.`);
     }
-    if (!used.length && meter) hint = `${monthNameOf(meter.used[0].key)}–${monthNameOf(meter.used[meter.used.length - 1].key)} (võrguarvesti)`;
+    if (!used.length && !preUsed.length && meter) hint = `${monthNameOf(meter.used[0].key)}–${monthNameOf(meter.used[meter.used.length - 1].key)} (võrguarvesti)`;
   }
-  return { ...range, totals, days: range.unit === 'month' ? monthItems(days) : days, hint, notes, meter };
+  return { ...range, totals, days: range.unit === 'month' ? [...preItems, ...monthItems(days)] : days, hint, notes, meter, sources };
 }
 
 function renderResults(d) {
@@ -2943,7 +2975,7 @@ function renderResults(d) {
   if (!t || (state.period === 'today' && !t.through)) {
     // Aasta ilma inverteri päevadeta (nt enne päikeseparki): ainult võrguarvesti summa
     hint.textContent = view.meter ? view.hint : '';
-    if (view.meter) setChildren(host, buildMeterPanel(view.meter, d.now, false), notesEl);
+    if (view.meter) setChildren(host, buildMeterPanel(view.meter, d.now, null), notesEl);
     else host.replaceChildren(el('p', { class: 'placeholder', text: state.period === 'today' ? 'Tänaseid inverteri mõõtmisi pole veel.' : 'Selle perioodi päevakokkuvõtteid pole veel.' }));
     renderSums(null);
     renderDaysPanel(d, null);
@@ -2975,7 +3007,7 @@ function renderResults(d) {
   setChildren(host,
     el('div', { class: 'results' }, blocks),
     buildEnergyPrice(t, view.word),
-    view.meter ? buildMeterPanel(view.meter, d.now, true) : null,
+    view.meter ? buildMeterPanel(view.meter, d.now, view.sources) : null,
     notesEl
   );
   renderSums(view);
@@ -3000,10 +3032,16 @@ function renderSums(view) {
   ].filter(r => r[3] != null) : [];
   details.hidden = !rows.length;
   byId('sums-until').textContent = rows.length && view.hint ? `· ${view.hint}` : '';
+  // Allikas: aasta vaates võivad kuud enne päikeseparki olla võrguarvestist (buildPeriodView sources)
+  const src = view && view.sources;
+  const source = src && src.meterSpan
+    ? `${capitalize(src.meterSpan)}: võrguarvesti kuusummad (päike ja aku 0)${src.inverterFrom ? `, alates ${src.inverterFrom} inverteri 15-min mõõtmiste summad` : ''}.`
+    : 'Inverteri 15-min mõõtmiste summad.';
+  byId('sums-note').textContent = `${source} Eurod on hinnang (≈): ost, maja tarbimine ja aku tühjendamine selle perioodi hinnaga koos tasudega, müük ja päikesest laetud energia müügihinnaga.`;
   if (!rows.length) { host.replaceChildren(); return; }
   const dash = '—';
   host.replaceChildren(el('table', { class: 'data-table data-table--sums' }, [
-    el('caption', { class: 'visually-hidden', text: `${view.title}: kogusummad inverteri mõõtmistest` }),
+    el('caption', { class: 'visually-hidden', text: `${view.title}: kogusummad (${src && src.meterSpan ? (src.inverterFrom ? 'võrguarvesti ja inverter' : 'võrguarvesti') : 'inverteri mõõtmised'})` }),
     el('thead', {}, el('tr', {}, [['Sari'], ['Kogus', 'kWh'], ['Eurodes', '≈ €'], ['Keskmine', 's/kWh']]
       .map(([text, sub]) => el('th', { scope: 'col' }, [text, sub ? el('span', { class: 'th-sub', text: sub }) : null])))),
     el('tbody', {}, rows.map(([color, keyClass, label, kwh, eur, note]) => el('tr', {}, [
@@ -3092,7 +3130,8 @@ function describeDay(day, metric) {
   }[metric].filter(Boolean);
   let suffix = day.partial && t.through ? ` (täna kuni ${formatTime(t.through)})` : day.incomplete ? ' (mõõtmistes auke)' : '';
   if (day.unit === 'month') {
-    const notes = [day.partial ? (t.through ? `pooleli, täna kuni ${formatTime(t.through)}` : 'pooleli') : null,
+    const notes = [day.meter ? 'võrguarvesti; päikest ja akut polnud' : null,
+      day.partial ? (t.through ? `pooleli, täna kuni ${formatTime(t.through)}` : 'pooleli') : null,
       day.missingDays ? `${day.missingDays} päeva andmed puuduvad` : null, day.gapDays ? `${day.gapDays} päeval mõõtmistes auke` : null].filter(Boolean);
     suffix = notes.length ? ` (${notes.join(', ')})` : '';
   }
@@ -3234,7 +3273,7 @@ function renderDaysPanel(d, view) {
   const days = view.days;
   const last = days[days.length - 1];
   state.daysView = view;
-  const key = [state.period, metric, state.days.version, days[0].key, days.length, last.totals && last.totals.through ? last.totals.through.getTime() : ''].join('|');
+  const key = [state.period, metric, state.days.version, state.prices.version, days[0].key, days.length, last.totals && last.totals.through ? last.totals.through.getTime() : ''].join('|');
   if (key === state.daysKey) return;
   state.daysKey = key;
   if (state.daysIndex == null || state.daysIndex >= days.length) state.daysIndex = days.length - 1;
@@ -3257,13 +3296,13 @@ function renderDaysTable(days) {
   const header = [[months ? 'Kuu' : 'Päev'], ['Päike', 'kWh'], ['Maja', 'kWh'], ['Ost', 'kWh'], ['Müük', 'kWh'], ['Laetud', 'kWh'], ['Tühjendatud', 'kWh'], ['Võrgu netokulu', '≈ €'], ['Aku tulu', '≈ €'], ['Maja maksis', 's/kWh']];
   const rows = days.map(day => {
     const t = day.totals;
-    const cells = [dayItemLabel(day) + (day.partial ? ' (pooleli)' : '')];
+    const cells = [dayItemLabel(day) + (day.partial ? ' (pooleli)' : day.meter ? ' (võrguarvesti)' : '')];
     if (t) cells.push(n1(t.pvKwh), n1(t.loadKwh), n1(t.importKwh), n1(t.exportKwh), n1(t.chargeKwh), n1(t.dischargeKwh), n2(t.netGridEur), t.batteryGainEur != null ? formatSigned2(t.batteryGainEur) : dash, n2(dayMetricValue(t, 'paid')));
     else cells.push(...Array(9).fill(dash));
     return el('tr', {}, cells.map((text, i) => (i === 0 ? el('th', { scope: 'row', text }) : el('td', { text }))));
   });
   byId('days-table-body').replaceChildren(el('table', { class: 'data-table' }, [
-    el('caption', { class: 'visually-hidden', text: `${months ? 'Kuude' : 'Päevade'} kokkuvõtted inverteri mõõtmistest` }),
+    el('caption', { class: 'visually-hidden', text: `${months ? 'Kuude' : 'Päevade'} kokkuvõtted inverteri mõõtmistest${days.some(x => x.meter) ? ' (enne päikeseparki võrguarvestist)' : ''}` }),
     el('thead', {}, el('tr', {}, header.map(([text, sub]) => el('th', { scope: 'col' }, [text, sub ? el('span', { class: 'th-sub', text: sub }) : null])))),
     el('tbody', {}, rows)
   ]));
