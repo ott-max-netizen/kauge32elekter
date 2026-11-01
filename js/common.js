@@ -1338,3 +1338,27 @@ const THEME_LABELS = { auto: 'Teema: automaatne', dark: 'Teema: tume', light: 'T
 function start() {
   Lukk.valmis().then(init, error => console.error('Lukk: lehe avamine ebaõnnestus', error));
 }
+
+/* ==========================================================================
+   9. Külastuste loendus (GoatCounter, js/vendor/goatcounter-count.js; README „Külastuste statistika“)
+   Lehe avamise loendab skript ise (lehe <head>-i silt); siin ainult parooli vaate sündmused (js/lukk.js → k32:lukk).
+   Saadetakse ainult sündmuse nimi – mitte kunagi lehe andmeid (hinnad, kWh, eurod).
+   ========================================================================== */
+const COUNT_EVENTS = { kysitud: 'Parooli vaade', avatud: 'Parool sisestatud' };
+
+/** Loendussündmus GoatCounterisse. Kui skript (async) pole veel laaditud, oodatakse lehe load-sündmust; blokeeritud või
+ *  puuduva skripti korral ei tehta midagi ja loenduse viga ei mõjuta lehte. */
+function countEvent(name, title) {
+  const send = () => {
+    const gc = window.goatcounter;
+    if (!gc || typeof gc.count !== 'function') return;
+    try { gc.count({ path: name, title, event: true }); } catch (error) { /* loendus ei tohi lehte segada */ }
+  };
+  if (document.readyState === 'complete') send();
+  else window.addEventListener('load', send, { once: true });
+}
+
+document.addEventListener('k32:lukk', event => {
+  const title = COUNT_EVENTS[event.detail];
+  if (title) countEvent(`lukk-${event.detail}`, title);
+});

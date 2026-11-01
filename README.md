@@ -32,6 +32,7 @@ Elering API → GitHub Actions → hinnad.json → GitHub Pages → index.html b
 | `img/icons.svg` | piktogrammide sprite (`<symbol id="i-…">`), mida kasutavad mõlemad lehed |
 | `js/common.js` | **mõlema lehe ühine skriptikood**: Tallinna aeg, vormindamine, hinnaarvutuste abifunktsioonid, DOM-abi ja graafikute ühisosa (Chart.js virn, tooltip, pluginad); laaditakse enne lehe põhiskripti, lehepõhine kood (`CONFIG`, olek, renderdamine) jääb HTML-i |
 | `js/vendor/chart.umd.min.js` | Chart.js 4.5.1 (MIT, `js/vendor/CHART_LICENSE.md`); graafikud joonistatakse sellega, teek on repo sees, sest CSP lubab skripte ainult samalt saidilt |
+| `js/vendor/goatcounter-count.js` | GoatCounteri loendusskript (`count.js`, ISC, `js/vendor/GOATCOUNTER_LICENSE.md`): anonüümne külastuste statistika, vt „Külastuste statistika“ |
 | `hinnad.json`, `paike.json`, `paevad.json` | GitHub Actionsi kirjutatud andmefailid (`paevad.json`: inverteri päevakokkuvõtted kWh ja €); parooliga kaitstud lehel krüpteeritud ümbrikud |
 | `js/lukk.js`, `lukk.json`, `.github/scripts/lukk.py`, `.github/scripts/requirements-lukk.txt` | **parooliga kaitse**: brauseri avamisvaade ja dekrüpteerimine, lehe sool ja parooli kontrollväärtus, töövoogude krüpteerimisskript ja selle räsidega lukustatud sõltuvused (vt „Parooliga kaitse“) |
 | `robots.txt` | otsingumootorite robotitele: andme- ja abifailid on blokeeritud; HTML-lehtedel on `noindex, nofollow, noarchive` |
@@ -579,6 +580,36 @@ lihtsalt kustutada, jääb töövoog veaga seisma (krüpteeritud faili ei saa av
   Artifact and log retention**).
 - `file://` alt avatud lehel (ilma HTTPS-ita) WebCrypto ei tööta; andmefaile sealt niikuinii ei loeta.
 
+## Külastuste statistika
+
+Lehtede külastusi loendab [GoatCounter](https://www.goatcounter.com/) (töölaud **https://kauge32.goatcounter.com**, konto on
+haldajal). See ei kasuta küpsiseid ega püsivaid kasutaja-ID-sid ja brauserisse midagi ei salvesta, seega nõusolekubännerit
+üldjuhul vaja pole; lehe jaluses on lühike märge. Töölaud jäägu mitteavalikuks (GoatCounteri seadetes avalik vaade väljas).
+
+**Mida loendatakse**
+
+- **Lehe avamine:** Elektriinfo (`/`) ja Energia (`/energy-dashboard.html`); nimi ja pealkiri on fikseeritud lehe
+  `<head>`-i sildi `data-goatcounter-settings`-is (sama leht ei jagune aadressi kuju järgi). Kaasa lähevad ekraani laius
+  ja tulek (eelmine leht, nt sõnumi link); riigi tuletab GoatCounter päringust.
+- **Sündmused** (parooliga lehel, `js/lukk.js` → `js/common.js` `countEvent`): `lukk-kysitud` „Parooli vaade“ (avamisvaade
+  näidati) ja `lukk-avatud` „Parool sisestatud“ (õige parool). Salvestatud võtmega avamine sündmust ei tee. Nende suhe
+  näitab, kui paljud parooli vaatest edasi jõuavad.
+- **Ei loendata:** lehe andmepäringuid (hinnad iga 10 min, energialeht iga 5 min) ega minutitikki – lahti seisev leht on
+  üks avamine. Lehe andmeid (hinnad, kWh, eurod) ei saadeta kunagi.
+
+**Kuidas numbreid lugeda:** GoatCounteri unikaalsed külastused on seansid (mitte inimesed); reklaamiblokeerijaga
+brauserid ei loe, seega on arvud alammäär. `localhost`-i ja `file://` avamisi ei loendata (testimine).
+
+**Oma külastused välja:** ava selles brauseris leht aadressiga, mille lõpus on `#toggle-goatcounter` (nt
+`…/kauge32elekter/#toggle-goatcounter`); teade kinnitab, et loendus on selles brauseris välja lülitatud. Sama aadress
+lülitab selle tagasi sisse.
+
+**Tehniliselt:** skript `js/vendor/goatcounter-count.js` (GoatCounteri `count.js`, commit `c031008`) on repo sees, sest
+CSP lubab skripte ainult samalt saidilt; see laaditakse `async`, nii et lehe joonistamist ei pidurda. Loendus läheb
+`navigator.sendBeacon`-iga aadressile `https://kauge32.goatcounter.com/count` (CSP `connect-src https:`); pildipõhine
+varuvariant on CSP `img-src`-iga tahtlikult blokeeritud. Uuendamisel vaheta fail GoatCounteri repo `public/count.js`-iga,
+uuenda `js/vendor/GOATCOUNTER_LICENSE.md`-i commit ja HTML-i linkides `?v=`.
+
 ## Otsingumootorid
 
 Mõlemal lehel on `<meta name="robots" content="noindex, nofollow, noarchive">` ja repo juures `robots.txt`.
@@ -600,7 +631,9 @@ tegemisega.
   kus secret'eid pole. Mõõteväärtusi logisse ei kirjutata (logid on avalikud).
 - Lehed lisavad sisu ainult `textContent`/`createElement` kaudu (mitte `innerHTML`) ning
   `Content-Security-Policy` meta-silt lubab skripte ja stiile ainult samalt saidilt ning väliseid
-  päringuid ainult HTTPS-iga. Uue välise teenuse lisamisel uuenda CSP-d.
+  päringuid ainult HTTPS-iga. Uue välise teenuse lisamisel uuenda CSP-d. Ainus kolmanda osapoole skript on repo sees olev
+  GoatCounteri loendusskript (`js/vendor/goatcounter-count.js`, vt „Külastuste statistika“); see saadab ainult lehe nime,
+  pealkirja, ekraani laiuse ja tuleku, mitte lehe andmeid.
 - GitHub Pagesi leht ja avalik repo on kõigile nähtavad: lehekood on avalik, andmefailid (`hinnad.json`-i
   15-min tarbimine, `paike.json`-i võimsused) on ilma paroolita loetavad ainult siis, kui parooliga kaitse on
   välja lülitatud; varasemad commit'id on tavatekstina alles. Kõik sama konto `*.github.io` lehed jagavad brauseri
