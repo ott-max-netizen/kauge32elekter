@@ -4,6 +4,24 @@ See fail kirjeldab rakenduse `index.html` versioonimuudatusi, arhitektuurilisi k
 
 ---
 
+## [3.3.0] ja energy-dashboard.html [2.5.0] — 2026-11-01 · külastuste statistika (GoatCounter)
+
+Lehtede külastusi loendab küpsisteta GoatCounter (töölaud `kauge32.goatcounter.com`, README „Külastuste statistika“).
+`APP_VERSION` `3.3.0` ja `2.5.0`, `js/common.js?v=20261101b`, `js/lukk.js?v=20261101`.
+
+- `js/vendor/goatcounter-count.js` (GoatCounteri `count.js`, commit `c031008`, ISC, `js/vendor/GOATCOUNTER_LICENSE.md`) on
+  repo sees, sest CSP lubab ainult sama saidi skripte; laaditakse `async`, loendus `sendBeacon`-iga. CSP-d ei muudetud.
+- Loendatakse lehe avamine fikseeritud nime ja pealkirjaga (Elektriinfo `/`, Energia `/energy-dashboard.html`), mitte
+  andmepäringuid ega minutitikki; parooliga lehel lisaks sündmused `lukk-kysitud` ja `lukk-avatud` (`js/lukk.js` saadab
+  `k32:lukk`, `js/common.js` `countEvent`). Lehe andmeid ei saadeta.
+- Mõlema lehe jaluses märge „Külastusi loendatakse anonüümselt (GoatCounter), küpsiseid ei kasutata.“
+- Kontrollitud Playwrightiga (loenduspäringud kinni püütud): üks lehevaade lehe kohta õige nime ja pealkirjaga, saadetakse
+  ainult lehe nimi, pealkiri, ekraani laius ja tulek; 25 min andmeuuendusi ei loenda; parooli vaade ja õige parool annavad
+  kumbki ühe sündmuse (vale parool mitte), salvestatud võtmega avamine ainult lehevaate; skripti puudumisel (blokeerija)
+  töötab leht vigadeta. Muu lehe sisu on kõigil 184 hetktõmmisel sama (v.a jaluse märge ja versioon).
+
+---
+
 ## energy-dashboard.html [2.4.1] ja töövoog — 2026-11-01 · trendid: tarbimine, „maja maksis“, tulu, börsihind
 
 Analüütiku ülevaate (2.4.0) parandused: ost üksi ei näita, kas päike või väiksem tarbimine vähendas ostu; ostuhind

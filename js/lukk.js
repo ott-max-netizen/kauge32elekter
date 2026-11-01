@@ -263,6 +263,11 @@
     get text() { return byId('lukk-tekst'); }
   };
 
+  /** Teade lehele (k32:lukk, detail 'kysitud' | 'avatud'): js/common.js loendab need külastuste statistikas. */
+  function teata(olek) {
+    try { document.dispatchEvent(new CustomEvent('k32:lukk', { detail: olek })); } catch (error) { /* teade pole kriitiline */ }
+  }
+
   function naitaViga(msg) {
     const el = ui.error;
     if (!el) return;
@@ -305,6 +310,7 @@
     const promise = new Promise(r => { resolve = r; });
     avamine = { promise, resolve };
     naitaVaadet(true);
+    teata('kysitud');
     naitaViga(teade || '');
     tooOlek(false);
     return promise;
@@ -330,6 +336,7 @@
       parool = pw;
       votmed.set(votmeId(lukuInfo.salt, lukuInfo.iter), voti);
       await salvestaVoti(voti, lukuInfo, Boolean(ui.remember && ui.remember.checked));
+      teata('avatud');
       lopetaAvamine();
     } catch (error) {
       console.error('Lukk: avamine ebaõnnestus', error);
