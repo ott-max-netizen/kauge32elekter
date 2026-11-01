@@ -4,6 +4,61 @@ See fail kirjeldab rakenduse `index.html` versioonimuudatusi, arhitektuurilisi k
 
 ---
 
+## energy-dashboard.html [2.4.1] ja töövoog — 2026-11-01 · trendid: tarbimine, „maja maksis“, tulu, börsihind
+
+Analüütiku ülevaate (2.4.0) parandused: ost üksi ei näita, kas päike või väiksem tarbimine vähendas ostu; ostuhind
+arvestil ei ole pärast parki see, mis tarbitud kWh maksab; aku ja päikese raha puudus; börsihind eraldi tasudest.
+`APP_VERSION` `2.4.1`, `css/energy-dashboard.css?v=20261101c`.
+
+- Töövoog: kuukirjes `spotAvg` = kuu kWh-ga kaalutud keskmine börsihind (€/MWh ilma KM-ta); sama `CALC_VERSION` 4
+  (pole veel main'is). Kontrollitud: 1 kWh × 40 + 2 kWh × 100 → 80.
+- kWh-paneel: maja tarbimine kuus ja 12 kuu keskmine (enne parki = ost arvestist, alates pargist inverter).
+- Hinnapaneel: börsihind kuus (katkendjoon), ostuhind kuus ja 12 k, „maja maksis“ kuus ja 12 k (netokulu / tarbitud
+  kWh; ainult inverteri kuud).
+- Uus neljas paneel **tulu, € / kuu**: aku tulu (`batteryGainEur`), päikese väärtus (`pvEur`) ja öötariifi sääst (öösel
+  ostetud kWh × (päeva − öö võrgutasu) × KM, praeguste tasudega) virnastatult + summa 12 kuu keskmine; telg algab
+  nullist, kui negatiivne osa on tühine.
+- Plaadid on nüüd 12 lõppenud kuu **summad**: ost (kWh, ≈ €, öö osa), maja tarbimine (päikese osa), maja maksis s/kWh
+  (kõrval ostuhind), tulu kokku (aku, päike, öötariif). Kitsal kaardil (< 400 px) väärtus 18 px, et „kWh“ ei murduks.
+- Tähelepanekud: pargi järgse perioodi tarbimine vs aasta varem (siis tarbimine = ost) ja päikese + aku kaetud osa;
+  börsihinna vs lõpphinna muutus poolperioodide vahel (turg vs tasud). Inspektor, legend (4 rühma), selgitus ja tabel
+  (21 veergu; ° = tarbimine arvestist) täiendatud.
+- Kontroll: Playwright 1280 hele, 700, 390 tume; JS-vigu pole, horisontaalset kerimist pole; skeleton mõõdetud.
+
+---
+
+## energy-dashboard.html [2.4.0] ja töövoog — 2026-11-01 · „Trendid“: 12 kuu libisev keskmine
+
+Omaniku soov (analüütiku vaates): 12 kuu libisev keskmine elektri kulule (€ ja kWh), päikese toodangule ning öösel ja
+päeval ostetud energiale, lisaks muu kasulik info olemasolevatest andmetest. `APP_VERSION` `2.4.0`,
+`css/energy-dashboard.css?v=20261101b`, töövoo `CALC_VERSION` 4.
+
+### 1. Töövoog `uuenda-hinnad.yml`: öö/päeva jaotus kuukirjes
+- Öötariifi reegel eraldi funktsioonis `is_night_tariff` (sama mis `calc_final_cents_kwh`-s: öötunnid, nädalavahetus,
+  riigipühad). Kuu kirjesse lisanduvad `kwhOo`, `kwhPaev`, `eurOo`, `eurPaev` (kuutasu jaotusest välja). Kontrollitud:
+  öö + päev = kokku nii kWh-s kui eurodes; oktoober 2026 ühtlase tarbimisega 55,6 % öötariifi ajal (9 nädalavahetuse
+  päeva + 22 × 9 öötundi).
+- `CALC_VERSION` 3 → 4: kõik vahemälus olevad kuud (kuni 24) arvutatakse järgmisel käivitusel uuesti (Estfeedi päringud,
+  `MAX_BACKFILL_PAIRS` 12 → ühe käivitusega); kuni selleni näitab leht „jaotus puudub“. README „Kuu kirje“.
+
+### 2. Energialeht: kaart „Trendid: 12 kuu libisev keskmine“ (`buildTrendMonths`, `renderTrends`)
+- Kolm Chart.js paneeli ühise kuuteljega (`chartStack` kind `category`, kuni 24 kuud): kWh (ost öösel/päeval
+  virnastatud tulbad, jaotuseta kuu neutraalne; päike kuus punktiir; ost ja päike 12 kuu keskmine jooned), € (kulu kuus,
+  12 kuu keskmine), s/kWh (kuu keskmine hind, 12 kuu keskmine). Jooned on omaette virnades (virnastatud telg ei liida
+  neid). Päike enne päikeseparki 0 (omaniku otsus 1.11.2026), puudulik kuu märgitud „*“.
+- Libisev keskmine ainult lõppenud kuudele, mille 12 kuu aken on täielik; jooksev kuu tuhmim ega osale.
+- Plaadid (viimased 12 lõppenud kuud): ost kWh ja ≈ €, keskmine hind, öötariifi ajal ostetud osa, päike.
+  Tähelepanekud (`trendInsights`): päikesepargi järgsed kuud vs aasta varem samad kuud (ost, kulu, toodang), öö osakaal,
+  viimase kuu hind vs 12 kuu keskmine, 12 kuu keskmise suund viimase 3 kuuga – iga lause ainult olemasolevate andmetega.
+- Inspektor (hiir, puudutus, nooleklahvid; ekraanilugejale ainult klaviatuurilt), HTML-legend kolme rühmaga, selgitus
+  (meetod, allikad, öötariifi aeg CONFIG-ist), tabelivaade (kuu, ost, öösel, päeval, kulu, hind, päike ja 12 kuu
+  keskmised). `normalizeMaja` loeb uued väljad; vanem fail → „jaotus puudub“.
+- CSS: bento ala `trendid` (12 veergu), paneelide kõrgused, `.trend-insights`, skeleton mõõdetud kõrgusega.
+- Kontroll: Playwright 1280 hele ja 390 tume, 24 sünteetilist kuud (osa jaotuseta, üks `noData`), klaviatuur, JS-vigu
+  pole, horisontaalset kerimist pole.
+
+---
+
 ## energy-dashboard.html [2.3.1] — 2026-11-01 · aasta kokkuvõte: kuud enne päikeseparki võrguarvestist
 
 Omaniku otsus: kuudel, mille kohta inverteri andmeid pole (2026 jaanuar–mai, kogu 2025), päikest ja akut veel polnud –

@@ -141,7 +141,9 @@ jobs:
           # Kuu kWh/€ arvutusreeglite versioon. Suurenda, kui reeglid muutuvad: vahemälus olevad
           # teise versiooniga kuud arvutatakse uuesti. 2 = riigipühade öötariif, KM 22% enne 01.07.2025.
           # 3 = tasude ajalugu (TASUDE_AJALUGU), kuutasu pooliku kuu korral osa kaupa, kirje sõrmejälg cfg.
-          CALC_VERSION = 3
+          # 4 = kuu kWh ja € jaotus öö- ja päevatariifi ajaks (kwhOo/kwhPaev, eurOo/eurPaev) ja kWh-ga kaalutud
+          #     keskmine börsihind spotAvg (€/MWh ilma KM-ta); energialehe trendid.
+          CALC_VERSION = 4
           KM_AJALUGU = ((datetime(2025, 7, 1, tzinfo=TZ), 22.0),)  # (kuni, määr %): enne 01.07.2025 oli KM 22%
 
           # Tasude ajalugu: CONFIG.hinnad võti -> ((kuni, väärtus), ...) kasvavas järjekorras, nagu KM_AJALUGU.
@@ -301,16 +303,20 @@ jobs:
                   return True
               return (day - easter_sunday(day.year)).days in (-2, 0, 49)
 
-          def calc_final_cents_kwh(spot_eur_mwh, dt_tl, cfg):
-              """Arvutab maja lõpphinna (s/kWh koos võrgutasu, aktsiisi, marginaali ja KM-ga) antud hetkel
-              sel hetkel kehtinud tasudega (TASUDE_AJALUGU, KM_AJALUGU)."""
-              spot_s = spot_eur_mwh / 10.0
+          def is_night_tariff(dt_tl, cfg):
+              """Kas hetkel kehtib öötariif (öötunnid, nädalavahetus, riigipüha; sama reegel mis lehtedel)."""
               is_weekend = dt_tl.weekday() in (5, 6)  # 5=L, 6=P
               hour = dt_tl.hour + dt_tl.minute / 60.0
               algus, lopp = cfg["algus"], cfg["lopp"]
               is_night_hour = (hour >= algus or hour < lopp) if algus > lopp else (algus <= hour < lopp)
               is_holiday = cfg["riigipuhadOnOo"] and is_public_holiday(dt_tl.date())
-              is_night = (cfg["nadalavahetusOnOo"] and is_weekend) or is_holiday or is_night_hour
+              return bool((cfg["nadalavahetusOnOo"] and is_weekend) or is_holiday or is_night_hour)
+
+          def calc_final_cents_kwh(spot_eur_mwh, dt_tl, cfg):
+              """Arvutab maja lõpphinna (s/kWh koos võrgutasu, aktsiisi, marginaali ja KM-ga) antud hetkel
+              sel hetkel kehtinud tasudega (TASUDE_AJALUGU, KM_AJALUGU)."""
+              spot_s = spot_eur_mwh / 10.0
+              is_night = is_night_tariff(dt_tl, cfg)
               network = tariff_at(cfg, "vorgutasuOo" if is_night else "vorgutasuPaev", dt_tl)
               subtotal = (spot_s + tariff_at(cfg, "marginaal", dt_tl) + network
                           + tariff_at(cfg, "taastuvenergiaTasu", dt_tl) + tariff_at(cfg, "aktsiis", dt_tl))
@@ -555,6 +561,9 @@ jobs:
 
               total_kwh = 0.0
               total_eur = 0.0
+              night_kwh = 0.0   # öötariifi ajal ostetud (öötunnid, nädalavahetus, riigipüha); päev = kokku − öö
+              night_eur = 0.0
+              spot_kwh = 0.0    # kWh-ga kaalutud börsihind: Σ(kWh × €/MWh) / Σ kWh
               todate_kwh = 0.0
               todate_eur = 0.0
               count = 0
@@ -579,6 +588,10 @@ jobs:
                   eur = kwh * final_s / 100.0
                   total_kwh += kwh
                   total_eur += eur
+                  spot_kwh += kwh * spot_eur_mwh
+                  if is_night_tariff(dt_tl, tariff_cfg):
+                      night_kwh += kwh
+                      night_eur += eur
                   if cutoff_ts is not None and ts < cutoff_ts:
                       todate_kwh += kwh
                       todate_eur += eur
@@ -595,10 +608,16 @@ jobs:
               if cutoff_ts is not None and todate_kwh > 0 and kuutasu > 0:
                   todate_eur += kuutasu * min(1.0, max(0, cutoff_ts - t0) / month_s)
 
+              # Öö/päeva jaotus (kuutasu jääb jaotusest välja: see pole tariifiajaga seotud)
               rec = {
                   "kuu": f"{year:04d}-{month:02d}",
                   "kwh": round(total_kwh, 2),
                   "eur": round(total_eur, 2),
+                  "kwhOo": round(night_kwh, 2),
+                  "kwhPaev": round(total_kwh - night_kwh, 2),
+                  "eurOo": round(night_eur, 2),
+                  "eurPaev": round(total_eur - night_eur - (kuutasu * min(1.0, (t1 - t0) / month_s) if total_kwh > 0 and kuutasu > 0 else 0.0), 2),
+                  "spotAvg": round(spot_kwh / total_kwh, 2) if total_kwh > 0 else None,
                   "complete": bool(complete_flag),
                   "v": CALC_VERSION,
                   "cfg": CFG_HASH,
