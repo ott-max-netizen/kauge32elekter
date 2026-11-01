@@ -4,6 +4,29 @@ See fail kirjeldab rakenduse `index.html` versioonimuudatusi, arhitektuurilisi k
 
 ---
 
+## energy-dashboard.html [2.4.1] ja töövoog — 2026-11-01 · trendid: tarbimine, „maja maksis“, tulu, börsihind
+
+Analüütiku ülevaate (2.4.0) parandused: ost üksi ei näita, kas päike või väiksem tarbimine vähendas ostu; ostuhind
+arvestil ei ole pärast parki see, mis tarbitud kWh maksab; aku ja päikese raha puudus; börsihind eraldi tasudest.
+`APP_VERSION` `2.4.1`, `css/energy-dashboard.css?v=20261101c`.
+
+- Töövoog: kuukirjes `spotAvg` = kuu kWh-ga kaalutud keskmine börsihind (€/MWh ilma KM-ta); sama `CALC_VERSION` 4
+  (pole veel main'is). Kontrollitud: 1 kWh × 40 + 2 kWh × 100 → 80.
+- kWh-paneel: maja tarbimine kuus ja 12 kuu keskmine (enne parki = ost arvestist, alates pargist inverter).
+- Hinnapaneel: börsihind kuus (katkendjoon), ostuhind kuus ja 12 k, „maja maksis“ kuus ja 12 k (netokulu / tarbitud
+  kWh; ainult inverteri kuud).
+- Uus neljas paneel **tulu, € / kuu**: aku tulu (`batteryGainEur`), päikese väärtus (`pvEur`) ja öötariifi sääst (öösel
+  ostetud kWh × (päeva − öö võrgutasu) × KM, praeguste tasudega) virnastatult + summa 12 kuu keskmine; telg algab
+  nullist, kui negatiivne osa on tühine.
+- Plaadid on nüüd 12 lõppenud kuu **summad**: ost (kWh, ≈ €, öö osa), maja tarbimine (päikese osa), maja maksis s/kWh
+  (kõrval ostuhind), tulu kokku (aku, päike, öötariif). Kitsal kaardil (< 400 px) väärtus 18 px, et „kWh“ ei murduks.
+- Tähelepanekud: pargi järgse perioodi tarbimine vs aasta varem (siis tarbimine = ost) ja päikese + aku kaetud osa;
+  börsihinna vs lõpphinna muutus poolperioodide vahel (turg vs tasud). Inspektor, legend (4 rühma), selgitus ja tabel
+  (21 veergu; ° = tarbimine arvestist) täiendatud.
+- Kontroll: Playwright 1280 hele, 700, 390 tume; JS-vigu pole, horisontaalset kerimist pole; skeleton mõõdetud.
+
+---
+
 ## energy-dashboard.html [2.4.0] ja töövoog — 2026-11-01 · „Trendid“: 12 kuu libisev keskmine
 
 Omaniku soov (analüütiku vaates): 12 kuu libisev keskmine elektri kulule (€ ja kWh), päikese toodangule ning öösel ja

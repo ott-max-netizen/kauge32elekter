@@ -141,7 +141,8 @@ jobs:
           # Kuu kWh/€ arvutusreeglite versioon. Suurenda, kui reeglid muutuvad: vahemälus olevad
           # teise versiooniga kuud arvutatakse uuesti. 2 = riigipühade öötariif, KM 22% enne 01.07.2025.
           # 3 = tasude ajalugu (TASUDE_AJALUGU), kuutasu pooliku kuu korral osa kaupa, kirje sõrmejälg cfg.
-          # 4 = kuu kWh ja € jaotus öö- ja päevatariifi ajaks (kwhOo/kwhPaev, eurOo/eurPaev; energialehe trendid).
+          # 4 = kuu kWh ja € jaotus öö- ja päevatariifi ajaks (kwhOo/kwhPaev, eurOo/eurPaev) ja kWh-ga kaalutud
+          #     keskmine börsihind spotAvg (€/MWh ilma KM-ta); energialehe trendid.
           CALC_VERSION = 4
           KM_AJALUGU = ((datetime(2025, 7, 1, tzinfo=TZ), 22.0),)  # (kuni, määr %): enne 01.07.2025 oli KM 22%
 
@@ -562,6 +563,7 @@ jobs:
               total_eur = 0.0
               night_kwh = 0.0   # öötariifi ajal ostetud (öötunnid, nädalavahetus, riigipüha); päev = kokku − öö
               night_eur = 0.0
+              spot_kwh = 0.0    # kWh-ga kaalutud börsihind: Σ(kWh × €/MWh) / Σ kWh
               todate_kwh = 0.0
               todate_eur = 0.0
               count = 0
@@ -586,6 +588,7 @@ jobs:
                   eur = kwh * final_s / 100.0
                   total_kwh += kwh
                   total_eur += eur
+                  spot_kwh += kwh * spot_eur_mwh
                   if is_night_tariff(dt_tl, tariff_cfg):
                       night_kwh += kwh
                       night_eur += eur
@@ -614,6 +617,7 @@ jobs:
                   "kwhPaev": round(total_kwh - night_kwh, 2),
                   "eurOo": round(night_eur, 2),
                   "eurPaev": round(total_eur - night_eur - (kuutasu * min(1.0, (t1 - t0) / month_s) if total_kwh > 0 and kuutasu > 0 else 0.0), 2),
+                  "spotAvg": round(spot_kwh / total_kwh, 2) if total_kwh > 0 else None,
                   "complete": bool(complete_flag),
                   "v": CALC_VERSION,
                   "cfg": CFG_HASH,

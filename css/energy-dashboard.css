@@ -311,16 +311,19 @@
 .notice--action > p { flex: 1 1 220px; min-width: 0; }
 
 /* ---------- 9b. Trendid: kolm paneeli ühise kuuteljega (kWh, €, s/kWh); kaksiktelge pole ---------- */
-.chart-host--trend-kwh { height: 200px; } .chart-host--trend-eur { height: 120px; } .chart-host--trend-price { height: 120px; }
-@media (min-width: 640px) { .chart-host--trend-kwh { height: 240px; } .chart-host--trend-eur { height: 140px; } .chart-host--trend-price { height: 130px; } }
+.chart-host--trend-kwh { height: 200px; } .chart-host--trend-eur { height: 110px; } .chart-host--trend-price { height: 120px; } .chart-host--trend-gain { height: 130px; }
+@media (min-width: 640px) { .chart-host--trend-kwh { height: 240px; } .chart-host--trend-eur { height: 130px; } .chart-host--trend-price { height: 140px; } .chart-host--trend-gain { height: 150px; } }
 #trend-body { display: flex; flex-direction: column; gap: var(--s3); }
+/* Kitsal kaardil (2 plaati reas < 400 px konteineris) 12 kuu summa „28 072,6 kWh“ (132 px 20 px fondis) ei mahu plaadile:
+   aste väiksem font, et ühik ei murduks („kW|h“); number ja ühik on mittekatkeva tühikuga */
+@container (max-width: 399px) { .stats--trend .stat__value { font-size: 18px; } }
 .trend-insights { display: grid; gap: var(--s2); margin: 0; padding: 0; list-style: none; }
 .trend-insights li { position: relative; padding-left: 26px; font-size: var(--fs-small); line-height: 1.45; }
 .trend-insights li > .icon { position: absolute; left: 0; top: 1px; width: 18px; height: 18px; color: var(--muted); }
 /* Skeleton lõppsisu kõrgusega (mõõdetud 390 / 700 / 1280 px, 24 kuud, tabel suletud) */
-#section-trends[aria-busy="true"] { min-height: 1790px; }
-@media (min-width: 640px) { #section-trends[aria-busy="true"] { min-height: 1370px; } }
-@media (min-width: 1024px) { #section-trends[aria-busy="true"] { min-height: 1120px; } }
+#section-trends[aria-busy="true"] { min-height: 2500px; }
+@media (min-width: 640px) { #section-trends[aria-busy="true"] { min-height: 1865px; } }
+@media (min-width: 1024px) { #section-trends[aria-busy="true"] { min-height: 1495px; } }
 
 /* ---------- 10. Solarmani otseühenduse dialoog (läbipaistmatu, klaasita) ---------- */
 .dialog {
