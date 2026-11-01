@@ -420,8 +420,9 @@ Elering API      → GitHub Actions (uuenda-hinnad.yml) → hinnad.json ┴→ G
     graafikul „↑ 07:39“ / „↓ 16:29“; ilma energiapaneelita hinnapaneelil). Silt ei kata ühikut, teisi silte ega
     „praegu“-joont; legendis ja graafiku kirjelduses (ekraanilugeja) on samad ajad. Ajad arvutatakse lehel
     (`sunTimes` failis `js/common.js`, NOAA päikesevalem, täpsus ~1 min) asukoha järgi `energy-dashboard.html`
-    `CONFIG.asukoht` (`{ laius, pikkus }` kraadides, vaikimisi Tallinn; linna täpsusest piisab, täpset aadressi pole
-    vaja; `null` lülitab märke välja).
+    `CONFIG.asukoht` (`{ laius, pikkus }` kraadides, Viljandi 58,36 / 25,59; linna täpsusest piisab, täpset aadressi
+    pole vaja; `null` lülitab märke välja). Kõik ajad on Tallinna ajas (EET/EEST): kellakeeramise päeval on tõus ja
+    loojang õiges ajas ja graafikul 23/25-tunnise päeva õiges kohas, brauseri ajavöönd tulemust ei mõjuta.
   - **Inverteri režiimi riba** („Täna“ ja „Eile“): iga 15-min kaader on *laeb võrgust*, *laeb päikesest*, *aku kasutus*,
     *müük võrku* või *aku ootel* (alla 0,2 kW). Režiim on tuletatud mõõtmistest (laadimise allikas = suurem osa
     energiavoost), mitte inverteri plaan; riba kohal „Inverter praegu: Aku kasutus · alates 17:30“ (vananenud

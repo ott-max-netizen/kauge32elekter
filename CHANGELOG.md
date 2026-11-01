@@ -47,13 +47,15 @@ Töövood, andmefailide lepingud ja arvutusreeglid (`computeDayTotals`, `sumTota
 
 ### 3. Päeva ülevaade: päikesetõus ja -loojang
 - `js/common.js`: `sunTimes(date, lat, lon)` (aja jaotis; NOAA lihtsustatud päikesevalem, −0,833°, täpsus ~1 min;
-  Tallinnas 21.12 09:17–15:20 ja 21.06 04:02–22:42, almanahh 09:18–15:21 ja 04:02–22:43) ja graafikuplugin
+  Tallinnas 21.12 09:17–15:20 ja 21.06 04:02–22:42, almanahh 09:18–15:21 ja 04:02–22:43; kellakeeramise päevadel
+  28.–30.3 ja 24.–26.10 NOAA täisvalemiga võrreldes ≤ 2 min, EET/EEST vahetub õigel päeval, protsessi/brauseri ajavöönd
+  tulemust ei mõjuta) ja graafikuplugin
   **`kSunTimes`** (`$k.sun = { riseMs, setMs, labels }`): katkendlik juhtjoon `--solar` toonis andmete taga igal paneelil;
   `labels` paneelil päikese ikoon (`SUN_PATH`) ja „tõus 07:39“ / „loojang 16:29“ (kitsal graafikul „↑“ / „↓“) päeva
   poolel joonest, ülaserva kohal või plot-ala sees; ei kata ühikut, teisi silte (`$boxes`), odavaima akna silti ega
   „praegu“-joont, kohata jääb silt ära.
-- Energialeht: `CONFIG.asukoht` (`{ laius: 59.44, pikkus: 24.75 }`, Tallinn; linna täpsus, avalikus repos täpset aadressi
-  pole vaja; `null` = väljas), `daySunTimes`; sildid energiapaneelil (selle puudumisel hinnapaneelil), legendis
+- Energialeht: `CONFIG.asukoht` (`{ laius: 58.36, pikkus: 25.59 }`, Viljandi – omaniku andmetel; linna täpsus, avalikus repos
+  täpset aadressi pole vaja; `null` = väljas), `daySunTimes`; sildid energiapaneelil (selle puudumisel hinnapaneelil), legendis
   „päikesetõus 07:39, -loojang 16:29“ ja graafiku `aria-label`-is „Päike tõuseb 07:39 ja loojub 16:29.“ Kõigil
   vahelehtedel (eile, täna, homme), ka „Võrguga vahetus“ vaates.
 
