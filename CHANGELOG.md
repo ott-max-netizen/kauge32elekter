@@ -4,10 +4,11 @@ See fail kirjeldab rakenduse `index.html` versioonimuudatusi, arhitektuurilisi k
 
 ---
 
-## energy-dashboard.html [2.3.0] ja [3.2.2] — 2026-11-01 · kuu- ja aastavaated, „Eile“ päeva ülevaates
+## energy-dashboard.html [2.3.0] ja [3.2.2] — 2026-11-01 · kuu- ja aastavaated, „Eile“ ja päikesetõus päeva ülevaates
 
 Omaniku soovid: „Täna kokku“ perioodivalikusse eelmise ja käesoleva aasta vaade ning kolm eelmist kuud (lisaks jooksvale
-kuule); „Päeva ülevaade“ kaardile vaheleht „Eile“. `APP_VERSION` `2.3.0` / `3.2.2`, `css/energy-dashboard.css?v=20261101`.
+kuule); „Päeva ülevaade“ kaardile vaheleht „Eile“ ning graafikule päikesetõusu ja -loojangu märge. `APP_VERSION` `2.3.0` /
+`3.2.2`, `css/energy-dashboard.css?v=20261101`, `js/common.js?v=20261101` (mõlemal lehel).
 Töövood, andmefailide lepingud ja arvutusreeglid (`computeDayTotals`, `sumTotals`, `finishTotals`) ei muutunud.
 
 ### 1. Perioodivalik: neli viimast kuud ja kaks aastat (`periodRange`, `periodAvailable`, `buildPeriodView`)
@@ -44,12 +45,24 @@ Töövood, andmefailide lepingud ja arvutusreeglid (`computeDayTotals`, `sumTota
 - Üldistatud: `buildChartSlots` (päev −1), `buildModeRuns(series, frameMs, measuredEndMs)`, `updateChartControls`,
   `renderChartStats(d, offset, …)`, `renderChartTable(…, series)`, `buildDayStack` (`measuredDay`).
 
-### 3. Kujundus
+### 3. Päeva ülevaade: päikesetõus ja -loojang
+- `js/common.js`: `sunTimes(date, lat, lon)` (aja jaotis; NOAA lihtsustatud päikesevalem, −0,833°, täpsus ~1 min;
+  Tallinnas 21.12 09:17–15:20 ja 21.06 04:02–22:42, almanahh 09:18–15:21 ja 04:02–22:43) ja graafikuplugin
+  **`kSunTimes`** (`$k.sun = { riseMs, setMs, labels }`): katkendlik juhtjoon `--solar` toonis andmete taga igal paneelil;
+  `labels` paneelil päikese ikoon (`SUN_PATH`) ja „tõus 07:39“ / „loojang 16:29“ (kitsal graafikul „↑“ / „↓“) päeva
+  poolel joonest, ülaserva kohal või plot-ala sees; ei kata ühikut, teisi silte (`$boxes`), odavaima akna silti ega
+  „praegu“-joont, kohata jääb silt ära.
+- Energialeht: `CONFIG.asukoht` (`{ laius: 59.44, pikkus: 24.75 }`, Tallinn; linna täpsus, avalikus repos täpset aadressi
+  pole vaja; `null` = väljas), `daySunTimes`; sildid energiapaneelil (selle puudumisel hinnapaneelil), legendis
+  „päikesetõus 07:39, -loojang 16:29“ ja graafiku `aria-label`-is „Päike tõuseb 07:39 ja loojub 16:29.“ Kõigil
+  vahelehtedel (eile, täna, homme), ka „Võrguga vahetus“ vaates.
+
+### 4. Kujundus
 - `.bill` (energialehe CSS, jaotis 7) jagab „Maja energiahind“ ploki pinda, rida, väärtuse suurust ja märki;
   ülaserv `--grid` (ost võrgust); sunnitud värvide ja printimise reeglid. Uusi tokeneid pole.
 
-### 4. Kontroll
-- Playwright fikseeritud kellaga (1.11.2026 10:30, 20.11.2026 16:00 homsete hindadega, 1.1.2027) ja sünteetiliste
+### 5. Kontroll
+- Playwright fikseeritud kellaga (1.11.2026 10:30, 20.11.2026 16:00 homsete hindadega, 1.1.2027, 21.6.2026 päikesemärgetele) ja sünteetiliste
   krüpteerimata andmefailidega: 1280 px hele ja 390 px tume teema; kõik perioodid ja vahelehed, puudutus, nooleklahvid;
   ilma `paevad.json`-ita jäävad alles ainult *Täna* ja aastate võrguarvesti plokk. Konsoolis ainult oodatud `lukk.json`
   404 (lukku pole), horisontaalset kerimist pole.

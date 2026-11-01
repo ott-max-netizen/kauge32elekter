@@ -329,7 +329,7 @@
 </dialog>
 
 <!-- Mõlema lehe ühine skriptikood (aeg, vormindamine, DOM-abi, graafikute ühisosa); peab laadima enne põhiskripti -->
-<script src="js/common.js?v=20261031"></script>
+<script src="js/common.js?v=20261101"></script>
 <script>
 'use strict';
 
@@ -447,7 +447,12 @@ const CONFIG = {
     ylejaakKw: 0.2,        // päikese ülejääk (kW), millest alates soovitatakse ülejääki kasutada
     minSaastProtsent: 15,  // võrgust laadimine: hilisem lõpphind peab olema vähemalt nii palju kõrgem (pärast kadusid)
     vaatePiirTundides: 12  // kui kaugele ette hindu võrreldakse
-  }
+  },
+
+  // Päikesetõusu ja -loojangu märge päeva ülevaate graafikul: asukoht kraadides (laius põhja, pikkus ida).
+  // Linna täpsusest piisab (10 km nihe muudab aega alla 1 min). Leht ja repo on avalikud: täpset aadressi
+  // pole vaja ega soovitatav. null = märget ei kuvata. Ohutu muuta.
+  asukoht: { laius: 59.44, pikkus: 24.75 }   // Tallinn
 };
 
 /* Tehnilised konstandid — neid ei ole tavakasutuses vaja muuta. Mõlema lehe ühised (TIME_ZONE, API_URL,
@@ -3554,10 +3559,13 @@ function priceClassItems(present = null) {
  * Legend (HTML, rühmades): ainult graafikul olevad elemendid. avgInLegend: keskmise silt ei mahtunud graafikule,
  * väärtus on legendis. lower: alumise paneeli sarjad ({ view: 'flows' | 'grid', … }); modes: režiimiribal olevad režiimid.
  */
-function renderChartLegend({ hasPrices = false, isToday = false, avg = null, avgInLegend = false, hasPast = false, best = false, missing = false, lower = null, nowLine = false, modes = [] } = {}) {
+function renderChartLegend({ hasPrices = false, isToday = false, avg = null, avgInLegend = false, hasPast = false, best = false, missing = false, lower = null, nowLine = false, modes = [], sun = null } = {}) {
   const legend = byId('chart-legend');
   const groups = [];
   const nowItem = () => legendItem(legendLineKey('var(--muted)', 'line-key--thin'), 'praegu');
+  // Päikesetõusu ja -loojangu joon (kSunTimes): selle paneeli rühmas, kus on sildid (alumine, selle puudumisel hind)
+  const sunItem = () => (sun ? legendItem(legendLineKey('var(--solar)', 'line-key--dashed line-key--thin'),
+    `päikesetõus ${formatTime(new Date(sun.riseMs))}, -loojang ${formatTime(new Date(sun.setMs))}`) : null);
   if (hasPrices) {
     const items = priceClassItems();
     // „Heledam“ oleks tumedas teemas vale (segu tumeda pinnaga tumendab): tuhmim mõlemas teemas
@@ -3576,6 +3584,7 @@ function renderChartLegend({ hasPrices = false, isToday = false, avg = null, avg
       legendItem(legendLineKey('var(--muted)', 'line-key--dotted'), 'müügihind')
     );
     if (nowLine && !lower) items.push(nowItem());
+    if (!lower && sun) items.push(sunItem());
     groups.push(legendGroup('Hind, s/kWh', items));
   }
   if (lower && lower.view === 'grid') {
@@ -3583,6 +3592,7 @@ function renderChartLegend({ hasPrices = false, isToday = false, avg = null, avg
     if (lower.imp) items.push(legendItem(legendSwatch('var(--grid)'), `ost võrgust (kWh / ${lower.unit}, alla)`));
     if (lower.exp) items.push(legendItem(legendSwatch('var(--export)'), `müük võrku (kWh / ${lower.unit}, üles)`));
     if (nowLine) items.push(nowItem());
+    if (sun) items.push(sunItem());
     groups.push(legendGroup(`Võrguga vahetus, kWh / ${lower.unit}`, items));
   } else if (lower) {
     const items = [];
@@ -3592,6 +3602,7 @@ function renderChartLegend({ hasPrices = false, isToday = false, avg = null, avg
     if (lower.grid) items.push(legendToggle('võrk', legendLineKey('var(--grid)', 'line-key--dashed'), lower.gridSigned ? 'võrk (kW): + ost, − müük' : 'võrk (kW): + ost'));
     if (lower.battery) items.push(legendToggle('aku', legendLineKey('var(--battery)'), lower.batterySigned ? 'aku (kW): + laeb, − tühjeneb' : 'aku (kW): + laeb'));
     if (nowLine) items.push(nowItem());
+    if (sun) items.push(sunItem());
     groups.push(legendGroup('Energia, kW', items));
   }
   if (modes.length) {
@@ -3663,7 +3674,7 @@ function fitEndLabels() {
 }
 
 /* ---------- energy-dashboard.html · Päeva ülevaade: hind, vood/vahetus, režiim, laetus (p 6.2, 6.4–6.7) ---------- */
-function buildDayStack({ slots, series, dayStartMs, dayEndMs, nowMs, isToday, measuredDay, currentTs, avg, best, modeRuns, powerView, resolution, forecast, frameMs }) {
+function buildDayStack({ slots, series, dayStartMs, dayEndMs, nowMs, isToday, measuredDay, currentTs, avg, best, modeRuns, powerView, resolution, forecast, frameMs, sun = null }) {
   if (!T) return null;
   const items = slots.map(s => ({ startMs: s.start.getTime(), endMs: s.end.getTime() }));
   const hasPrices = slots.some(s => s.period);
@@ -3671,6 +3682,8 @@ function buildDayStack({ slots, series, dayStartMs, dayEndMs, nowMs, isToday, me
   const hasPower = measuredDay && series.some(s => s.pvKw != null || s.loadKw != null || s.gridKw != null || s.batteryKw != null);
   const showSoc = hasPower && series.some(s => s.soc != null);
   const showLower = hasPower || forecast.length > 0;
+  // Päikesetõus ja -loojang (kSunTimes): joon igal paneelil, sildid alumisel (päikesetoodang), selle puudumisel hinnal
+  const sunMark = labels => (sun ? { ...sun, labels } : null);
   const currentIndex = currentTs == null ? -1 : slots.findIndex(s => s.period && s.period.timestamp === currentTs);
   const nowIndex = items.findIndex(it => it.startMs <= nowMs && nowMs < it.endMs);
   const stack = chartStack(byId('day-stack'), {
@@ -3712,7 +3725,7 @@ function buildDayStack({ slots, series, dayStartMs, dayEndMs, nowMs, isToday, me
           best: best ? { startMs: best.start.getTime(), endMs: best.end.getTime(), label: `odavaim 2 h · ${formatTimeRange(best.start, best.end)}`,
             labelShort: formatTimeRange(best.start, best.end) } : null,
           nowMs: isToday ? nowMs : null, nowLabel: isToday ? timeFormatter.format(new Date(nowMs)) : null,
-          zero: { color: T.text, width: 1.5 }, unit: 's/kWh', endLabels: [{ ds: 2, text: 'ostuhind', at: 'along' }]
+          zero: { color: T.text, width: 1.5 }, unit: 's/kWh', endLabels: [{ ds: 2, text: 'ostuhind', at: 'along' }], sun: sunMark(!showLower)
         }
       },
       options: chartOptions({
@@ -3741,7 +3754,7 @@ function buildDayStack({ slots, series, dayStartMs, dayEndMs, nowMs, isToday, me
           { label: 'ost võrgust', order: 1, grouped: false, data: slots.map((s, i) => ({ x: mid(s), y: imp[i] })), backgroundColor: T.grid, borderWidth: 0, borderSkipped: 'start' }
         ],
         $k: { stack, dayStartMs, dayEndMs, slotMs: resolution * MINUTE_MS, nowMs: isToday ? nowMs : null,
-          zero: { always: true, color: T.muted, width: 1 }, exchangeLabels: { up: 'müük ↑', down: 'ost ↓' }, unit: `kWh / ${unitStep}` }
+          zero: { always: true, color: T.muted, width: 1 }, exchangeLabels: { up: 'müük ↑', down: 'ost ↓' }, unit: `kWh / ${unitStep}`, sun: sunMark(true) }
       },
       options: chartOptions({
         parsing: false, normalized: true,
@@ -3774,7 +3787,8 @@ function buildDayStack({ slots, series, dayStartMs, dayEndMs, nowMs, isToday, me
       pointRadius: 0, spanGaps: maxGapMs }, { text: `päike ${numberFormat.d1.format(lastOf('pvKw'))}`, color: T.solar });
     const lower = upsertChart(byId('c-day-lower'), {
       type: 'line',
-      data: { datasets, $k: { stack, dayStartMs, dayEndMs, nowMs: isToday ? nowMs : null, zero: { color: T.muted, width: 1 }, unit: 'kW', endLabels: isToday ? endLabels : [] } },
+      data: { datasets, $k: { stack, dayStartMs, dayEndMs, nowMs: isToday ? nowMs : null, zero: { color: T.muted, width: 1 }, unit: 'kW', endLabels: isToday ? endLabels : [],
+        sun: sunMark(true) } },
       options: chartOptions({
         parsing: false, normalized: true,
         scales: {
@@ -3798,7 +3812,7 @@ function buildDayStack({ slots, series, dayStartMs, dayEndMs, nowMs, isToday, me
       data: {
         datasets: [{ label: 'aku laetus', data: socPts, borderColor: T.battery, backgroundColor: T.area(T.battery), fill: 'origin', borderWidth: 2,
           pointRadius: 0, spanGaps: maxGapMs }],
-        $k: { stack, dayStartMs, dayEndMs, nowMs: isToday ? nowMs : null, unit: 'aku laetus, %',
+        $k: { stack, dayStartMs, dayEndMs, nowMs: isToday ? nowMs : null, unit: 'aku laetus, %', sun: sunMark(false),
           reserve: { value: Number(CONFIG.aku.reservProtsent), label: `reserv ${formatPct(CONFIG.aku.reservProtsent)}` },
           measuredEnd: lastSoc ? [{ ds: 0, text: formatPct(lastSoc.y) }] : [] }
       },
@@ -3848,8 +3862,9 @@ function layoutModeNames(strip) {
  * Päeva virna aria-label (p 6.4): sama tekst mis senise SVG-päevagraafiku ariaParts-lausetes (režiim, börsihind,
  * odavaim aken, vahetus või vood, prognoos, laetus, tipud, viimane mõõtmine); „parem telg“ kaob.
  */
-function dayAriaSummary({ slots, series, avg, best, nowMs, dayStartMs, dayEndMs, powerView, forecast, modeRuns, hasPower, showSoc, lastMeasured }) {
+function dayAriaSummary({ slots, series, avg, best, nowMs, dayStartMs, dayEndMs, powerView, forecast, modeRuns, hasPower, showSoc, lastMeasured, sun }) {
   const parts = [];
+  if (sun) parts.push(`Päike tõuseb ${formatTime(new Date(sun.riseMs))} ja loojub ${formatTime(new Date(sun.setMs))}.`);
   if (hasPower && modeRuns.length) {
     const minutes = new Map();
     for (const run of modeRuns) minutes.set(run.mode, (minutes.get(run.mode) || 0) + (run.end - run.start) / MINUTE_MS);
@@ -3988,6 +4003,20 @@ function renderChartEmpty(text, kind) {
     : [iconEl(kind === 'clock' ? 'clock' : 'info'), el('p', { text })]));
 }
 
+/**
+ * Valitud päeva päikesetõus ja -loojang (CONFIG.asukoht, sunTimes js/common.js-is) päeva graafikule; null, kui asukohta
+ * pole, see on vigane või aeg jääb päevast välja.
+ */
+function daySunTimes(dayStart, dayEnd) {
+  const loc = CONFIG.asukoht;
+  const lat = Number(loc?.laius);
+  const lon = Number(loc?.pikkus);
+  if (!loc || !Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
+  const t = sunTimes(dayStart, lat, lon);
+  if (!t || t.rise < dayStart || t.set > dayEnd) return null;
+  return { riseMs: t.rise.getTime(), setMs: t.set.getTime() };
+}
+
 const DAY_TABS = { yesterday: { offset: -1, word: 'Eile' }, today: { offset: 0, word: 'Täna' }, tomorrow: { offset: 1, word: 'Homme' } };
 
 function renderChart(d) {
@@ -4099,13 +4128,14 @@ function renderChart(d) {
   stackEl.hidden = false;   // nähtav enne ehitamist: Chart.js mõõdab hosti suurust
   state.chartSlots = slots;
   const best = offset >= 0 ? d.best2h : null;   // odavaim aken on tulevikus: eilsel päeval seda pole
+  const sun = daySunTimes(dayStart, dayEnd);
   const view = buildDayStack({
     slots, series: stackSeries, dayStartMs, dayEndMs, nowMs, isToday, measuredDay, currentTs, avg, best, modeRuns, powerView, resolution,
-    forecast: lowerForecast, frameMs: hourly ? HOUR_MS : frameMs
+    forecast: lowerForecast, frameMs: hourly ? HOUR_MS : frameMs, sun
   });
   fitEndLabels();
   stackEl.setAttribute('aria-label', `${dayAriaSummary({ slots, series: stackSeries, avg, best, nowMs, dayStartMs, dayEndMs, powerView,
-    forecast: lowerForecast, modeRuns, hasPower: view.hasPower, showSoc: view.showSoc, lastMeasured: isToday && d.solar ? d.solar.updated : null })} Nooleklahvidega või sõrmega libistades saab perioode ükshaaval vaadata.`);
+    forecast: lowerForecast, modeRuns, hasPower: view.hasPower, showSoc: view.showSoc, lastMeasured: isToday && d.solar ? d.solar.updated : null, sun })} Nooleklahvidega või sõrmega libistades saab perioode ükshaaval vaadata.`);
   const items = slots.map(s => ({ startMs: s.start.getTime(), endMs: s.end.getTime() }));
   const exchange = view.hasPower && powerView === 'grid';
   renderChartLegend({
@@ -4123,6 +4153,7 @@ function renderChart(d) {
         batterySigned: stackSeries.some(s => s.batteryKw != null && s.batteryKw < -FLOW_MIN_KW)
       } : null,
     nowLine: isToday && nowMs >= dayStartMs && nowMs < dayEndMs,
+    sun,
     modes: view.hasPower ? Object.keys(INVERTER_MODES).filter(mode => modeRuns.some(run => run.mode === mode)) : []
   });
   // Ümberehitusel jääb sama kellaaeg valituks (chartStack): tooltip ja inspektor ilma uue ettelugemiseta

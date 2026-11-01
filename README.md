@@ -415,6 +415,13 @@ Elering API      → GitHub Actions (uuenda-hinnad.yml) → hinnad.json ┴→ G
     režiimiriba, lülitid ja tabel mis „Täna“; „praegu“-joont, möödunud perioodide tuhmistust, odavaimat akent ja
     prognoosi pole. Plaatidel eilne madalaim, keskmine ja kõrgeim börsihind ning suurim tarbimine (inverter). Kui eilse
     päeva viimased kaadrid pole veel failis (kesköö järel), on graafiku all „Eilsed inverteri mõõtmised on kuni HH:MM“.
+  - **Päikesetõus ja -loojang** (kõigil vahelehtedel): katkendlik juhtjoon päikese toonis (`--solar`) igal paneelil
+    andmete taga ning energiapaneeli ülaservas päikese ikoon ja kellaaeg („tõus 07:39“ / „loojang 16:29“, kitsal
+    graafikul „↑ 07:39“ / „↓ 16:29“; ilma energiapaneelita hinnapaneelil). Silt ei kata ühikut, teisi silte ega
+    „praegu“-joont; legendis ja graafiku kirjelduses (ekraanilugeja) on samad ajad. Ajad arvutatakse lehel
+    (`sunTimes` failis `js/common.js`, NOAA päikesevalem, täpsus ~1 min) asukoha järgi `energy-dashboard.html`
+    `CONFIG.asukoht` (`{ laius, pikkus }` kraadides, vaikimisi Tallinn; linna täpsusest piisab, täpset aadressi pole
+    vaja; `null` lülitab märke välja).
   - **Inverteri režiimi riba** („Täna“ ja „Eile“): iga 15-min kaader on *laeb võrgust*, *laeb päikesest*, *aku kasutus*,
     *müük võrku* või *aku ootel* (alla 0,2 kW). Režiim on tuletatud mõõtmistest (laadimise allikas = suurem osa
     energiavoost), mitte inverteri plaan; riba kohal „Inverter praegu: Aku kasutus · alates 17:30“ (vananenud
