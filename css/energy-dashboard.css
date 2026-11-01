@@ -199,7 +199,7 @@
 /* Chart.js puudub: tekstikaksik on nähtav loend */
 .hours-list { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; font-size: var(--fs-small); font-variant-numeric: tabular-nums; }
 
-/* ---------- 7. Täna kokku: perioodivalik, tulemusplokid, maja energiahind, kogusummad ---------- */
+/* ---------- 7. Täna kokku: perioodivalik, tulemusplokid, maja energiahind, aasta ost võrgust, kogusummad ---------- */
 .results { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s2); }
 @container (min-width: 480px) { .results { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @container (min-width: 900px) { .results { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
@@ -243,7 +243,8 @@
   .result__rows dd { margin-left: 0; }
 }
 
-.energy-price {
+.energy-price,
+.bill {
   display: flex;
   flex-direction: column;
   gap: var(--s2);
@@ -253,10 +254,13 @@
   background: var(--surface-2);
 }
 .energy-price__title { font-size: var(--fs-secondary); font-weight: 700; }
-.energy-price__row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s4); }
-.energy-price__value { margin-top: 2px; font-size: var(--fs-result); font-weight: 800; line-height: 1.1; }
+.energy-price__row,
+.bill__row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s4); }
+.energy-price__value,
+.bill__value { margin-top: 2px; font-size: var(--fs-result); font-weight: 800; line-height: 1.1; }
 .energy-price__arrow { color: var(--muted); font-size: 20px; }
-.energy-price__badge {
+.energy-price__badge,
+.bill__badge {
   margin-left: auto;
   padding: 4px 12px;
   border: 1px solid var(--border);
@@ -265,7 +269,15 @@
   font-size: var(--fs-small);
   font-weight: 700;
 }
-.energy-price__badge.is-good { border-color: transparent; background: var(--ok-bg); color: var(--ok-fg); }
+.energy-price__badge.is-good,
+.bill__badge.is-good { border-color: transparent; background: var(--ok-bg); color: var(--ok-fg); }
+/* Aasta vaade: ost võrgust võrguarvesti (Estfeed) järgi – arve alus, eraldi inverteri plokkidest (README „Mõõtmiste loogika“) */
+.bill { border-top: 3px solid var(--grid); }
+.bill__title { display: flex; align-items: center; gap: 6px; font-size: var(--fs-secondary); font-weight: 700; line-height: 1.3; }
+.bill__title .icon { width: 18px; height: 18px; color: var(--muted); }
+.bill__source { margin-top: 2px; color: var(--muted); font-size: var(--fs-micro); line-height: 1.35; }
+.bill__cell { min-width: 0; }
+.bill__value { font-variant-numeric: tabular-nums; }
 .sums-label { display: inline-flex; align-items: center; gap: var(--s2); }
 
 /* ---------- 8. Päevade graafik (p 6.9) ---------- */
@@ -432,10 +444,10 @@
 
 /* ---------- 11. Sunnitud värvid ja printimine (lehepõhised osad) ---------- */
 @media (forced-colors: active) {
-  .chip, .advice-reasons li, .flow-list li, .result, .energy-price, .energy-price__badge { border: 1px solid CanvasText; }
+  .chip, .advice-reasons li, .flow-list li, .result, .energy-price, .energy-price__badge, .bill, .bill__badge { border: 1px solid CanvasText; }
   .card--advice { border-left: 6px solid CanvasText; }
 }
 @media print {
   #direct-open, .chart-controls, .days-panel .chart-controls { display: none !important; }
-  .chip, .result, .energy-price__badge { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .chip, .result, .energy-price__badge, .bill, .bill__badge { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }

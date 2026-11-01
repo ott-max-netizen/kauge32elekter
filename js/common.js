@@ -64,6 +64,29 @@ function getTallinnDayStart(date, dayOffset = 0) {
   return tallinnLocalToUtc(p.year, p.month, p.day + dayOffset, 0, 0);
 }
 
+/**
+ * Päikesetõus ja -loojang Tallinna kalendripäeval, kuhu kuulub hetk date (NOAA lihtsustatud päikesevalem, täpsus ~1 min;
+ * päikese ülemine serv koos murdumisega, −0,833°). lat/lon kraadides (põhi, ida). { rise, set } on hetked (Date), seega
+ * on ka kellakeeramise päev õige; polaarpäeval/-ööl null (Eestis seda ei juhtu). Kontroll Tallinnas: 21.12 09:17–15:20,
+ * 21.06 04:02–22:42 (almanahh 09:18–15:21 ja 04:02–22:43).
+ */
+function sunTimes(date, lat, lon) {
+  const RAD = Math.PI / 180;
+  const p = getTallinnDateParts(date);
+  const n = Math.round(Date.UTC(p.year, p.month - 1, p.day) / DAY_MS) - 10957;   // päev alates J2000.0-st
+  const mean = n - lon / 360;                                                      // keskmine päikeseaeg
+  const anomaly = (357.5291 + 0.98560028 * mean) % 360;
+  const centre = 1.9148 * Math.sin(anomaly * RAD) + 0.02 * Math.sin(2 * anomaly * RAD) + 0.0003 * Math.sin(3 * anomaly * RAD);
+  const longitude = (anomaly + centre + 180 + 102.9372) % 360;                     // ekliptiline pikkus
+  const transit = mean + 0.0053 * Math.sin(anomaly * RAD) - 0.0069 * Math.sin(2 * longitude * RAD);
+  const sinDec = Math.sin(longitude * RAD) * Math.sin(23.4397 * RAD);
+  const cosHour = (Math.sin(-0.833 * RAD) - Math.sin(lat * RAD) * sinDec) / (Math.cos(lat * RAD) * Math.cos(Math.asin(sinDec)));
+  if (!(cosHour >= -1 && cosHour <= 1)) return null;
+  const half = Math.acos(cosHour) / RAD / 360;
+  const toDate = j => new Date((j + 10957.5) * DAY_MS);                            // J2000.0 = 2000-01-01 12:00 UTC
+  return { rise: toDate(transit - half), set: toDate(transit + half) };
+}
+
 /** Tänane homsete hindade avaldamise hetk Tallinna aja järgi (CONFIG.homsedHinnad.avaldamiseKell). */
 function getTomorrowPublishTime(now) {
   const match = /^(\d{1,2}):(\d{2})$/.exec(String(CONFIG.homsedHinnad?.avaldamiseKell ?? ''));
@@ -1133,6 +1156,75 @@ const kActive = {
   }
 };
 
+/**
+ * Päikesetõus ja -loojang päeva graafikul ($k.sun = { riseMs, setMs, labels }): katkendlik juhtjoon päikese toonis
+ * andmete taga igal virna paneelil; labels: true paneelil ülaservas päikese ikoon ja kellaaeg („↑ 07:39“ / „↓ 16:29“,
+ * laial graafikul „tõus 07:39“ / „loojang 16:29“): tõusu silt joonest paremal, loojangu oma vasakul (päeva poolel).
+ * Silt ei kata ühikut, teisi silte, „praegu“-joont ega (plot-ala sees) andmeid; kui kohta pole, jääb silt ära
+ * (tähendus on legendis ja graafiku kirjelduses).
+ */
+const kSunTimes = {
+  id: 'kSunTimes',
+  beforeDatasetsDraw(chart) {
+    const sun = chart.data.$k?.sun;
+    if (!sun) return;
+    const { ctx, chartArea: a, scales: { x } } = chart;
+    ctx.save();
+    ctx.strokeStyle = T.solar;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 3]);
+    for (const ms of [sun.riseMs, sun.setMs]) {
+      if (ms > x.min && ms < x.max) vline(ctx, Math.round(x.getPixelForValue(ms)) + 0.5, a.top, a.bottom);
+    }
+    ctx.restore();
+  },
+  afterDatasetsDraw(chart) {
+    const k = chart.data.$k;
+    const sun = k?.sun;
+    if (!sun?.labels) return;
+    const { ctx, chartArea: a, scales: { x } } = chart;
+    ctx.save();
+    ctx.font = `600 12px ${T.font}`;
+    const wide = a.right - a.left >= 480;
+    const unitBox = k.unit ? { x0: 0, x1: 4 + ctx.measureText(k.unit).width + 6, y0: a.top - 26, y1: a.top - 8 } : null;
+    const nowPx = k.nowMs != null && k.nowMs >= x.min && k.nowMs <= x.max ? x.getPixelForValue(k.nowMs) : null;
+    const nowHalf = k.nowLabel ? ctx.measureText(k.nowLabel).width / 2 + 4 : 4;
+    const icon = 12;   // SUN_PATH 24 × 24 poole suurusega
+    for (const [ms, rise] of [[sun.riseMs, true], [sun.setMs, false]]) {
+      if (!(ms > x.min && ms < x.max)) continue;
+      const px = x.getPixelForValue(ms);
+      const time = timeFormatter.format(new Date(ms));
+      const text = wide ? `${rise ? 'tõus' : 'loojang'} ${time}` : `${rise ? '↑' : '↓'} ${time}`;
+      const w = icon + 3 + ctx.measureText(text).width;
+      // Eelistus: päeva pool joonest ülaserva kohal, siis teine pool, siis plot-ala sees ülaservas
+      const spot = [[rise ? px + 4 : px - 4 - w, a.top - 8], [rise ? px - 4 - w : px + 4, a.top - 8],
+        [rise ? px + 4 : px - 4 - w, a.top + 14], [rise ? px - 4 - w : px + 4, a.top + 14]]
+        .map(([lx, base]) => ({ x0: lx, x1: lx + w, y0: base - 12, y1: base + 3, base }))
+        .find(c => c.x0 >= a.left && c.x1 <= a.right
+          && !(unitBox && boxesOverlap(unitBox, c))
+          && !(nowPx != null && c.x0 - nowHalf < nowPx && c.x1 + nowHalf > nowPx)
+          && !(k.$bestBox && boxesOverlap(k.$bestBox, c))
+          && !(k.$boxes || []).some(b => boxesOverlap(b, c))
+          && (c.y0 < a.top || !chartHits(chart, c, true)));
+      if (!spot) continue;
+      if (k.$boxes) k.$boxes.push(spot);
+      ctx.save();
+      ctx.translate(spot.x0, spot.base - 10);
+      ctx.scale(0.5, 0.5);
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = T.plot;    // halo nagu tekstil
+      ctx.lineWidth = 7;
+      ctx.stroke(new Path2D(SUN_PATH));
+      ctx.strokeStyle = T.solar;
+      ctx.lineWidth = 3;
+      ctx.stroke(new Path2D(SUN_PATH));
+      ctx.restore();
+      haloText(ctx, text, spot.x0 + icon + 3, spot.base, T.muted);
+    }
+    ctx.restore();
+  }
+};
+
 const kNow = {
   id: 'kNow',
   afterDatasetsDraw(chart) {
@@ -1234,7 +1326,7 @@ const kUnit = {
 };
 
 const K_PLUGINS = [kBarSize, kBestWindow, kSelected, kThresholds, kMissing, kYearMarks, kZero, kReserve,
-  kEndLabels, kMeasuredEnd, kAvgLine, kCurrent, kActive, kNow, kExchangeLabels, kValueLabels, kUnit];
+  kEndLabels, kMeasuredEnd, kAvgLine, kCurrent, kActive, kSunTimes, kNow, kExchangeLabels, kValueLabels, kUnit];
 
 /* ==========================================================================
    8. Teema ja käivitus
