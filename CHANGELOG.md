@@ -4,6 +4,38 @@ See fail kirjeldab rakenduse `index.html` versioonimuudatusi, arhitektuurilisi k
 
 ---
 
+## energy-dashboard.html [2.4.0] ja töövoog — 2026-11-01 · „Trendid“: 12 kuu libisev keskmine
+
+Omaniku soov (analüütiku vaates): 12 kuu libisev keskmine elektri kulule (€ ja kWh), päikese toodangule ning öösel ja
+päeval ostetud energiale, lisaks muu kasulik info olemasolevatest andmetest. `APP_VERSION` `2.4.0`,
+`css/energy-dashboard.css?v=20261101b`, töövoo `CALC_VERSION` 4.
+
+### 1. Töövoog `uuenda-hinnad.yml`: öö/päeva jaotus kuukirjes
+- Öötariifi reegel eraldi funktsioonis `is_night_tariff` (sama mis `calc_final_cents_kwh`-s: öötunnid, nädalavahetus,
+  riigipühad). Kuu kirjesse lisanduvad `kwhOo`, `kwhPaev`, `eurOo`, `eurPaev` (kuutasu jaotusest välja). Kontrollitud:
+  öö + päev = kokku nii kWh-s kui eurodes; oktoober 2026 ühtlase tarbimisega 55,6 % öötariifi ajal (9 nädalavahetuse
+  päeva + 22 × 9 öötundi).
+- `CALC_VERSION` 3 → 4: kõik vahemälus olevad kuud (kuni 24) arvutatakse järgmisel käivitusel uuesti (Estfeedi päringud,
+  `MAX_BACKFILL_PAIRS` 12 → ühe käivitusega); kuni selleni näitab leht „jaotus puudub“. README „Kuu kirje“.
+
+### 2. Energialeht: kaart „Trendid: 12 kuu libisev keskmine“ (`buildTrendMonths`, `renderTrends`)
+- Kolm Chart.js paneeli ühise kuuteljega (`chartStack` kind `category`, kuni 24 kuud): kWh (ost öösel/päeval
+  virnastatud tulbad, jaotuseta kuu neutraalne; päike kuus punktiir; ost ja päike 12 kuu keskmine jooned), € (kulu kuus,
+  12 kuu keskmine), s/kWh (kuu keskmine hind, 12 kuu keskmine). Jooned on omaette virnades (virnastatud telg ei liida
+  neid). Päike enne päikeseparki 0 (omaniku otsus 1.11.2026), puudulik kuu märgitud „*“.
+- Libisev keskmine ainult lõppenud kuudele, mille 12 kuu aken on täielik; jooksev kuu tuhmim ega osale.
+- Plaadid (viimased 12 lõppenud kuud): ost kWh ja ≈ €, keskmine hind, öötariifi ajal ostetud osa, päike.
+  Tähelepanekud (`trendInsights`): päikesepargi järgsed kuud vs aasta varem samad kuud (ost, kulu, toodang), öö osakaal,
+  viimase kuu hind vs 12 kuu keskmine, 12 kuu keskmise suund viimase 3 kuuga – iga lause ainult olemasolevate andmetega.
+- Inspektor (hiir, puudutus, nooleklahvid; ekraanilugejale ainult klaviatuurilt), HTML-legend kolme rühmaga, selgitus
+  (meetod, allikad, öötariifi aeg CONFIG-ist), tabelivaade (kuu, ost, öösel, päeval, kulu, hind, päike ja 12 kuu
+  keskmised). `normalizeMaja` loeb uued väljad; vanem fail → „jaotus puudub“.
+- CSS: bento ala `trendid` (12 veergu), paneelide kõrgused, `.trend-insights`, skeleton mõõdetud kõrgusega.
+- Kontroll: Playwright 1280 hele ja 390 tume, 24 sünteetilist kuud (osa jaotuseta, üks `noData`), klaviatuur, JS-vigu
+  pole, horisontaalset kerimist pole.
+
+---
+
 ## energy-dashboard.html [2.3.1] — 2026-11-01 · aasta kokkuvõte: kuud enne päikeseparki võrguarvestist
 
 Omaniku otsus: kuudel, mille kohta inverteri andmeid pole (2026 jaanuar–mai, kogu 2025), päikest ja akut veel polnud –

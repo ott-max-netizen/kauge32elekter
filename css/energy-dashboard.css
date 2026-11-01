@@ -12,14 +12,15 @@
 @media (min-width: 640px) {
   #section-advice { grid-area: soovitus; } #section-flow { grid-area: voog; }    #section-price { grid-area: hind; }
   #section-hours { grid-area: tunnid; }    #section-battery { grid-area: aku; }  #section-solar { grid-area: paike; }
-  #section-results { grid-area: tulemus; } #section-chart { grid-area: graafik; }
+  #section-results { grid-area: tulemus; } #section-chart { grid-area: graafik; } #section-trends { grid-area: trendid; }
   .layout { grid-template-areas:
     "soovitus soovitus soovitus soovitus soovitus soovitus"
     "voog voog voog voog voog voog"
     "hind hind hind tunnid tunnid tunnid"
     "aku aku aku paike paike paike"
     "tulemus tulemus tulemus tulemus tulemus tulemus"
-    "graafik graafik graafik graafik graafik graafik"; }
+    "graafik graafik graafik graafik graafik graafik"
+    "trendid trendid trendid trendid trendid trendid"; }
 }
 @media (min-width: 1024px) {
   .layout { grid-template-areas:
@@ -28,7 +29,8 @@
     "voog voog voog voog voog voog voog tunnid tunnid tunnid tunnid tunnid"
     "aku aku aku aku aku aku paike paike paike paike paike paike"
     "tulemus tulemus tulemus tulemus tulemus tulemus tulemus tulemus tulemus tulemus tulemus tulemus"
-    "graafik graafik graafik graafik graafik graafik graafik graafik graafik graafik graafik graafik"; }
+    "graafik graafik graafik graafik graafik graafik graafik graafik graafik graafik graafik graafik"
+    "trendid trendid trendid trendid trendid trendid trendid trendid trendid trendid trendid trendid"; }
   /* 2 rea kõrgune voo plaat ei jäta tühja keskele: joonis täidab vaba kõrguse, loend all (tunnide kaardi põhjaga ühel
      joonel). Kõrge geomeetria (flowTallGeometry, kõrgus ala kuju järgi) on absoluutne ja skaleerub alasse
      (preserveAspectRatio meet), nii et see ei kasvata ridu; min-height hoiab joonise loetavana, kui kõrvalveerg on lühike. */
@@ -307,6 +309,18 @@
 /* Hinnakaardi viga (p 10): ikoon, senine tekst ja „Proovi uuesti“ */
 .notice--action { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3); }
 .notice--action > p { flex: 1 1 220px; min-width: 0; }
+
+/* ---------- 9b. Trendid: kolm paneeli ühise kuuteljega (kWh, €, s/kWh); kaksiktelge pole ---------- */
+.chart-host--trend-kwh { height: 200px; } .chart-host--trend-eur { height: 120px; } .chart-host--trend-price { height: 120px; }
+@media (min-width: 640px) { .chart-host--trend-kwh { height: 240px; } .chart-host--trend-eur { height: 140px; } .chart-host--trend-price { height: 130px; } }
+#trend-body { display: flex; flex-direction: column; gap: var(--s3); }
+.trend-insights { display: grid; gap: var(--s2); margin: 0; padding: 0; list-style: none; }
+.trend-insights li { position: relative; padding-left: 26px; font-size: var(--fs-small); line-height: 1.45; }
+.trend-insights li > .icon { position: absolute; left: 0; top: 1px; width: 18px; height: 18px; color: var(--muted); }
+/* Skeleton lõppsisu kõrgusega (mõõdetud 390 / 700 / 1280 px, 24 kuud, tabel suletud) */
+#section-trends[aria-busy="true"] { min-height: 1790px; }
+@media (min-width: 640px) { #section-trends[aria-busy="true"] { min-height: 1370px; } }
+@media (min-width: 1024px) { #section-trends[aria-busy="true"] { min-height: 1120px; } }
 
 /* ---------- 10. Solarmani otseühenduse dialoog (läbipaistmatu, klaasita) ---------- */
 .dialog {

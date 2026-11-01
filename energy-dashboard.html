@@ -17,7 +17,7 @@
 <link rel="stylesheet" href="css/common.css?v=20261031">
 <!-- Lukk (parooliga kaitse, README „Parooliga kaitse“): ilma defer'ita, et globaal Lukk oleks lehe skriptile olemas ja .app peituks enne esimest joonistamist -->
 <script src="js/lukk.js?v=20261031c"></script>
-<link rel="stylesheet" href="css/energy-dashboard.css?v=20261101">
+<link rel="stylesheet" href="css/energy-dashboard.css?v=20261101b">
 <script>
 /* Teema enne esimest joonistamist (sama reegel ja võti kauge32_theme mis elektriinfo lehel ja applyTheme-is):
    <html data-theme> on alati "light" või "dark", ka „auto“ korral süsteemi eelistuse järgi (css/common.css). */
@@ -269,6 +269,17 @@
       </div>
     </section>
 
+    <!-- 9. Trendid: kuud ja 12 kuu libisev keskmine – ost võrgust (öö/päev), kulu, keskmine hind, päike; plaadid, tähelepanekud, tabel -->
+    <section class="card" id="section-trends" aria-labelledby="h-trends" aria-busy="true">
+      <div class="card__head">
+        <h2 id="h-trends" class="card__title"><svg class="icon" aria-hidden="true" focusable="false"><use href="img/icons.svg?v=20261023#i-cycle"></use></svg>Trendid: 12 kuu libisev keskmine</h2>
+        <span id="trend-hint" class="card__hint" data-testid="trend-hint"></span>
+      </div>
+      <div class="card__body" id="trend-body">
+        <span class="skeleton skeleton--block" aria-hidden="true"></span>
+      </div>
+    </section>
+
   </main>
 
   <footer class="app-footer">
@@ -457,7 +468,7 @@ const CONFIG = {
 
 /* Tehnilised konstandid — neid ei ole tavakasutuses vaja muuta. Mõlema lehe ühised (TIME_ZONE, API_URL,
    MINUTE_MS, HOUR_MS, DAY_MS) on failis js/common.js. */
-const APP_VERSION = '2.3.1';
+const APP_VERSION = '2.4.0';
 const PRICE_TIMEOUT_MS = 20000;
 const SOLAR_TIMEOUT_MS = 30000;
 const TARIFF_TIMEOUT_MS = 5000;
@@ -521,6 +532,8 @@ const state = {
   period: 'today',        // kokkuvõtte periood (PERIODS): 'today' | 'yesterday' | '7d' | 'month-3' … 'month' | 'year-1' | 'year'
   daysMetric: 'solar',    // päevade/kuude graafiku näitaja: 'solar' | 'load' | 'grid' | 'battery' | 'price'
   daysIndex: null,        // päevade/kuude graafikul valitud päev või kuu (indeks)
+  trendIndex: null,       // trendide graafikul valitud kuu (indeks)
+  trendKey: '',
   loading: false,
   lastRefresh: null,
   lastRefreshStartedAt: 0, // viimase värskenduse algus (ms), ooteaja arvutamiseks
@@ -788,6 +801,8 @@ function normalizeMaja(list) {
     months.set(row.kuu, {
       key: row.kuu, year: Number(match[1]), month: Number(match[2]), kwh, eur,
       kwhToDate: finiteOrNull(row.kwhToDate), eurToDate: finiteOrNull(row.eurToDate),
+      // Öö-/päevatariifi jaotus (töövoo CALC_VERSION ≥ 4); vanemas kirjes puudub -> null (trendidel „jaotus puudub“)
+      kwhOo: finiteOrNull(row.kwhOo), kwhPaev: finiteOrNull(row.kwhPaev), eurOo: finiteOrNull(row.eurOo), eurPaev: finiteOrNull(row.eurPaev),
       complete: row.complete !== false, noData: row.noData === true
     });
   }
@@ -3315,6 +3330,340 @@ function formatSigned2(value) {
   return `${rounded > 0 ? '+' : '−'}${numberFormat.d2.format(Math.abs(rounded))}`;
 }
 
+/* ---------- Trendid: kuud ja 12 kuu libisev keskmine (võrguarvesti + inverteri päevakokkuvõtted) ---------- */
+const TREND_MONTHS = 24;     // graafikul kuni 24 kuud (hinnad.json majaElekter: jooksev aasta ja aasta varem samad kuud)
+const TREND_WINDOW = 12;     // libiseva keskmise aken (lõppenud kuud)
+
+/**
+ * Kuuread trendide jaoks (vanimast uusimani, kuni TREND_MONTHS kuud kuni jooksva kuuni): ost võrgust (võrguarvesti,
+ * öö/päev), kulu koos tasudega, keskmine hind, päike (inverteri päevakokkuvõtted; enne päikeseparki 0 – omaniku otsus)
+ * ja igale kuule 12 kuu libisev keskmine (kuu ja 11 eelmist; ainult lõppenud kuud, kõik 12 peavad olemas olema).
+ */
+function buildTrendMonths(d) {
+  const p = getTallinnDateParts(d.now);
+  const maja = state.prices.maja || new Map();
+  const fromKey = state.days.meta && typeof state.days.meta.from === 'string' ? state.days.meta.from
+    : state.days.list.length ? state.days.list[0].paev : null;
+  const fromMonth = fromKey ? fromKey.slice(0, 7) : null;
+  const solarByMonth = new Map();
+  for (const r of state.days.list) {
+    if (r.noData || r.pvKwh == null) continue;
+    const key = r.paev.slice(0, 7);
+    const m = solarByMonth.get(key) || { kwh: 0, days: 0 };
+    m.kwh += r.pvKwh; m.days += 1;
+    solarByMonth.set(key, m);
+  }
+  const todayKey = tallinnDateKey(d.now);
+  if (d.totals && d.totals.pvKwh != null && !state.days.list.some(r => r.paev === todayKey)) {
+    const key = todayKey.slice(0, 7);
+    const m = solarByMonth.get(key) || { kwh: 0, days: 0 };
+    m.kwh += d.totals.pvKwh; m.days += 1;
+    solarByMonth.set(key, m);
+  }
+  const pad = n => String(n).padStart(2, '0');
+  const rows = [];
+  for (let back = TREND_MONTHS - 1; back >= 0; back--) {
+    const { year, month } = shiftMonth(p.year, p.month, -back);
+    const key = `${year}-${pad(month)}`;
+    const rec = maja.get(key);
+    const meter = rec && !rec.noData ? rec : null;
+    const ongoing = back === 0;
+    const sol = solarByMonth.get(key);
+    const expectedDays = ongoing ? p.day : daysInMonth(year, month);
+    // Päike: enne päevakokkuvõtete algust 0 (parki polnud); algusest alates päevade summa (puudulik kuu märgitud)
+    const solarKwh = fromMonth ? (key < fromMonth ? 0 : sol ? sol.kwh : null) : null;
+    const solarDays = key >= (fromMonth || '') && sol ? sol.days : null;
+    const expectedFrom = fromKey && key === fromMonth ? expectedDays - Number(fromKey.slice(8)) + 1 : expectedDays;
+    rows.push({
+      key, year, month, date: dateFromKey(`${key}-01`), ongoing,
+      kwh: meter ? meter.kwh : null, eur: meter ? meter.eur : null,
+      kwhOo: meter ? meter.kwhOo : null, kwhPaev: meter ? meter.kwhPaev : null, eurOo: meter ? meter.eurOo : null, eurPaev: meter ? meter.eurPaev : null,
+      price: meter && meter.kwh > 0.5 ? meter.eur / meter.kwh * 100 : null,
+      preliminary: Boolean(meter) && !ongoing && !meter.complete,
+      noData: Boolean(rec && rec.noData),
+      solarKwh, solarPartial: solarKwh != null && solarDays != null && solarDays < expectedFrom
+    });
+  }
+  // Libisev keskmine: kõik 12 kuud peavad olema lõppenud ja olemas (muidu auk joones)
+  const rolling = (get, i) => {
+    if (i < TREND_WINDOW - 1 || rows[i].ongoing) return null;
+    let sum = 0;
+    for (let j = i - TREND_WINDOW + 1; j <= i; j++) { const v = get(rows[j]); if (v == null) return null; sum += v; }
+    return sum / TREND_WINDOW;
+  };
+  rows.forEach((r, i) => {
+    r.kwh12 = rolling(x => x.kwh, i);
+    r.eur12 = rolling(x => x.eur, i);
+    r.solar12 = rolling(x => x.solarKwh, i);
+    r.price12 = r.kwh12 > 0.5 && r.eur12 != null ? r.eur12 / r.kwh12 * 100 : null;
+    r.night12 = rolling(x => x.kwhOo, i);
+    r.nightShare12 = r.night12 != null && r.kwh12 > 0.5 ? r.night12 / r.kwh12 : null;
+  });
+  // Graafik algab esimesest andmetega kuust
+  const first = rows.findIndex(r => r.kwh != null || (r.solarKwh != null && r.solarKwh > 0));
+  return { rows: first > 0 ? rows.slice(first) : rows, fromKey };
+}
+
+/** Viimase 12 lõppenud kuu kokkuvõte plaatidele (ainult siis, kui kõik 12 kuud on olemas). */
+function trendSummary(rows) {
+  const last = rows[rows.length - 1];
+  const prev = rows[rows.length - 2];
+  const done = rows.filter(r => !r.ongoing);
+  const window = done.slice(-TREND_WINDOW);
+  const full = window.length === TREND_WINDOW && window.every(r => r.kwh != null);
+  const sum = (list, key) => list.reduce((a, r) => a + (r[key] ?? 0), 0);
+  const nightOk = full && window.every(r => r.kwhOo != null);
+  const solarOk = window.every(r => r.solarKwh != null) && window.length === TREND_WINDOW;
+  return {
+    last, prev, window, full,
+    kwh: full ? sum(window, 'kwh') : null, eur: full ? sum(window, 'eur') : null,
+    price: full && sum(window, 'kwh') > 0.5 ? sum(window, 'eur') / sum(window, 'kwh') * 100 : null,
+    nightShare: nightOk && sum(window, 'kwh') > 0.5 ? sum(window, 'kwhOo') / sum(window, 'kwh') : null,
+    solarKwh: solarOk ? sum(window, 'solarKwh') : null,
+    monthsWithMeter: window.filter(r => r.kwh != null).length,
+    span: window.length ? `${monthShortFormatter.format(window[0].date)} ${window[0].year}–${monthShortFormatter.format(window[window.length - 1].date)} ${window[window.length - 1].year}` : ''
+  };
+}
+
+/**
+ * Analüütiku tähelepanekud andmetest (ainult need, mille jaoks andmed on olemas): päikesepargi mõju ostule sama
+ * perioodi aasta varasemaga võrreldes, öösel ostetud osa, viimase lõppenud kuu hind 12 kuu keskmise suhtes, trendi suund.
+ */
+function trendInsights(rows, sum, fromKey) {
+  const out = [];
+  const byKey = new Map(rows.map(r => [r.key, r]));
+  if (fromKey) {
+    // Päikesepargi järel: lõppenud kuud alates pargi esimesest täiskuust vs aasta varem samad kuud (võrguarvesti ost)
+    const startKey = fromKey.slice(8) === '01' ? fromKey.slice(0, 7) : `${shiftMonth(Number(fromKey.slice(0, 4)), Number(fromKey.slice(5, 7)), 1).year}-${String(shiftMonth(Number(fromKey.slice(0, 4)), Number(fromKey.slice(5, 7)), 1).month).padStart(2, '0')}`;
+    const after = rows.filter(r => !r.ongoing && r.key >= startKey && r.kwh != null);
+    const pairs = after.map(r => [r, byKey.get(`${r.year - 1}-${String(r.month).padStart(2, '0')}`)]).filter(([, q]) => q && q.kwh != null);
+    if (pairs.length >= 2) {
+      const now = pairs.reduce((a, [r]) => a + r.kwh, 0);
+      const before = pairs.reduce((a, [, q]) => a + q.kwh, 0);
+      const eurNow = pairs.reduce((a, [r]) => a + r.eur, 0);
+      const eurBefore = pairs.reduce((a, [, q]) => a + q.eur, 0);
+      const solar = pairs.reduce((a, [r]) => a + (r.solarKwh ?? 0), 0);
+      if (before > 0.5) {
+        const d = 1 - now / before;
+        out.push(`Päikesepargi järel (${monthShortFormatter.format(pairs[0][0].date)}–${monthShortFormatter.format(pairs[pairs.length - 1][0].date)} ${pairs[pairs.length - 1][0].year}, ${pairs.length} kuud) osteti võrgust ${formatKwh(now)} ehk ${formatPercentAbs(d * 100)} ${d >= 0 ? 'vähem' : 'rohkem'} kui aasta varem samadel kuudel (${formatKwh(before)}); kulu ${approxEur(eurNow)} vs ${approxEur(eurBefore)}${solar > 0 ? `; päike tootis sel ajal ${formatKwh(solar)}` : ''}.`);
+      }
+    }
+  }
+  if (sum.nightShare != null) {
+    out.push(`Viimase 12 kuu ostust ${formatPct(sum.nightShare * 100)} oli öötariifi ajal (öö, nädalavahetus, riigipüha) – odavama võrgutasuga; aku laadimine öösel tõstab seda osa.`);
+  } else {
+    const withSplit = rows.filter(r => !r.ongoing && r.kwhOo != null && r.kwh > 0.5);
+    if (withSplit.length) {
+      const share = withSplit.reduce((a, r) => a + r.kwhOo, 0) / withSplit.reduce((a, r) => a + r.kwh, 0);
+      out.push(`Öö/päeva jaotus on olemas ${withSplit.length} kuu kohta: neist ostust ${formatPct(share * 100)} oli öötariifi ajal. Ülejäänud kuud arvutab töövoog järk-järgult.`);
+    }
+  }
+  const last = [...rows].reverse().find(r => !r.ongoing && r.price != null);
+  if (last && last.price12 != null) {
+    const d = last.price / last.price12 - 1;
+    out.push(`${capitalize(monthNameOf(last.key))} ${last.year} keskmine ostuhind ${formatCents(last.price)} oli ${Math.abs(d) < 0.005 ? 'sama mis' : `${formatPercentAbs(d * 100)} ${d > 0 ? 'kallim kui' : 'odavam kui'}`} 12 kuu keskmine (${formatCents(last.price12)}).`);
+  }
+  const pts = rows.filter(r => r.kwh12 != null);
+  if (pts.length >= 4) {
+    const a = pts[pts.length - 4];
+    const b = pts[pts.length - 1];
+    const d = b.kwh12 / a.kwh12 - 1;
+    if (Math.abs(d) >= 0.02) out.push(`12 kuu keskmine ost on viimase 3 kuuga ${d < 0 ? 'langenud' : 'tõusnud'} ${formatPercentAbs(d * 100)} (${formatKwh(a.kwh12)} → ${formatKwh(b.kwh12)} kuus).`);
+    else out.push(`12 kuu keskmine ost on viimase 3 kuuga püsinud samal tasemel (${formatKwh(b.kwh12)} kuus).`);
+  }
+  return out;
+}
+
+function trendTick(rows, i, plotWidth) {
+  const r = rows[i];
+  const step = plotWidth / rows.length < 34 ? 3 : plotWidth / rows.length < 56 ? 2 : 1;
+  const last = rows.length - 1;
+  if (!(i === last || (last - i) % step === 0)) return '';
+  const name = monthShortFormatter.format(r.date);
+  return r.month === 1 || i === 0 ? [name, String(r.year)] : name;
+}
+
+/** Valitud kuu rida inspektoris ja ekraanilugejale. */
+function describeTrendMonth(r) {
+  const parts = [];
+  const label = `${capitalize(monthNameOf(r.key))} ${r.year}${r.ongoing ? ' (pooleli)' : r.preliminary ? ' (esialgne)' : ''}`;
+  if (r.kwh != null) parts.push(`ost ${formatKwh(r.kwh)}${r.kwhOo != null && r.kwh > 0.5 ? ` (öösel ${formatPct(r.kwhOo / r.kwh * 100)})` : ''}`, `kulu ${approxEur(r.eur)}`);
+  if (r.price != null) parts.push(formatCents(r.price));
+  if (r.solarKwh != null) parts.push(`päike ${formatKwh(r.solarKwh)}${r.solarPartial ? ' (osa päevi)' : ''}`);
+  if (r.noData) parts.push('võrguarvesti andmed puuduvad');
+  const avg = [];
+  if (r.kwh12 != null) avg.push(`ost ${formatKwh(r.kwh12)}`, `kulu ${approxEur(r.eur12)}`);
+  if (r.price12 != null) avg.push(formatCents(r.price12));
+  if (r.solar12 != null) avg.push(`päike ${formatKwh(r.solar12)}`);
+  return `${label}: ${parts.length ? parts.join(' · ') : 'andmed puuduvad'}${avg.length ? ` · 12 kuu keskmine kuus: ${avg.join(', ')}` : ''}`;
+}
+
+function selectTrendIndex(index, pointerType) {
+  const rows = state.trendRows;
+  if (!rows || !rows[index]) return;
+  state.trendIndex = index;
+  const text = describeTrendMonth(rows[index]);
+  byId('trend-inspector').textContent = text;
+  if (pointerType === 'keyboard') byId('trend-announcer').textContent = text;
+}
+
+function buildTrendStack(rows) {
+  if (!T) return null;
+  const stack = chartStack(byId('trend-stack'), {
+    kind: 'category', items: rows, defaultIndex: rows.length - 1, sticky: true, hoverSelects: true,
+    onSelect: (index, pointerType) => selectTrendIndex(index, pointerType)
+  });
+  stack.active = clamp(state.trendIndex ?? rows.length - 1, 0, rows.length - 1);
+  const labels = rows.map((r, i) => i);
+  const dim = r => r.ongoing;
+  const bar = (color, data) => ({ type: 'bar', stack: 'ost', borderSkipped: 'start', maxBarThickness: 22, barPercentage: 0.72, categoryPercentage: 1, borderWidth: 0,
+    data, backgroundColor: rows.map(r => (dim(r) ? T.partial(color) : color)) });
+  // Igal joonel oma virn: virnastatud y-telg (öö + päev tulbad) liidaks muidu ka jooned kokku
+  let lineStacks = 0;
+  const line = (label, color, data, extra = {}) => ({ type: 'line', label, data, stack: `joon${++lineStacks}`, borderColor: color, backgroundColor: color, borderWidth: 2.5, pointRadius: 0, spanGaps: false, $color: color, ...extra });
+  const xAxis = (showLabels, i) => ({ type: 'category', offset: true, grid: { display: false }, border: { color: T.axis },
+    ticks: showLabels ? { color: T.muted, font: { size: 12 }, maxRotation: 0, autoSkip: false, callback(value, index) { return trendTick(rows, index, this.width); } } : { display: false } });
+  const yTicks = { maxTicksLimit: 4, callback: v => numberFormat.d0.format(v) };
+  const splitMissing = rows.some(r => r.kwh != null && r.kwhOo == null);
+  const nightColor = T.mix(T.grid, 0.55);
+  const kwh = upsertChart(byId('c-trend-kwh'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { ...bar(nightColor, rows.map(r => (r.kwhOo != null ? r.kwhPaev : null))), label: 'ost päeval', order: 5 },
+        { ...bar(T.grid, rows.map(r => r.kwhOo)), label: 'ost öösel', order: 4 },
+        { ...bar(T.mix(T.muted, 0.5), rows.map(r => (r.kwh != null && r.kwhOo == null ? r.kwh : null))), label: 'ost (jaotus puudub)', order: 6 },
+        line('päike kuus', T.solar, rows.map(r => r.solarKwh), { borderWidth: 1.5, borderDash: [3, 3], $noActive: true }),
+        line('päike 12 kuu keskmine', T.solar, rows.map(r => r.solar12)),
+        line('ost 12 kuu keskmine', T.text, rows.map(r => r.kwh12))
+      ],
+      $k: { stack, unit: 'kWh / kuu', missing: rows.map((r, i) => (r.kwh == null && !(r.solarKwh > 0) ? i : null)).filter(i => i != null) }
+    },
+    options: chartOptions({ scales: { x: xAxis(false), y: valueAxis(stack, { stacked: true, beginAtZero: true, grace: '8%', ticks: yTicks }) } })
+  });
+  const eur = upsertChart(byId('c-trend-eur'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { ...bar(T.mix(T.grid, 0.6), rows.map(r => r.eur)), label: 'kulu kuus', order: 2 },
+        line('kulu 12 kuu keskmine', T.text, rows.map(r => r.eur12))
+      ],
+      $k: { stack, unit: '€ / kuu' }
+    },
+    options: chartOptions({ scales: { x: xAxis(false), y: valueAxis(stack, { beginAtZero: true, grace: '8%', ticks: yTicks }) } })
+  });
+  const price = upsertChart(byId('c-trend-price'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        line('keskmine hind kuus', T.muted, rows.map(r => r.price), { borderWidth: 1.5, borderDash: [3, 3], pointRadius: 2.5, pointBackgroundColor: rows.map(r => (dim(r) ? T.partial(T.muted) : T.muted)) }),
+        line('hind 12 kuu keskmine', T.text, rows.map(r => r.price12))
+      ],
+      $k: { stack, unit: 's/kWh' }
+    },
+    options: chartOptions({ scales: { x: xAxis(true), y: valueAxis(stack, { beginAtZero: true, grace: '10%', ticks: { maxTicksLimit: 4, callback: v => numberFormat.max1.format(v) } }) } })
+  });
+  stack.charts.push(kwh, eur, price);
+  syncStack(stack);
+  return { stack, splitMissing };
+}
+
+function renderTrendLegend(rows, splitMissing) {
+  const swatch = (color, modifier = '') => el('span', { class: modifier ? `legend__swatch ${modifier}` : 'legend__swatch', style: color ? `--swatch:${color}` : null, 'aria-hidden': 'true' });
+  const kwhItems = [legendItem(swatch('var(--grid)'), 'ost öösel (öötariif)'), legendItem(swatch('color-mix(in srgb, var(--grid) 55%, var(--plot))'), 'ost päeval')];
+  if (splitMissing) kwhItems.push(legendItem(swatch('color-mix(in srgb, var(--muted) 50%, var(--plot))'), 'ost, öö/päeva jaotus veel puudub (töövoog arvutab järk-järgult)'));
+  kwhItems.push(legendItem(legendLineKey('var(--text)'), 'ost 12 kuu keskmine'));
+  if (rows.some(r => r.solarKwh != null)) kwhItems.push(legendItem(legendLineKey('var(--solar)', 'line-key--dotted'), 'päike kuus'), legendItem(legendLineKey('var(--solar)'), 'päike 12 kuu keskmine'));
+  if (rows.some(r => r.ongoing)) kwhItems.push(legendItem(swatch('var(--grid)', 'legend__swatch--partial'), 'tuhmim = jooksev kuu (pooleli, keskmises ei osale)'));
+  if (rows.some(r => r.kwh == null)) kwhItems.push(legendItem(swatch(null, 'legend__swatch--missing'), 'andmed puuduvad'));
+  byId('trend-legend').replaceChildren(
+    legendGroup('Ost võrgust ja päike, kWh / kuu', kwhItems),
+    legendGroup('Kulu, € / kuu', [legendItem(swatch('color-mix(in srgb, var(--grid) 60%, var(--plot))'), 'kulu kuus koos tasudega'), legendItem(legendLineKey('var(--text)'), 'kulu 12 kuu keskmine')]),
+    legendGroup('Keskmine ostuhind, s/kWh', [legendItem(legendLineKey('var(--muted)', 'line-key--dotted'), 'kuu keskmine'), legendItem(legendLineKey('var(--text)'), '12 kuu keskmine')])
+  );
+}
+
+function renderTrendTable(rows) {
+  const dash = '—';
+  const n0 = v => (v != null ? numberFormat.d0.format(v) : dash);
+  const n2 = v => (v != null ? numberFormat.d2.format(v) : dash);
+  const header = [['Kuu'], ['Ost', 'kWh'], ['öösel', 'kWh'], ['päeval', 'kWh'], ['Kulu', '≈ €'], ['Hind', 's/kWh'], ['Päike', 'kWh'],
+    ['Ost 12 k', 'kWh/kuu'], ['Kulu 12 k', '≈ €/kuu'], ['Hind 12 k', 's/kWh'], ['Päike 12 k', 'kWh/kuu'], ['Öösel 12 k', '%']];
+  byId('trend-table-body').replaceChildren(el('table', { class: 'data-table' }, [
+    el('caption', { class: 'visually-hidden', text: 'Kuud ja 12 kuu libisev keskmine: ost võrgust (võrguarvesti), kulu, hind ja päike (inverter)' }),
+    el('thead', {}, el('tr', {}, header.map(([text, sub]) => el('th', { scope: 'col' }, [text, sub ? el('span', { class: 'th-sub', text: sub }) : null])))),
+    el('tbody', {}, rows.map(r => el('tr', {}, [
+      el('th', { scope: 'row', text: `${capitalize(monthShortFormatter.format(r.date))} ${r.year}${r.ongoing ? ' (pooleli)' : r.preliminary ? ' (esialgne)' : ''}` }),
+      ...[n0(r.kwh), n0(r.kwhOo), n0(r.kwhPaev), n2(r.eur), n2(r.price), r.solarKwh != null ? `${n0(r.solarKwh)}${r.solarPartial ? '*' : ''}` : dash,
+        n0(r.kwh12), n2(r.eur12), n2(r.price12), n0(r.solar12), r.nightShare12 != null ? numberFormat.pct.format(r.nightShare12 * 100) : dash].map(text => el('td', { text }))
+    ])))
+  ]));
+}
+
+function renderTrends(d) {
+  const host = byId('trend-body');
+  const hint = byId('trend-hint');
+  if (!state.prices.loaded) return;
+  const { rows, fromKey } = buildTrendMonths(d);
+  const hasMeter = rows.some(r => r.kwh != null);
+  if (!hasMeter) {
+    hint.textContent = '';
+    host.replaceChildren(el('p', { class: 'placeholder', text: 'Võrguarvesti kuusummasid (hinnad.json) pole veel: trende ei saa arvutada.' }));
+    state.trendKey = '';
+    return;
+  }
+  const sum = trendSummary(rows);
+  const last = rows[rows.length - 1];
+  const key = [state.prices.version, state.days.version, rows[0].key, rows.length, last.solarKwh ?? '', last.kwh ?? ''].join('|');
+  if (key === state.trendKey) return;
+  state.trendKey = key;
+  state.trendRows = rows;
+  hint.textContent = `${monthShortFormatter.format(rows[0].date)} ${rows[0].year} – ${monthShortFormatter.format(last.date)} ${last.year} · võrguarvesti (Estfeed) ja inverter`;
+  const tiles = [
+    testTile('trend-kwh', 'Ost võrgust 12 kuud', sum.kwh != null ? formatKwh(sum.kwh) : '—', sum.full ? `${sum.span} · ${approxEur(sum.eur)}` : `${sum.monthsWithMeter}/12 kuud olemas`),
+    testTile('trend-price', 'Keskmine hind 12 kuud', sum.price != null ? numberFormat.d2.format(sum.price) : '—', sum.price != null ? 's/kWh koos tasudega' : 'vajab 12 lõppenud kuud'),
+    testTile('trend-night', 'Öötariifi ajal ostetud', sum.nightShare != null ? formatPct(sum.nightShare * 100) : '—', sum.nightShare != null ? 'viimase 12 kuu ostust' : 'jaotus laaditakse järk-järgult'),
+    testTile('trend-solar', 'Päike 12 kuud', sum.solarKwh != null ? formatKwh(sum.solarKwh) : '—', fromKey ? `park alates ${formatDayKey(fromKey)}; enne seda 0` : 'päevakokkuvõtteid pole')
+  ];
+  const insights = trendInsights(rows, sum, fromKey);
+  if (!byId('trend-stack')) {
+    setChildren(host,
+      el('div', { class: 'stats stats--4', role: 'group', 'aria-label': 'Viimase 12 lõppenud kuu kokkuvõte' }, tiles),
+      el('p', { id: 'trend-inspector', class: 'days-inspector' }),
+      el('p', { id: 'trend-announcer', class: 'visually-hidden', 'aria-live': 'polite' }),
+      el('div', { class: 'chart-well' }, [
+        el('div', { class: 'chart-stack', id: 'trend-stack', tabindex: '0', role: 'group', 'aria-roledescription': 'graafik', 'aria-label': 'Trendide graafik' }, [
+          el('div', { class: 'chart-host chart-host--trend-kwh' }, el('canvas', { id: 'c-trend-kwh', 'aria-hidden': 'true' })),
+          el('div', { class: 'chart-host chart-host--trend-eur' }, el('canvas', { id: 'c-trend-eur', 'aria-hidden': 'true' })),
+          el('div', { class: 'chart-host chart-host--trend-price' }, el('canvas', { id: 'c-trend-price', 'aria-hidden': 'true' })),
+          el('span', { class: 'chart-stack__cross', hidden: true })
+        ])
+      ]),
+      el('div', { id: 'trend-legend', class: 'legend', role: 'group', 'aria-label': 'Trendide graafiku selgitus' }),
+      el('ul', { id: 'trend-insights', class: 'trend-insights' }),
+      el('p', { class: 'table-note', id: 'trend-note' }),
+      el('details', { class: 'table-view' }, [
+        el('summary', {}, [iconEl('table'), 'Tabelivaade (kuu kaupa)', el('span', { class: 'table-view__hint', 'aria-hidden': 'true', text: 'keri →' }), iconEl('chevron-down')]),
+        el('div', { class: 'table-scroll', id: 'trend-table-body' })
+      ])
+    );
+  } else {
+    host.querySelector('.stats').replaceChildren(...tiles);
+  }
+  byId('trend-note').textContent = `12 kuu libisev keskmine = kuu ja sellele eelneva 11 kuu keskmine kuus; ainult lõppenud kuud, kõik 12 peavad olemas olema (jooksev kuu on graafikul tuhmim). Ost võrgust, öö/päeva jaotus ja kulu: võrguarvesti (Estfeed), kulu on hinnang sel ajal kehtinud börsihinna, tasude ja KM-ga (arve alus). Öö = öötariifi aeg (${TARIFFS.ootariif.algus}–${TARIFFS.ootariif.lopp}, nädalavahetus, riigipühad). Päike: inverteri päevakokkuvõtted${fromKey ? `, enne päikeseparki (${formatDayKey(fromKey)}) 0` : ''}; * = kuus pole kõiki päevi. Maja kogutarbimine on suurem kui ost (osa katab päike ja aku).`;
+  byId('trend-insights').replaceChildren(...insights.map(text => el('li', {}, [iconEl('info'), text])));
+  byId('trend-insights').hidden = !insights.length;
+  if (state.trendIndex == null || state.trendIndex >= rows.length) state.trendIndex = rows.length - 1;
+  const built = buildTrendStack(rows);
+  byId('trend-stack').setAttribute('aria-label', `Trendide graafik: ost võrgust (öösel ja päeval), kulu, keskmine hind ja päike kuu kaupa ning 12 kuu libisev keskmine, ${rows.length} kuud. ${describeTrendMonth(last)} Nooleklahvidega saab kuid valida.`);
+  byId('trend-inspector').textContent = describeTrendMonth(rows[state.trendIndex]);
+  renderTrendLegend(rows, built ? built.splitMissing : false);
+  renderTrendTable(rows);
+}
+
 /* ---------- Järgmised tunnid (p 6.11) ---------- */
 /** Järgmiste tundide read: käimasolev tund esimesena, tunni kaalutud keskmine börsihind (sama tsükkel mis endisel hinnakaardi loendil). */
 function upcomingHourRows(d, count = 8) {
@@ -4435,6 +4784,7 @@ function renderAll() {
   renderSolar(d);
   renderResults(d);
   renderChart(d);
+  renderTrends(d);
   if (state.prices.loaded || state.solar.loaded) {
     for (const card of document.querySelectorAll('.card[aria-busy]')) card.removeAttribute('aria-busy');
   }

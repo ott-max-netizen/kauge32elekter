@@ -26,7 +26,7 @@ Elering API → GitHub Actions → hinnad.json → GitHub Pages → index.html b
 | Fail | Sisu |
 |---|---|
 | `index.html` | **Elektriinfo**: börsihind, odavaim aeg, päikesekaart, maja lõpphind ja üldelekter (HTML ja JS) |
-| `energy-dashboard.html` | **Energia**: päikesepark, akupank, energiavoog, soovitus, „Täna kokku“ (kWh ja €; perioodid päevast aastani), päeva graafik (eile, täna, homme) ja päevade/kuude graafik |
+| `energy-dashboard.html` | **Energia**: päikesepark, akupank, energiavoog, soovitus, „Täna kokku“ (kWh ja €; perioodid päevast aastani), päeva graafik (eile, täna, homme), päevade/kuude graafik ja „Trendid“ (kuud ja 12 kuu libisev keskmine) |
 | `css/common.css` | **ühine disainisüsteem** mõlemale lehele: tokenid (hele ja tume), klaaskaardid ja mesh-taust, bento-ruudustiku alus, komponendid, graafikuraam, olekud, print ja eelistuste varuvariandid |
 | `css/index.css`, `css/energy-dashboard.css` | ainult lehe paigutus (`grid-template-areas`) ja lehepõhised komponendid |
 | `img/icons.svg` | piktogrammide sprite (`<symbol id="i-…">`), mida kasutavad mõlemad lehed |
@@ -116,7 +116,9 @@ mõnetunnise viivitusega, seega võib viimane `kwh` rida olla mitu tundi vana. F
   `warnings` (töövoo hoiatused; lehed näitavad neid elanikele, seega on need tavakeeles – sisemised nimed nagu
   `kwhRes`, `CONFIG`, `TASUDE_AJALUGU` on ainult Actions-i logis). Vanemas failis `meta`-t pole – lehed toimivad ka siis.
 - **Kuu kirje:** `v` = arvutusreeglite versioon (`CALC_VERSION`), `cfg` = tasude sõrmejälg (versioon,
-  KM ja tasude ajalugu, CONFIG-i tasud), `updatedAt` = millal kirje sisu viimati muutus. Lõplik kuu
+  KM ja tasude ajalugu, CONFIG-i tasud), `updatedAt` = millal kirje sisu viimati muutus. Alates `v` 4 on kirjes ka
+  öö-/päevatariifi jaotus `kwhOo`, `kwhPaev`, `eurOo`, `eurPaev` (sama öötariifi reegel mis hinnal: öötunnid,
+  nädalavahetus, riigipühad; kuutasu jaotusest välja) – energialehe „Trendid“ kaart; vanemas kirjes puuduvad. Lõplik kuu
   arvutatakse uuesti, kui `v` või `cfg` erineb; `noData: true` = selle kuu kohta mõõteandmeid pole (graafikul „—“).
 
 `paike.json` (töövoog `uuenda-paike.yml`) sisaldab inverteri hetkeseisu ja 15-min mõõtmisi:
@@ -479,6 +481,16 @@ Elering API      → GitHub Actions (uuenda-hinnad.yml) → hinnad.json ┴→ G
   - **Maja energiahind täna:** keskmine ostuhind (maja tarbimine perioodi lõpphinnaga) → maja maksis (võrgu netokulu /
     maja tarbimine) ja „x % odavam“. Kõrval aku laetuse muutus, sest päeva lõpuks täitunud või tühjenenud aku
     mõjutab võrdlust.
+
+- **Trendid** (kaart lehe lõpus): kuni 24 kuud (`hinnad.json` `majaElekter`: jooksev aasta ja aasta varem samad kuud)
+  kolmel paneelil ühise kuuteljega, kaksiktelge pole: **kWh** – ost võrgust kuus (võrguarvesti) öö/päeva jaotusega
+  (jaotuseta kuu neutraalne), päike kuus (inverteri päevakokkuvõtted; enne päikeseparki 0) ja mõlema **12 kuu libisev
+  keskmine**; **€** – kulu kuus koos tasudega ja 12 kuu keskmine; **s/kWh** – kuu keskmine ostuhind ja 12 kuu keskmine.
+  Libisev keskmine = kuu ja 11 eelmise kuu keskmine, ainult lõppenud kuud ja kõik 12 peavad olemas olema (muidu auk
+  joones); jooksev kuu on tuhmim ega osale. Plaadid: viimase 12 lõppenud kuu ost (kWh, €), keskmine hind, öötariifi
+  ajal ostetud osa, päike. Tähelepanekud andmetest (ainult kui andmed lubavad): päikesepargi järgsed kuud vs aasta varem
+  samad kuud, öö osakaal, viimase kuu hind 12 kuu keskmise suhtes, 12 kuu keskmise suund viimase 3 kuuga. Valitud kuu
+  rida graafiku kohal (hiir, puudutus, nooleklahvid), legend, selgitus ja tabelivaade.
 
 **Otseühendus (valikuline):** jaluse lingi „Solarmani otseühendus“ kaudu saab ühes
 seadmes pärida andmed brauserist otse Solarmani API-st. Võtmed ja token salvestatakse
