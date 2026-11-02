@@ -820,6 +820,7 @@ a { color: var(--focus); text-underline-offset: 2px; }
   background: transparent;
   color: var(--text);
   font: inherit;
+  text-align: left;                   /* nupu vaikimisi keskjoondus nihutaks murduva teksti keskele */
   cursor: pointer;
   -webkit-appearance: none;
   appearance: none;

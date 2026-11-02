@@ -194,6 +194,8 @@
   background: var(--muted);
 }
 .sun-card__note { font-size: var(--fs-small); line-height: 1.45; }
+.sun-card__note p { margin: 0 0 6px; }
+.sun-card__note p:last-child { margin-bottom: 0; }
 .sun-card__foot .link-btn { vertical-align: middle; }
 /* „Eile“ rida (paevad.json): kokkuvõte kaardi põhjas jaluse kohal */
 .sun-card__yesterday { margin: auto 0 var(--s2); padding-top: var(--s3); font-size: var(--fs-small); line-height: 1.45; color: var(--muted); }
@@ -213,7 +215,9 @@
 
 /* ---------- 7. Maja üldelekter ---------- */
 .building-status { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--s1) var(--s3); min-height: 26px; }
-.building-status__info { margin: 0; font-size: var(--fs-secondary); font-weight: 600; line-height: 1.4; }
+.building-status__info { margin: 0; font-size: var(--fs-secondary); line-height: 1.4; }
+.building-status__main { display: block; font-weight: 700; }
+.building-status__prev { display: block; font-size: var(--fs-small); color: var(--muted); }
 .building-status__hint { margin: 0; font-size: var(--fs-micro); color: var(--muted); }
 .building-body { display: flex; flex-direction: column; gap: var(--s3); min-width: 0; }
 .stats--building { grid-template-columns: repeat(2, minmax(0, 1fr)); }

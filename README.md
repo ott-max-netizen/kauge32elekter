@@ -195,7 +195,7 @@ Energialehe kokkuvõtte perioodivaliku (eile, 7 päeva, kuud, aastad) andmed. Fa
 ## Mõõtmiste loogika: Estfeed vs inverter
 
 Rakendus kasutab kahte teineteist täiendavat mõõtmist:
-1. **Estfeed (Eleringi andmeladu, liitumispunkti arvesti, `hinnad.json` → `kwh`)**: **elektri ost võrgust** 15 minuti kaupa („ost võrgust (Estfeed)“; plaat „Ostetud võrgust“, alltekst „Estfeed · kuni HH:MM · arve alus“). See on arve alus.
+1. **Estfeed (Eleringi andmeladu, liitumispunkti arvesti, `hinnad.json` → `kwh`)**: **elektri ost võrgust** 15 minuti kaupa („ost võrgust (Estfeed)“; grupp „Ost võrgust sel päeval (võrguarvesti, arve alus)“, plaat „Ostetud võrgust“, alltekst „kuni HH:MM“). See on arve alus.
 2. **Inverter (Solarman, `paike.json`)**: **päikesetoodang**, **maja tegelik tarbimine** (`usePower`), aku laadimine/tühjenemine ja ost võrgust (märgistatud „(inverter)“). Inverteri ost (`purchasePower` × 0,25 h) klapib Estfeedi arvestiga 15-min täpsusega (±2 %): periooditi kuni ±0,5 kWh ja päeva lõikes ~2 %, ning ulatub tavaliselt hilisema kellaajani; arve alus on Estfeed. Numbreid eri allikatest ei liideta, igaühel on allikas ja lõikeaeg („kuni HH:MM“).
 
 Eri allikate arve ei liideta. Maja tarbimine ≠ ost võrgust + päikese omatarve, sest maja akut laetakse
@@ -250,7 +250,8 @@ Solarmani välja nimed ja märgid on failis muutmata; lehed tõlgendavad neid ni
   PUUDU“, kui hinnaridades on auk või tunnine samm (`pricesOk: false`; hinnad ise on värsked).
 - „Päikesest kaetud“ = ise kasutatud päikeseenergia (toodang − müük) / maja tarbimine; sama mõõdik on
   energialehel. Aku laadimine (võrgust/päikesest) on voosõlmedes („sellest akusse“) ja selgitavas lauses
-  koos allika ja lõikeajaga („Akut laeti täna (inverter, kuni 14:59) 31,8 kWh …“); „Maja tarbis täna“ plaadil
+  koos allika ja lõikeajaga („Aku täna (inverter, kuni 14:59): laetud 31,8 kWh …“; iga selgituslause on omaette
+  real); „Maja tarbis täna“ plaadil
   „ost võrgust 126,5 kWh (inverter), sellest akusse 31,2 · kuni 14:59“, väärtusplaadil „täna kuni 14:59 ·
   hinnang …“. Aku suund on |`chargePower`| − |`dischargePower`|, nende puudumisel `batteryPower`-ist (< 0 = laeb).
   Kõige kitsamal telefonil (≤ 380 px) on voosõlmede kiri väiksem ja „Päikese-park“ poolitub; kahe veeru
