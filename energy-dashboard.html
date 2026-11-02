@@ -14,13 +14,13 @@
 <meta name="robots" content="noindex, nofollow, noarchive">
 <title>Kauge 32 energia</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="css/common.css?v=20261031">
+<link rel="stylesheet" href="css/common.css?v=20261102">
 <!-- Lukk (parooliga kaitse, README „Parooliga kaitse“): ilma defer'ita, et globaal Lukk oleks lehe skriptile olemas ja .app peituks enne esimest joonistamist -->
 <script src="js/lukk.js?v=20261101"></script>
 <!-- Külastuste loendus (GoatCounter, küpsisteta; README „Külastuste statistika“). Skript on repo sees, sest CSP lubab ainult
      sama saidi skripte; loendus läheb sendBeacon-iga (connect-src). Saadetakse lehe nimi, ekraani laius ja tulek, mitte andmeid. -->
 <script data-goatcounter="https://kauge32.goatcounter.com/count" data-goatcounter-settings='{"path":"/energy-dashboard.html","title":"Energia"}' async src="js/vendor/goatcounter-count.js?v=c031008"></script>
-<link rel="stylesheet" href="css/energy-dashboard.css?v=20261101c">
+<link rel="stylesheet" href="css/energy-dashboard.css?v=20261102">
 <script>
 /* Teema enne esimest joonistamist (sama reegel ja võti kauge32_theme mis elektriinfo lehel ja applyTheme-is):
    <html data-theme> on alati "light" või "dark", ka „auto“ korral süsteemi eelistuse järgi (css/common.css). */
@@ -473,7 +473,7 @@ const CONFIG = {
 
 /* Tehnilised konstandid — neid ei ole tavakasutuses vaja muuta. Mõlema lehe ühised (TIME_ZONE, API_URL,
    MINUTE_MS, HOUR_MS, DAY_MS) on failis js/common.js. */
-const APP_VERSION = '2.5.0';
+const APP_VERSION = '2.5.1';
 const PRICE_TIMEOUT_MS = 20000;
 const SOLAR_TIMEOUT_MS = 30000;
 const TARIFF_TIMEOUT_MS = 5000;
@@ -584,8 +584,10 @@ function buildApiRange(now) {
    ========================================================================== */
 const dateShortFormatter = new Intl.DateTimeFormat('et-EE', { timeZone: TIME_ZONE, day: 'numeric', month: 'numeric' });
 const numberFormat = {
-  d2: new Intl.NumberFormat('et-EE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-  d1: new Intl.NumberFormat('et-EE', { minimumFractionDigits: 1, maximumFractionDigits: 1 }),
+  // useGrouping 'always': ka 4-kohalised arvud tuhandeeraldajaga (4 866,8 kWh), nagu 5-kohalised ja elektriinfo lehel;
+  // vaikimisi (min2) jäid 4-kohalised rühmitamata ja samal kaardil oli „4866,8“ kõrval „60 292,3“
+  d2: new Intl.NumberFormat('et-EE', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: 'always' }),
+  d1: new Intl.NumberFormat('et-EE', { minimumFractionDigits: 1, maximumFractionDigits: 1, useGrouping: 'always' }),
   d0: new Intl.NumberFormat('et-EE', { maximumFractionDigits: 0, useGrouping: 'always' }),
   pct: new Intl.NumberFormat('et-EE', { maximumFractionDigits: 0 }),
   max1: new Intl.NumberFormat('et-EE', { maximumFractionDigits: 1 })
@@ -3243,13 +3245,20 @@ function buildDaysChart(days, metric) {
   return { stack, chart };
 }
 
+/** Inspektori rida „Silt: kirjeldus“: silt paksus kirjas, kirjeldus tavakirjas (üks pikk paks lause oli raske lugeda). */
+function setInspector(node, text) {
+  const i = text.indexOf(': ');
+  if (i < 0) { node.textContent = text; return; }
+  node.replaceChildren(el('strong', { text: text.slice(0, i + 1) }), ` ${text.slice(i + 2)}`);
+}
+
 /** Päevade graafiku valik (p 6.9): inspektor; klaviatuurilt sama tekst ka ekraanilugejale. */
 function selectDaysIndex(index, pointerType) {
   const view = state.daysView;
   if (!view || !view.days || !view.days[index]) return;
   state.daysIndex = index;
   const text = describeDay(view.days[index], state.daysMetric);
-  byId('days-inspector').textContent = text;
+  setInspector(byId('days-inspector'), text);
   if (pointerType === 'keyboard') byId('days-announcer').textContent = text;
 }
 
@@ -3303,7 +3312,7 @@ function renderDaysPanel(d, view) {
   if (stack) stack.setAttribute('aria-label', `${view.title}: ${DAY_METRICS[metric].series.map(sr => sr.name).join(', ')} ${months ? 'kuu' : 'päeva'} kaupa. Nooleklahvidega saab ${months ? 'kuid' : 'päevi'} valida.`);
   byId('days-table-title').textContent = `Tabelivaade (${months ? 'kuu' : 'päeva'} kaupa)`;
   buildDaysChart(days, metric);
-  byId('days-inspector').textContent = describeDay(days[state.daysIndex], metric);
+  setInspector(byId('days-inspector'), describeDay(days[state.daysIndex], metric));
   renderDaysLegend(days, metric);
   renderDaysTable(days);
 }
@@ -3565,7 +3574,7 @@ function selectTrendIndex(index, pointerType) {
   if (!rows || !rows[index]) return;
   state.trendIndex = index;
   const text = describeTrendMonth(rows[index]);
-  byId('trend-inspector').textContent = text;
+  setInspector(byId('trend-inspector'), text);
   if (pointerType === 'keyboard') byId('trend-announcer').textContent = text;
 }
 
@@ -3757,7 +3766,7 @@ function renderTrends(d) {
   if (state.trendIndex == null || state.trendIndex >= rows.length) state.trendIndex = rows.length - 1;
   const built = buildTrendStack(rows);
   byId('trend-stack').setAttribute('aria-label', `Trendide graafik: ost võrgust (öösel ja päeval), maja tarbimine, päike, kulu, börsihind, ostuhind, maja maksis ning aku, päikese ja öötariifi tulu kuu kaupa ja 12 kuu libisev keskmine, ${rows.length} kuud. ${describeTrendMonth(last)} Nooleklahvidega saab kuid valida.`);
-  byId('trend-inspector').textContent = describeTrendMonth(rows[state.trendIndex]);
+  setInspector(byId('trend-inspector'), describeTrendMonth(rows[state.trendIndex]));
   renderTrendLegend(rows, built ? built.splitMissing : false);
   renderTrendTable(rows);
 }
@@ -4082,11 +4091,12 @@ function renderChartLegend({ hasPrices = false, isToday = false, avg = null, avg
     groups.push(legendGroup(`Võrguga vahetus, kWh / ${lower.unit}`, items));
   } else if (lower) {
     const items = [];
-    if (lower.pv) items.push(legendToggle('päike', legendSwatch('var(--solar)', 'legend__swatch--area'), 'päikesetoodang (kW)'));
-    if (lower.load) items.push(legendToggle('maja', legendLineKey('var(--home)'), 'maja tarbimine (kW)'));
+    // Ühik (kW) on grupi pealkirjas „Energia, kW“, mitte igal real
+    if (lower.pv) items.push(legendToggle('päike', legendSwatch('var(--solar)', 'legend__swatch--area'), 'päikesetoodang'));
+    if (lower.load) items.push(legendToggle('maja', legendLineKey('var(--home)'), 'maja tarbimine'));
     if (lower.forecastBasis) items.push(legendToggle('maja prognoos', legendLineKey('var(--home)', 'line-key--dotted'), `maja tarbimise prognoos (${lower.forecastBasis})`));
-    if (lower.grid) items.push(legendToggle('võrk', legendLineKey('var(--grid)', 'line-key--dashed'), lower.gridSigned ? 'võrk (kW): + ost, − müük' : 'võrk (kW): + ost'));
-    if (lower.battery) items.push(legendToggle('aku', legendLineKey('var(--battery)'), lower.batterySigned ? 'aku (kW): + laeb, − tühjeneb' : 'aku (kW): + laeb'));
+    if (lower.grid) items.push(legendToggle('võrk', legendLineKey('var(--grid)', 'line-key--dashed'), lower.gridSigned ? 'võrk: + ost, − müük' : 'võrk: + ost'));
+    if (lower.battery) items.push(legendToggle('aku', legendLineKey('var(--battery)'), lower.batterySigned ? 'aku: + laeb, − tühjeneb' : 'aku: + laeb'));
     if (nowLine) items.push(nowItem());
     if (sun) items.push(sunItem());
     groups.push(legendGroup('Energia, kW', items));

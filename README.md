@@ -195,7 +195,7 @@ Energialehe kokkuvõtte perioodivaliku (eile, 7 päeva, kuud, aastad) andmed. Fa
 ## Mõõtmiste loogika: Estfeed vs inverter
 
 Rakendus kasutab kahte teineteist täiendavat mõõtmist:
-1. **Estfeed (Eleringi andmeladu, liitumispunkti arvesti, `hinnad.json` → `kwh`)**: **elektri ost võrgust** 15 minuti kaupa („ost võrgust (Estfeed)“; plaat „Ostetud võrgust“, alltekst „Estfeed · kuni HH:MM · arve alus“). See on arve alus.
+1. **Estfeed (Eleringi andmeladu, liitumispunkti arvesti, `hinnad.json` → `kwh`)**: **elektri ost võrgust** 15 minuti kaupa („ost võrgust (Estfeed)“; grupp „Ost võrgust sel päeval (võrguarvesti, arve alus)“, plaat „Ostetud võrgust“, alltekst „kuni HH:MM“). See on arve alus.
 2. **Inverter (Solarman, `paike.json`)**: **päikesetoodang**, **maja tegelik tarbimine** (`usePower`), aku laadimine/tühjenemine ja ost võrgust (märgistatud „(inverter)“). Inverteri ost (`purchasePower` × 0,25 h) klapib Estfeedi arvestiga 15-min täpsusega (±2 %): periooditi kuni ±0,5 kWh ja päeva lõikes ~2 %, ning ulatub tavaliselt hilisema kellaajani; arve alus on Estfeed. Numbreid eri allikatest ei liideta, igaühel on allikas ja lõikeaeg („kuni HH:MM“).
 
 Eri allikate arve ei liideta. Maja tarbimine ≠ ost võrgust + päikese omatarve, sest maja akut laetakse
@@ -250,7 +250,8 @@ Solarmani välja nimed ja märgid on failis muutmata; lehed tõlgendavad neid ni
   PUUDU“, kui hinnaridades on auk või tunnine samm (`pricesOk: false`; hinnad ise on värsked).
 - „Päikesest kaetud“ = ise kasutatud päikeseenergia (toodang − müük) / maja tarbimine; sama mõõdik on
   energialehel. Aku laadimine (võrgust/päikesest) on voosõlmedes („sellest akusse“) ja selgitavas lauses
-  koos allika ja lõikeajaga („Akut laeti täna (inverter, kuni 14:59) 31,8 kWh …“); „Maja tarbis täna“ plaadil
+  koos allika ja lõikeajaga („Aku täna (inverter, kuni 14:59): laetud 31,8 kWh …“; iga selgituslause on omaette
+  real); „Maja tarbis täna“ plaadil
   „ost võrgust 126,5 kWh (inverter), sellest akusse 31,2 · kuni 14:59“, väärtusplaadil „täna kuni 14:59 ·
   hinnang …“. Aku suund on |`chargePower`| − |`dischargePower`|, nende puudumisel `batteryPower`-ist (< 0 = laeb).
   Kõige kitsamal telefonil (≤ 380 px) on voosõlmede kiri väiksem ja „Päikese-park“ poolitub; kahe veeru
@@ -518,21 +519,26 @@ ootab 15 s.
 
 Ülevaateleht samadest andmefailidest (`hinnad.json`, `paike.json`, `paevad.json`), sama parooli ja disainiga. Erinevalt
 kahest töölehest on graafikud siin **animeeritud**: iga kaart ilmub ja selle graafik joonistub, kui kaart kerimisel
-vaatesse jõuab (`IntersectionObserver`); tulbad kasvavad lainena, jooned joonistuvad vasakult paremale, rõngas pöörleb
-täis ja plaatide numbrid loendavad nullist. Lülitid (eile/täna/homme, 1 h / 15 min, täna/eile, 30/90 päeva, kWh/€) animeerivad graafiku uutele
+vaatesse jõuab (`IntersectionObserver`); tulbad kasvavad lainena, jooned joonistuvad vasakult paremale, jagatud tulbad
+kasvavad täis ja plaatide numbrid loendavad nullist. Lülitid (eile/täna/homme, 1 h / 15 min, täna/eile, 30/90 päeva, kWh/€) animeerivad graafiku uutele
 väärtustele. **Vähendatud liikumise** eelistusega (`prefers-reduced-motion`) ja teemavahetusel animatsioone pole.
 
 | Kaart | Andmed | Mida näitab |
 |---|---|---|
 | Plaadid | kõik | elektri hind praegu koos tasude ja KM-ga (all börsihind + tasud); päike, aku tulu (`batteryGainEur`) ja maja tarbimine viimase 30 lõppenud päeva kohta |
 | Elektri hind | `hinnad.json` `data.ee` ja `meta.tariffs` | **eile / täna / homme**, **1 h või 15 min** (vaikimisi telefonis 1 h, arvutis 15 min). Tulp = börsihind (all) + tasud (heledam, üleval), mõlemad KM-ga: tasud = müüja marginaal + võrgutasu (päeva- või öötariif; öötariif ka nädalavahetusel ja riigipühadel) + taastuvenergia- ja varustuskindluse tasu + aktsiis, KM kogu summale, kuutasud pole sees – sama arvutus mis elektriinfo lehe lõpphind (kontrollitud: kõik 96 perioodi samad). Tasud võetakse `hinnad.json` `meta.tariffs`-ist (töövoog kirjutab sinna `index.html` `CONFIG`-i väärtused); kui need puuduvad, näitab graafik börsihinda KM-ga ja teadet. Värv on päeva sees **suhteline** (odavaim roheline → kalleim punane lõpphinna järgi), mitte elektriinfo lehe hinnaklass; möödunud perioodid tuhmid, praegune raamiga, katkendjoon = päeva keskmine. Tooltip: kokku, börsihind, tasud ja tariif. Homme alates ~15:00 |
-| Kust energia tuli | `paevad.json` | 30 päeva päikesetoodang vs ost võrgust (kogu majja tulnud energia) ja päikese osa |
+| Kust energia tuli | `paevad.json` | kolm jagatud tulpa (eile, 7 päeva, 30 päeva): päikesetoodang vs ost võrgust (kogu majja tulnud energia); osa protsent on ploki sees, kui see mahub, kogused rea päises ja all |
 | Päike, maja ja võrk | `paike.json` `frames` | 15-min keskmised võimsused täna või eile (kW) |
 | Aku | `paike.json` `frames`, `realTime`; `paevad.json` | plaadid: laetus praegu (ja laeb / tühjeneb / ootel, < 0,2 kW = ootel), laetud ja tühjendatud kWh valitud päeval (täna või eile; laetuse algus → lõpp, suurim võimsus), aku tulu eile ja 30 päeva; graafikud: laetus % ja laadimine (üles) / tühjenemine (alla) kW 15 min kaupa – kaks eraldi graafikut, et ühelgi poleks kahte y-telge |
 | Päevad | `paevad.json` | päike + ost võrgust virnas (sisse tulnud energia) ja maja tarbimine joonena, 30 või 90 päeva; tooltipis aku tulu |
 | Tarbimine kellaaja järgi | `paevad.json` `loadH` | viimase 14 päeva keskmine kW kellatunni järgi, tööpäev vs puhkepäev (nädalavahetus ja riigipühad) |
 | Maja üldelekter kuude kaupa | `hinnad.json` `data.majaElekter` | viimased 12 kuud arvesti järgi (kWh või €) ja aasta varasem sama kuu; pooleli kuu on heledam |
 
+- **Loetavus:** iga graafiku ühik on telje kohal (s/kWh, kW, %, kWh, €); hinnagraafikul on otsesildid (praegu, kalleim,
+  odavaim ja keskmine joone otsas, kattuv madalama prioriteediga silt jääb ära); 15-min graafikute ajatelg ainult
+  täistundidel (iga 2 h, kitsal ekraanil iga 3 h); aku kahe graafiku plot-alad algavad samast kohast; virnastatud tulpade
+  osade vahel on 2 px pinnavahe; jooned 2 px; plaatide ühik on väiksem kui number. Seeriavärvid (päike, maja, võrk, aku)
+  on kontrollitud värvipimeduse eristatavuse validaatoriga nii heledas kui tumedas teemas.
 - **Hõljutus:** iga graafik näitab tooltipi (kogu veerg korraga), hinnagraafik ka erinevust päeva keskmisest, kuude graafik
   muutust aasta varasemaga. Puutel töötab sama toksamisega.
 - **Ligipääsetavus:** iga lõuend on `role="img"` ja selle `aria-label` on graafiku tekstikokkuvõte (nt odavaim ja kalleim

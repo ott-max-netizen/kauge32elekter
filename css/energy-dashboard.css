@@ -284,7 +284,8 @@
 
 /* ---------- 8. Päevade graafik (p 6.9) ---------- */
 .days-panel { display: flex; flex-direction: column; gap: var(--s3); padding-top: var(--s3); border-top: 1px solid var(--border); }
-.days-inspector { min-height: 40px; font-size: var(--fs-small); font-weight: 600; line-height: 20px; }
+.days-inspector { min-height: 40px; font-size: var(--fs-small); font-weight: 400; line-height: 20px; }
+.days-inspector strong { font-weight: 700; }   /* valitud päev/kuu; kirjeldus tavakirjas */
 /* Legend peegeldab märki: hantli ○ (keskmine ostuhind) ja ● (maja maksis), 45 % täide (laetud), 50 % (pooleli päev) */
 .legend__swatch--ring { border: 2px solid var(--swatch, var(--text)); border-radius: 50%; background: var(--plot); }
 .legend__swatch--dot { border-radius: 50%; }

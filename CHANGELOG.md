@@ -4,6 +4,53 @@ See fail kirjeldab rakenduse `index.html` versioonimuudatusi, arhitektuurilisi k
 
 ---
 
+## [3.3.1] ja energy-dashboard.html [2.5.1] — 2026-11-02 · loetavus: tekstid, legendid, numbrid
+
+Sama ülevaatus mis graafikute lehel (`graafikud.html` 1.2.0), nüüd elektriinfo ja energia lehel. Graafikud ise (ühikud
+teljel, otsesildid, värvid) olid juba korras; parandused on tekstides, legendides ja numbrivormingus. Andmed ja arvutused
+ei muutunud. `css/common.css?v=20261102` (kõik kolm lehte), `css/index.css?v=20261102`, `css/energy-dashboard.css?v=20261102`.
+
+- **Energialeht: numbrid tuhandeeraldajaga.** `numberFormat.d1`/`d2`-l puudus `useGrouping: 'always'`, nii et 4-kohalised
+  arvud jäid rühmitamata ja samal kaardil oli „4866,8 kWh“ kõrval „60 292,3 kWh“ (trendid, tähelepanekud, tooltipid).
+  Nüüd nagu elektriinfo lehel: „4 866,8 kWh“, „≈ 9 548,78 €“.
+- **Legendid:** legendi lüliti tekst on vasakule joondatud (nupu keskjoondus nihutas murduvat rida, nt „maja tarbimise
+  prognoos …“, keskele); päeva ülevaate legendis on ühik ainult grupi pealkirjas („Energia, kW“), mitte igal real;
+  elektriinfo hinnagraafiku legend „odavaim 2 h (koos tasudega), keskm. …“ (enne „… aken (koos võrgutasuga, keskm. …)“).
+- **Inspektorid (päevade ja trendide graafik):** ainult valitud päev/kuu on paksus kirjas, kirjeldus tavakirjas (enne oli
+  kogu pikk rida paks).
+- **Maja üldelekter:** valitud kuu paksus kirjas, võrdlus aasta varasemaga eraldi real tuhmimalt (enne üks pikk paks lause).
+- **„Ost võrgust sel päeval (võrguarvesti, arve alus)“:** allikas on grupi pealkirjas, plaadi alltekst ainult „kuni HH:MM“
+  (telefonis 5 rea asemel 1–2).
+- **Päikesekaart:** selgituslaused omaette ridadel ja lühemalt („Aku täna (inverter, kuni …): laetud …, kasutatud …“;
+  inverteri ja võrguarvesti erinevus ühes lauses) – allikas ja lõikeaeg jäid alles.
+- Hinnakomponentide osakaalu legendis sama nimi mis tabelis („Taastuvenergia-, varustuskindluse tasu ja aktsiis“).
+- Kontrollitud: kõigi 184 hetktõmmise tekst muutus ainult ülalnimetatud kohtades, uusi JS-vigu pole; navigatsioon kolmel
+  lehel 320/390/1280 px; lähivõtted igast kaardist (hele 1280, tume 390) enne ja pärast.
+
+---
+
+## graafikud.html [1.2.0] — 2026-11-02 · loetavus: tekstid, suurused, legendid
+
+`APP_VERSION` `1.2.0`, `css/graafikud.css?v=20261102c`. Andmed ja arvutused ei muutunud.
+
+- **Ühikud teljel:** iga graafiku ühik on plot-ala kohal (s/kWh, kW, %, kWh, €); kaartide vihjed lühenesid (nt „koos tasude
+  ja KM-ga“), plaatide ühik on numbrist väiksem (`<small>`), lõppväärtus proportsionaalsete numbritega.
+- **Hinnagraafiku otsesildid:** praegu, kalleim ja odavaim tulba kohal ning „keskmine“ joone otsas (halo-ga, kattuv
+  madalama prioriteediga silt jääb ära); legend lühem (keskmine on joone otsas). Börsihinna ja tasude vahel 2 px pinnavahe,
+  tasud tumedas teemas heledamad, tulbad kuni 24 px.
+- **Kust energia tuli:** kahe osaga rõnga asemel kolm jagatud tulpa (eile, 7 päeva, 30 päeva) – osade võrdlus on lihtsam,
+  protsent ploki sees (valge või peaaegu must teksti kontrasti järgi, ainult kui mahub), kogused rea päises ja all.
+- **Ajatelg:** 15-min graafikutel (hind 15 min, päike/maja/võrk, aku) sildid ainult täistundidel, iga 2 h (kitsal iga 3 h).
+- **Aku:** kahe graafiku y-teljed sama laiad (plot-alad joonduvad), võimsuse graafikul „laeb ↑ / tühjeneb ↓“ sildid,
+  plaatide alltekstid selgemad („suurim võimsus 8,0 kW“, „ei tühjenenud“), laetuse muutus kaardi märkuses.
+- **Märgid:** jooned 2 px, alad heledam kiht, päevade graafiku tarbimisjoonel punkte pole, päike/ost tulpade vahel 2 px
+  pinnavahe; tooltip 13 px, joontel joonevõti ja tulpadel ristkülik.
+- Seeriavärvid (päike, maja, võrk, aku) kontrollitud värvipimeduse validaatoriga: kõik kontrollid läbivad heledas ja tumedas.
+- Kontrollitud Playwrightiga (hele 1280, tume 390, vähendatud liikumine, parooliga, puuduv `paevad.json`): 7 graafikut ja 3
+  jagatud tulpa, ühikud, lülitid, tooltip, teemavahetus, laiuse muutus; JS-vigu ega horisontaalset kerimist pole.
+
+---
+
 ## graafikud.html [1.1.0] — 2026-11-02 · hind koos tasudega, eile, 1 h / 15 min, aku
 
 `APP_VERSION` `1.1.0`, `css/graafikud.css?v=20261102b`.
