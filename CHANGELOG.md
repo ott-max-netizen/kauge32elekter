@@ -4,6 +4,43 @@ See fail kirjeldab rakenduse `index.html` versioonimuudatusi, arhitektuurilisi k
 
 ---
 
+## graafikud.html [1.1.0] — 2026-11-02 · hind koos tasudega, eile, 1 h / 15 min, aku
+
+`APP_VERSION` `1.1.0`, `css/graafikud.css?v=20261102b`.
+
+- **Elektri hind koos tasude ja KM-ga:** tulp = börsihind (all) + tasud (heledam), mõlemad KM-ga; tasud ja öötariifi reegel
+  `hinnad.json` `meta.tariffs`-ist (töövoo kasutatud `index.html` `CONFIG`), arvutus nagu elektriinfo lehe
+  `calculateFinalPrice` (kuutasud pole sees). Kontrollitud samadel andmetel: hind praegu ja kõik eilsed 96 perioodi on
+  elektriinfo lehe lõpphinnaga samad (päeva- ja öötariif). Tooltip: kokku, börsihind, tasud ja tariif; plaat „Elektri hind
+  praegu“ (börsihind + tasud). Tasude puudumisel börsihind KM-ga ja teade.
+- **Eile / Täna / Homme** ja **1 h / 15 min** hinnagraafikul (vaikimisi telefonis 1 h, arvutis 15 min).
+- **Navigatsioon:** elektriinfo ja energia lehe päises on nüüd link „Graafikud“ (muu nende lehtede sisu ei muutunud).
+- **Uus kaart „Aku“:** plaadid (laetus praegu ja olek, laetud ja tühjendatud kWh valitud päeval, aku tulu eile ja 30
+  päeva), laetuse graafik (%) ja laadimise/tühjenemise graafik (kW, üles/alla) 15 min kaupa; täna / eile.
+- Kontrollitud Playwrightiga (hele 1280, tume 390): 8 graafikut, kõik lülitid, tooltip, aku eile, JS-vigu ja
+  horisontaalset kerimist pole.
+
+---
+
+## graafikud.html [1.0.0] — 2026-11-02 · animeeritud graafikute leht
+
+Uus leht `graafikud.html` (+ `css/graafikud.css?v=20261102`) samadest andmefailidest, sama parooli, disaini ja
+külastuste loendusega (README „Graafikud“). Elektriinfo ja energia leht ei muutunud.
+
+- Plaadid (börsihind praegu, päike, aku tulu, maja tarbimine 30 päeva) ja kuus graafikut: börsihind tunni kaupa (täna /
+  homme, päeva sees suhteline värv), kust energia tuli (rõngas, 30 päeva), päike/maja/võrk 15 min kaupa (täna / eile),
+  päevad (30 / 90), tarbimine kellaaja järgi (tööpäev vs puhkepäev) ja maja üldelekter kuude kaupa (kWh / €, aasta varem).
+- Animatsioonid: kaardid ilmuvad kerimisel vaatesse ja graafik joonistub siis (tulbad lainena, jooned vasakult paremale,
+  rõngas, loendavad numbrid); lülitid animeerivad uutele väärtustele; `prefers-reduced-motion` ja teemavahetus ilma.
+- Hõljutus: tooltip kogu veeru kohta, erinevus päeva keskmisest / aasta varasemast; tume ja hele teema tokenitest.
+- Kasutab `js/common.js` ühisosa (Tallinna aeg, `chartTokens`, `el`, `start`); Chart.js-i vaikeväärtused seab leht ise
+  (`setupCharts` lülitab animatsioonid ja sündmused välja ega sobi siia).
+- Kontrollitud Playwrightiga (hele 1280, tume 390, vähendatud liikumine; sünteetilised andmed): 6 graafikut, kõik lülitid,
+  tooltip, teemavahetus, horisontaalset kerimist pole, JS-vigu pole; parooliga leht avaneb; puuduva `paevad.json`-i korral
+  näitavad kolm kaarti teadet ja ülejäänud töötavad.
+
+---
+
 ## [3.3.0] ja energy-dashboard.html [2.5.0] — 2026-11-01 · külastuste statistika (GoatCounter)
 
 Lehtede külastusi loendab küpsisteta GoatCounter (töölaud `kauge32.goatcounter.com`, README „Külastuste statistika“).
