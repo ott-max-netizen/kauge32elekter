@@ -4,6 +4,23 @@ See fail kirjeldab rakenduse `index.html` versioonimuudatusi, arhitektuurilisi k
 
 ---
 
+## graafikud.html [1.1.0] — 2026-11-02 · hind koos tasudega, eile, 1 h / 15 min, aku
+
+`APP_VERSION` `1.1.0`, `css/graafikud.css?v=20261102b`.
+
+- **Elektri hind koos tasude ja KM-ga:** tulp = börsihind (all) + tasud (heledam), mõlemad KM-ga; tasud ja öötariifi reegel
+  `hinnad.json` `meta.tariffs`-ist (töövoo kasutatud `index.html` `CONFIG`), arvutus nagu elektriinfo lehe
+  `calculateFinalPrice` (kuutasud pole sees). Kontrollitud samadel andmetel: hind praegu ja kõik eilsed 96 perioodi on
+  elektriinfo lehe lõpphinnaga samad (päeva- ja öötariif). Tooltip: kokku, börsihind, tasud ja tariif; plaat „Elektri hind
+  praegu“ (börsihind + tasud). Tasude puudumisel börsihind KM-ga ja teade.
+- **Eile / Täna / Homme** ja **1 h / 15 min** hinnagraafikul (vaikimisi telefonis 1 h, arvutis 15 min).
+- **Uus kaart „Aku“:** plaadid (laetus praegu ja olek, laetud ja tühjendatud kWh valitud päeval, aku tulu eile ja 30
+  päeva), laetuse graafik (%) ja laadimise/tühjenemise graafik (kW, üles/alla) 15 min kaupa; täna / eile.
+- Kontrollitud Playwrightiga (hele 1280, tume 390): 8 graafikut, kõik lülitid, tooltip, aku eile, JS-vigu ja
+  horisontaalset kerimist pole.
+
+---
+
 ## graafikud.html [1.0.0] — 2026-11-02 · animeeritud graafikute leht
 
 Uus leht `graafikud.html` (+ `css/graafikud.css?v=20261102`) samadest andmefailidest, sama parooli, disaini ja

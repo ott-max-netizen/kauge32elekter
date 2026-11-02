@@ -9,12 +9,13 @@
 @media (min-width: 640px) {
   #section-kpi { grid-area: kpi; }        #section-price { grid-area: hind; }   #section-mix { grid-area: jaotus; }
   #section-power { grid-area: voog; }     #section-days { grid-area: paevad; }  #section-profile { grid-area: profiil; }
-  #section-months { grid-area: kuud; }
+  #section-months { grid-area: kuud; }    #section-battery { grid-area: aku; }
   .layout { grid-template-areas:
     "kpi kpi kpi kpi kpi kpi"
     "hind hind hind hind hind hind"
     "jaotus jaotus jaotus jaotus jaotus jaotus"
     "voog voog voog voog voog voog"
+    "aku aku aku aku aku aku"
     "paevad paevad paevad paevad paevad paevad"
     "profiil profiil profiil profiil profiil profiil"
     "kuud kuud kuud kuud kuud kuud"; }
@@ -24,6 +25,7 @@
     "kpi kpi kpi kpi kpi kpi kpi kpi kpi kpi kpi kpi"
     "hind hind hind hind hind hind hind jaotus jaotus jaotus jaotus jaotus"
     "voog voog voog voog voog voog voog voog voog voog voog voog"
+    "aku aku aku aku aku aku aku aku aku aku aku aku"
     "paevad paevad paevad paevad paevad paevad paevad paevad paevad paevad paevad paevad"
     "profiil profiil profiil profiil profiil profiil kuud kuud kuud kuud kuud kuud"; }
 }
@@ -36,10 +38,14 @@
 .chart-box > canvas { display: block; }
 .chart-box--tall { height: 280px; }
 .chart-box--donut { height: 220px; }
+.chart-box--soc { height: 160px; }
+.chart-box--batpower { height: 150px; }
 @media (min-width: 1024px) {
   .chart-box { height: 280px; }
   .chart-box--tall { height: 320px; }
   .chart-box--donut { height: 240px; }
+  .chart-box--soc { height: 180px; }
+  .chart-box--batpower { height: 170px; }
 }
 .chart-box__fallback { margin: 0; padding: var(--s4) 0; font-size: var(--fs-small); color: var(--muted); }
 
@@ -59,6 +65,11 @@
 .donut__label { font-size: var(--fs-micro); font-weight: 600; color: var(--muted); }
 .mix-legend { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s2); margin: 0; }
 .mix-legend .stat__value { font-size: var(--fs-secondary); }
+
+/* ---------- 4b. Hinnagraafiku legend: börsihind + tasud ühe tulbana; värviskaala päeva odavaimast kalleimani ---------- */
+.legend__swatch--split { background: linear-gradient(to top, var(--cat-kollane) 0 55%, color-mix(in srgb, var(--cat-kollane) 45%, var(--plot)) 55% 100%); }
+.legend__swatch--scale { width: 28px; background: linear-gradient(to right, var(--cat-roheline), var(--cat-kollane), var(--cat-punane)); }
+#price-note:empty { display: none; }
 
 /* ---------- 5. Plaatide numbrid: tabelnumbrid, et loendamise animatsioon ei väriseks ---------- */
 .stat__value[data-count] { font-variant-numeric: tabular-nums; }

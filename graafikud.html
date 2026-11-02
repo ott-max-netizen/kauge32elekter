@@ -20,7 +20,7 @@
 <!-- Külastuste loendus (GoatCounter, küpsisteta; README „Külastuste statistika“). Skript on repo sees, sest CSP lubab ainult
      sama saidi skripte; loendus läheb sendBeacon-iga (connect-src). Saadetakse lehe nimi, ekraani laius ja tulek, mitte andmeid. -->
 <script data-goatcounter="https://kauge32.goatcounter.com/count" data-goatcounter-settings='{"path":"/graafikud.html","title":"Graafikud"}' async src="js/vendor/goatcounter-count.js?v=c031008"></script>
-<link rel="stylesheet" href="css/graafikud.css?v=20261102">
+<link rel="stylesheet" href="css/graafikud.css?v=20261102b">
 <script>
 /* Teema enne esimest joonistamist (sama reegel ja võti kauge32_theme mis teistel lehtedel):
    <html data-theme> on alati "light" või "dark", ka „auto“ korral süsteemi eelistuse järgi (css/common.css). */
@@ -78,33 +78,38 @@
     <section class="card reveal" id="section-kpi" aria-labelledby="h-kpi">
       <h2 id="h-kpi" class="visually-hidden">Kokkuvõte</h2>
       <div class="stats stats--4" id="kpi-body">
-        <div class="stat"><p class="stat__label">Börsihind praegu</p><p class="stat__value" id="kpi-price">—</p><p class="stat__time" id="kpi-price-sub">&nbsp;</p></div>
+        <div class="stat"><p class="stat__label">Elektri hind praegu</p><p class="stat__value" id="kpi-price">—</p><p class="stat__time" id="kpi-price-sub">&nbsp;</p></div>
         <div class="stat"><p class="stat__label">Päike, 30 päeva</p><p class="stat__value" id="kpi-solar">—</p><p class="stat__time" id="kpi-solar-sub">&nbsp;</p></div>
         <div class="stat"><p class="stat__label">Aku tulu, 30 päeva</p><p class="stat__value" id="kpi-battery">—</p><p class="stat__time" id="kpi-battery-sub">&nbsp;</p></div>
         <div class="stat"><p class="stat__label">Maja tarbimine, 30 päeva</p><p class="stat__value" id="kpi-load">—</p><p class="stat__time" id="kpi-load-sub">&nbsp;</p></div>
       </div>
     </section>
 
-    <!-- 2. Börsihind tunni kaupa (täna / homme) -->
+    <!-- 2. Elektri hind koos tasude ja KM-ga (eile / täna / homme; 1 h või 15 min) -->
     <section class="card reveal" id="section-price" aria-labelledby="h-price" data-chart="price">
       <div class="card__head">
-        <h2 id="h-price" class="card__title"><svg class="icon" aria-hidden="true" focusable="false"><use href="img/icons.svg?v=20261023#i-bolt"></use></svg>Börsihind tunni kaupa</h2>
-        <span class="card__hint">s/kWh koos KM-ga, tunni keskmine</span>
+        <h2 id="h-price" class="card__title"><svg class="icon" aria-hidden="true" focusable="false"><use href="img/icons.svg?v=20261023#i-bolt"></use></svg>Elektri hind</h2>
+        <span class="card__hint" id="price-hint">s/kWh koos tasude ja KM-ga</span>
       </div>
       <div class="card__controls">
         <fieldset class="segmented segmented--small" id="price-day">
           <legend class="visually-hidden">Päev</legend>
+          <input type="radio" name="price-day" id="price-yesterday" value="-1"><label for="price-yesterday">Eile</label>
           <input type="radio" name="price-day" id="price-today" value="0" checked><label for="price-today">Täna</label>
           <input type="radio" name="price-day" id="price-tomorrow" value="1"><label for="price-tomorrow">Homme</label>
         </fieldset>
-        <p class="card__hint" id="price-note"></p>
+        <fieldset class="segmented segmented--small" id="price-res">
+          <legend class="visually-hidden">Samm</legend>
+          <input type="radio" name="price-res" id="price-60" value="60"><label for="price-60">1 h</label>
+          <input type="radio" name="price-res" id="price-15" value="15"><label for="price-15">15 min</label>
+        </fieldset>
       </div>
-      <div class="chart-box"><canvas id="c-price" role="img" aria-label="Börsihinna graafik"></canvas></div>
+      <p class="card__hint" id="price-note"></p>
+      <div class="chart-box"><canvas id="c-price" role="img" aria-label="Elektri hinna graafik"></canvas></div>
       <div class="legend" aria-hidden="true">
-        <span class="legend__item"><span class="legend__swatch" style="--swatch: var(--cat-roheline)"></span>päeva odavaim</span>
-        <span class="legend__item"><span class="legend__swatch" style="--swatch: var(--cat-kollane)"></span>keskmine</span>
-        <span class="legend__item"><span class="legend__swatch" style="--swatch: var(--cat-punane)"></span>päeva kalleim</span>
-        <span class="legend__item"><span class="legend__swatch legend__swatch--current"></span>praegune tund</span>
+        <span class="legend__item"><span class="legend__swatch legend__swatch--split"></span>börsihind (all) + tasud (heledam)</span>
+        <span class="legend__item"><span class="legend__swatch legend__swatch--scale"></span>päeva odavaim → kalleim</span>
+        <span class="legend__item"><span class="legend__swatch legend__swatch--current"></span>praegu</span>
         <span class="legend__item"><span class="legend__swatch" style="--swatch: var(--avg-line); height: 2px"></span>päeva keskmine</span>
       </div>
     </section>
@@ -144,6 +149,35 @@
         <span class="legend__item"><span class="legend__swatch legend__swatch--area" style="--swatch: var(--solar)"></span>päike</span>
         <span class="legend__item"><span class="legend__swatch" style="--swatch: var(--home); height: 3px"></span>maja tarbimine</span>
         <span class="legend__item"><span class="legend__swatch" style="--swatch: var(--grid); height: 3px"></span>ost võrgust</span>
+      </div>
+    </section>
+
+    <!-- 4b. Aku: laetus (%) ja laadimine/tühjenemine (kW) 15 min kaupa (täna / eile) -->
+    <section class="card reveal" id="section-battery" aria-labelledby="h-battery" data-chart="battery">
+      <div class="card__head">
+        <h2 id="h-battery" class="card__title"><svg class="icon" aria-hidden="true" focusable="false"><use href="img/icons.svg?v=20261023#i-battery"></use></svg>Aku</h2>
+        <span class="card__hint">inverter, 15 min kaupa</span>
+      </div>
+      <div class="card__controls">
+        <fieldset class="segmented segmented--small" id="battery-day">
+          <legend class="visually-hidden">Päev</legend>
+          <input type="radio" name="battery-day" id="battery-today" value="0" checked><label for="battery-today">Täna</label>
+          <input type="radio" name="battery-day" id="battery-yesterday" value="-1"><label for="battery-yesterday">Eile</label>
+        </fieldset>
+        <p class="card__hint" id="battery-note"></p>
+      </div>
+      <div class="stats stats--4">
+        <div class="stat"><p class="stat__label">Laetus praegu</p><p class="stat__value" id="bat-soc">—</p><p class="stat__time" id="bat-soc-sub">&nbsp;</p></div>
+        <div class="stat"><p class="stat__label" id="bat-charge-label">Laetud täna</p><p class="stat__value" id="bat-charge">—</p><p class="stat__time" id="bat-charge-sub">&nbsp;</p></div>
+        <div class="stat"><p class="stat__label" id="bat-discharge-label">Tühjendatud täna</p><p class="stat__value" id="bat-discharge">—</p><p class="stat__time" id="bat-discharge-sub">&nbsp;</p></div>
+        <div class="stat"><p class="stat__label">Aku tulu eile</p><p class="stat__value" id="bat-gain">—</p><p class="stat__time" id="bat-gain-sub">&nbsp;</p></div>
+      </div>
+      <div class="chart-box chart-box--soc"><canvas id="c-soc" role="img" aria-label="Aku laetuse graafik"></canvas></div>
+      <div class="chart-box chart-box--batpower"><canvas id="c-batpower" role="img" aria-label="Aku laadimise ja tühjenemise graafik"></canvas></div>
+      <div class="legend" aria-hidden="true">
+        <span class="legend__item"><span class="legend__swatch legend__swatch--area" style="--swatch: var(--battery)"></span>laetus, %</span>
+        <span class="legend__item"><span class="legend__swatch" style="--swatch: var(--battery)"></span>laeb (üles), kW</span>
+        <span class="legend__item"><span class="legend__swatch legend__swatch--past" style="--swatch: var(--battery)"></span>tühjeneb (alla), kW</span>
       </div>
     </section>
 
@@ -205,7 +239,7 @@
   </main>
 
   <footer class="app-footer">
-    <p><strong>Andmed:</strong> börsihind — Elering (Nord Pool, Eesti hinnapiirkond), käibemaksuga; päike, maja tarbimine ja ost võrgust päevade lõikes — inverter (Solarman); maja üldelekter kuude kaupa — võrguarvesti (Elering Estfeed). Värvid hinnagraafikul on päeva sees suhtelised (odavaim → kalleim), mitte elektriinfo lehe hinnaklassid.</p>
+    <p><strong>Andmed:</strong> elektri hind — Elering (Nord Pool, Eesti hinnapiirkond) börsihind + müüja marginaal + võrgutasu (päeva- või öötariif) + taastuvenergia- ja varustuskindluse tasu + aktsiis, kogu summale käibemaks (kuutasud pole sees); tasud on hinnad.json-is töövoo kasutatud elektriinfo lehe seaded; päike, aku, maja tarbimine ja ost võrgust päevade lõikes — inverter (Solarman); maja üldelekter kuude kaupa — võrguarvesti (Elering Estfeed). Värvid hinnagraafikul on päeva sees suhtelised (odavaim → kalleim), mitte elektriinfo lehe hinnaklassid.</p>
     <div class="app-footer__meta">
       <p id="footer-version"></p>
       <p>Külastusi loendatakse anonüümselt (GoatCounter), küpsiseid ei kasutata.</p>
@@ -232,7 +266,9 @@ const CONFIG = {
   uuendusMinutites: 15          // vahelehele naastes laaditakse andmed uuesti, kui need on sellest vanemad
 };
 
-const APP_VERSION = '1.0.0';
+const APP_VERSION = '1.1.0';
+const BATTERY_IDLE_KW = 0.2;     // väiksem aku võimsus = „ootel“ (hoidevool), nagu energialehel
+const TARIFF_KEYS = ['marginaal', 'vorgutasuPaev', 'vorgutasuOo', 'taastuvenergiaTasu', 'aktsiis', 'kaibemaks', 'algus', 'lopp'];
 const MAX_PERIOD_MINUTES = 60;   // common.js nõue (pikim hinnaperiood)
 
 /* ==========================================================================
@@ -241,7 +277,9 @@ const MAX_PERIOD_MINUTES = 60;   // common.js nõue (pikim hinnaperiood)
 const state = {
   loadedAt: 0,
   vat: 1 + CONFIG.kaibemaks / 100,
-  prices: [],        // [{ t (ms), end (ms), cents (s/kWh koos KM-ga) }]
+  prices: [],        // [{ t (ms), end (ms), spot (börsihind s/kWh ilma KM-ta) }]
+  tariffs: null,     // hinnad.json meta.tariffs (töövoo kasutatud index.html CONFIG): tasud s/kWh ilma KM-ta, KM %, öötariif
+  realTime: null,    // paike.json realTime: aku laetus ja võimsus praegu
   frames: [],        // [{ t, pv, load, buy } kW]
   days: [],          // paevad.json kirjed (noData-ta), kuupäeva järgi
   months: [],        // hinnad.json majaElekter (noData-ta)
@@ -250,7 +288,9 @@ const state = {
   charts: new Map(), // canvas.id -> Chart
   drawn: new Set(),  // kaardid, mis on vaates olnud (nende graafik joonistatakse/uuendatakse)
   priceDay: 0,
+  priceRes: window.matchMedia && window.matchMedia('(max-width: 767px)').matches ? 60 : 15,   // telefonis 1 h, arvutis 15 min
   powerDay: 0,
+  batteryDay: 0,
   daysRange: 30,
   monthsMetric: 'kwh',
   theme: 'auto',
@@ -297,32 +337,52 @@ async function loadJson(file) {
   return json;
 }
 
+/** hinnad.json: börsihinnad (s/kWh ilma KM-ta), tasud meta.tariffs-ist ja maja üldelektri kuud. */
 function readPrices(json) {
-  const tariffVat = num(json.meta && json.meta.tariffs && json.meta.tariffs.kaibemaks);
-  state.vat = 1 + (tariffVat != null && tariffVat >= 0 && tariffVat < 100 ? tariffVat : CONFIG.kaibemaks) / 100;
+  const t = json.meta && json.meta.tariffs && typeof json.meta.tariffs === 'object' ? json.meta.tariffs : null;
+  state.tariffs = t && TARIFF_KEYS.every(k => num(t[k]) != null) ? {
+    marginaal: t.marginaal, vorgutasuPaev: t.vorgutasuPaev, vorgutasuOo: t.vorgutasuOo, taastuvenergiaTasu: t.taastuvenergiaTasu,
+    aktsiis: t.aktsiis, kaibemaks: t.kaibemaks, algus: t.algus, lopp: t.lopp,
+    nadalavahetusOnOo: t.nadalavahetusOnOo !== false, riigipuhadOnOo: t.riigipuhadOnOo !== false
+  } : null;
+  const vatPct = t && num(t.kaibemaks) != null && t.kaibemaks >= 0 && t.kaibemaks < 100 ? t.kaibemaks : CONFIG.kaibemaks;
+  state.vat = 1 + vatPct / 100;
   const rows = (Array.isArray(json.data.ee) ? json.data.ee : [])
     .filter(r => r && Number.isInteger(r.timestamp) && num(r.price) != null)
     .sort((a, b) => a.timestamp - b.timestamp);
   state.prices = rows.map((r, i) => {
-    const t = r.timestamp * 1000;
+    const t0 = r.timestamp * 1000;
     const next = rows[i + 1] ? rows[i + 1].timestamp * 1000 : null;
-    const step = next && next - t <= HOUR_MS ? next - t : 15 * MINUTE_MS;   // puuduv periood ei pikenda eelmist
-    return { t, end: t + step, cents: r.price / 10 * state.vat };
+    const step = next && next - t0 <= HOUR_MS ? next - t0 : 15 * MINUTE_MS;   // puuduv periood ei pikenda eelmist
+    return { t: t0, end: t0 + step, spot: r.price / 10 };
   });
   state.months = (Array.isArray(json.data.majaElekter) ? json.data.majaElekter : [])
     .filter(m => m && typeof m.kuu === 'string' && /^\d{4}-\d{2}$/.test(m.kuu) && !m.noData && num(m.kwh) != null);
 }
 
+/** paike.json: 15-min kaadrid (kW; aku laadimine ja tühjenemine absoluutväärtusena) ja hetkeseis (realTime). */
 function readSolar(json) {
+  const kw = v => (num(v) != null ? v / 1000 : null);
+  const abs = v => (num(v) != null ? Math.abs(v) / 1000 : null);
   state.frames = (Array.isArray(json.data.frames) ? json.data.frames : [])
     .filter(f => f && num(f.dateTime) != null)
     .map(f => ({
       t: (f.dateTime > 1e11 ? f.dateTime : f.dateTime * 1000),
-      pv: num(f.generationPower) != null ? f.generationPower / 1000 : null,
-      load: num(f.usePower) != null ? f.usePower / 1000 : null,
-      buy: num(f.purchasePower) != null ? f.purchasePower / 1000 : null
+      pv: kw(f.generationPower),
+      load: kw(f.usePower),
+      buy: kw(f.purchasePower),
+      charge: abs(f.chargePower),        // kaadrites laadimisel positiivne (README „Märgid ja väljad“)
+      discharge: abs(f.dischargePower),
+      soc: num(f.batterySoc)
     }))
     .sort((a, b) => a.t - b.t);
+  const rt = json.data.realTime && typeof json.data.realTime === 'object' ? json.data.realTime : null;
+  const updated = num(json.data.lastUpdateTime);
+  state.realTime = rt ? {
+    soc: num(rt.batterySoc),
+    kw: ((abs(rt.chargePower) || 0) - (abs(rt.dischargePower) || 0)),   // + laeb, − tühjeneb (realTime chargePower on laadimisel negatiivne)
+    updated: updated != null ? new Date(updated > 1e11 ? updated : updated * 1000) : null
+  } : null;
 }
 
 function readDays(json) {
@@ -384,22 +444,56 @@ const sumOf = (list, field) => {
   return count ? { total, count } : null;
 };
 
-/** Ühe Tallinna päeva tunnikeskmised (s/kWh): kestusega kaalutud 15-min perioodidest. */
-function hourlyPrices(dayOffset) {
+/** Võrgutariif Tallinna aja järgi: 'oo' | 'paev' (sama reegel mis index.html getNetworkTariff: öötunnid, nädalavahetus, riigipühad). */
+function networkTariff(date) {
+  const r = state.tariffs;
+  const p = getTallinnDateParts(date);
+  if (r.nadalavahetusOnOo && (p.weekday === 0 || p.weekday === 6)) return 'oo';
+  if (r.riigipuhadOnOo && isPublicHoliday(p.year, p.month, p.day)) return 'oo';
+  const hour = p.hour + p.minute / 60;
+  const start = Number(r.algus);
+  const end = Number(r.lopp);
+  return (start > end ? (hour >= start || hour < end) : (hour >= start && hour < end)) ? 'oo' : 'paev';
+}
+
+/** Perioodi hind s/kWh koos KM-ga (index.html calculateFinalPrice): börsihind + marginaal + võrgutasu + taastuvenergia-
+ *  ja varustuskindluse tasu + aktsiis, KM kogu summale; kuutasud pole sees. Tasudeta (vana fail) ainult börsihind KM-ga. */
+function priceParts(spot, date) {
+  if (!state.tariffs) return { spot: spot * state.vat, fees: 0, total: spot * state.vat, tariff: null };
+  const f = state.tariffs;
+  const tariff = networkTariff(date);
+  const fees = f.marginaal + (tariff === 'oo' ? f.vorgutasuOo : f.vorgutasuPaev) + f.taastuvenergiaTasu + f.aktsiis;
+  return { spot: spot * state.vat, fees: fees * state.vat, total: (spot + fees) * state.vat, tariff };
+}
+
+/** Ühe Tallinna päeva hinnaperioodid: 15 min (nagu andmetes) või tunni kaupa (kestusega kaalutud keskmine). */
+function pricePeriods(dayOffset, resolution) {
   const now = new Date();
   const start = getTallinnDayStart(now, dayOffset).getTime();
   const end = getTallinnDayStart(now, dayOffset + 1).getTime();
+  const rows = state.prices.filter(p => p.t >= start && p.t < end).map(p => ({ t: p.t, end: p.end, ...priceParts(p.spot, new Date(p.t)) }));
+  if (resolution !== 60) return rows;
   const hours = new Map();
-  for (const p of state.prices) {
-    if (p.t < start || p.t >= end) continue;
-    const h = Math.floor(p.t / HOUR_MS) * HOUR_MS;   // Tallinna nihe on täistundides: UTC tund = kohalik tund
-    const acc = hours.get(h) || { sum: 0, min: 0 };
-    const minutes = (p.end - p.t) / MINUTE_MS;
-    acc.sum += p.cents * minutes;
+  for (const r of rows) {
+    const h = Math.floor(r.t / HOUR_MS) * HOUR_MS;   // Tallinna nihe on täistundides: UTC tund = kohalik tund
+    const acc = hours.get(h) || { t: h, end: h + HOUR_MS, spot: 0, fees: 0, total: 0, min: 0, tariff: r.tariff };
+    const minutes = (r.end - r.t) / MINUTE_MS;
+    acc.spot += r.spot * minutes;
+    acc.fees += r.fees * minutes;
+    acc.total += r.total * minutes;
     acc.min += minutes;
     hours.set(h, acc);
   }
-  return [...hours.entries()].sort((a, b) => a[0] - b[0]).map(([t, acc]) => ({ t, cents: acc.sum / acc.min }));
+  return [...hours.values()].sort((a, b) => a.t - b.t)
+    .map(a => ({ t: a.t, end: a.end, spot: a.spot / a.min, fees: a.fees / a.min, total: a.total / a.min, tariff: a.tariff }));
+}
+
+/** Kestusega kaalutud keskmine lõpphind. */
+function averageTotal(items) {
+  let sum = 0;
+  let minutes = 0;
+  for (const i of items) { const m = (i.end - i.t) / MINUTE_MS; sum += i.total * m; minutes += m; }
+  return minutes ? sum / minutes : null;
 }
 
 /* ==========================================================================
@@ -557,11 +651,12 @@ function countUp(node, value, format) {
 
 function renderKpis() {
   const nowMs = Date.now();
-  const current = state.prices.find(p => p.t <= nowMs && nowMs < p.end);
-  const today = hourlyPrices(0);
-  const avg = today.length ? today.reduce((s, h) => s + h.cents, 0) / today.length : null;
-  countUp(byId('kpi-price'), current ? current.cents : null, v => fmtCents(v));
-  byId('kpi-price-sub').textContent = avg != null ? `tänane keskmine ${fmtCents(avg)}` : (state.errors.prices || '');
+  const row = state.prices.find(p => p.t <= nowMs && nowMs < p.end);
+  const current = row ? priceParts(row.spot, new Date(row.t)) : null;
+  countUp(byId('kpi-price'), current ? current.total : null, v => fmtCents(v));
+  byId('kpi-price-sub').textContent = current
+    ? (state.tariffs ? `börsihind ${NF.d2.format(current.spot)} + tasud ${NF.d2.format(current.fees)}` : 'börsihind KM-ga (tasusid ei leitud)')
+    : (state.errors.prices || '');
 
   const recs = lastDays(CONFIG.kokkuvotePaevi).map(d => d.rec).filter(Boolean);
   const pv = sumOf(recs, 'pvKwh');
@@ -580,68 +675,86 @@ function renderKpis() {
 /* ==========================================================================
    7. Graafikud
    ========================================================================== */
-/** Börsihind tunni kaupa: tulba värv päeva odavaimast (roheline) kalleimani (punane), praegune tund raamiga. */
+/** Elektri hind: börsihind (all) + tasud (heledam, üleval) ühe tulbana, mõlemad KM-ga; värv päeva odavaimast (roheline)
+ *  kalleimani (punane) lõpphinna järgi; möödunud perioodid tuhmid, praegune raamiga; 1 h või 15 min. */
 function drawPrice() {
-  const hours = hourlyPrices(state.priceDay);
-  const hasTomorrow = hourlyPrices(1).length > 0;
-  byId('price-tomorrow').disabled = !hasTomorrow;
-  byId('price-note').textContent = hasTomorrow ? '' : 'homsed hinnad alates ~15:00';
-  if (state.priceDay === 1 && !hasTomorrow) { state.priceDay = 0; byId('price-today').checked = true; return drawPrice(); }
-  if (!hours.length) { cardNotice('section-price', state.errors.prices || 'Selle päeva hindu pole.'); return; }
+  const available = d => state.prices.length > 0 && pricePeriods(d, 60).length > 0;
+  byId('price-yesterday').disabled = !available(-1);
+  byId('price-tomorrow').disabled = !available(1);
+  if (state.priceDay !== 0 && !available(state.priceDay)) { state.priceDay = 0; byId('price-today').checked = true; }
+  byId(state.priceRes === 60 ? 'price-60' : 'price-15').checked = true;
+  const notes = [];
+  if (!available(1)) notes.push('homsed hinnad alates ~15:00');
+  if (state.prices.length && !state.tariffs) notes.push('tasusid ei leitud (hinnad.json meta.tariffs): näidatakse börsihinda KM-ga');
+  byId('price-note').textContent = notes.join(' · ');
+  byId('price-hint').textContent = state.tariffs || !state.prices.length ? 's/kWh koos tasude ja KM-ga' : 's/kWh, börsihind KM-ga';
+  const items = pricePeriods(state.priceDay, state.priceRes);
+  if (!items.length) { cardNotice('section-price', state.errors.prices || 'Selle päeva hindu pole.'); return; }
   cardNotice('section-price', null);
-  const values = hours.map(h => h.cents);
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const avg = values.reduce((s, v) => s + v, 0) / values.length;
+  const totals = items.map(i => i.total);
+  const min = Math.min(...totals);
+  const max = Math.max(...totals);
+  const avg = averageTotal(items);
   const nowMs = Date.now();
-  const scale = v => (max > min ? (v - min) / (max - min) : 0.5);
   const tone = v => {
-    const s = scale(v);
+    const s = max > min ? (v - min) / (max - min) : 0.5;
     return s < 0.5 ? mixColor(C.cat.kollane, C.cat.roheline, s * 2) : mixColor(C.cat.punane, C.cat.kollane, (s - 0.5) * 2);
   };
-  const isNow = h => h.t <= nowMs && nowMs < h.t + HOUR_MS;
-  const isPast = h => h.t + HOUR_MS <= nowMs;
-  const bg = hours.map(h => (isPast(h) ? C.mix(tone(h.cents), 0.55) : tone(h.cents)));
-  const labels = hours.map(h => hh(new Date(h.t)));
-  const cheapest = hours[values.indexOf(min)];
-  const dearest = hours[values.indexOf(max)];
-  byId('c-price').setAttribute('aria-label', `Börsihind ${state.priceDay ? 'homme' : 'täna'}: odavaim kell ${hh(new Date(cheapest.t))} ${fmtCents(min)}, kalleim kell ${hh(new Date(dearest.t))} ${fmtCents(max)}, keskmine ${fmtCents(avg)}.`);
+  const isNow = i => i.t <= nowMs && nowMs < i.end;
+  const isPast = i => i.end <= nowMs;
+  const hourly = state.priceRes === 60;
+  const timeOf = ms => (hourly ? `${hh(new Date(ms))}:00` : timeFormatter.format(new Date(ms)));
+  const labels = items.map(i => (hourly ? hh(new Date(i.t)) : timeFormatter.format(new Date(i.t))));
+  const border = items.map(i => (isNow(i) ? C.text : 'transparent'));
+  const borderWidth = items.map(i => (isNow(i) ? 2 : 0));
+  const cheapest = items[totals.indexOf(min)];
+  const dearest = items[totals.indexOf(max)];
+  const dayName = { '-1': 'eile', 0: 'täna', 1: 'homme' }[state.priceDay];
+  byId('c-price').setAttribute('aria-label', `Elektri hind ${state.tariffs ? 'koos tasude ja KM-ga ' : ''}${dayName}: odavaim ${timeOf(cheapest.t)} ${fmtCents(min)}, kalleim ${timeOf(dearest.t)} ${fmtCents(max)}, keskmine ${fmtCents(avg)}.`);
+  const radiusTop = { topLeft: hourly ? 6 : 3, topRight: hourly ? 6 : 3, bottomLeft: 0, bottomRight: 0 };
   upsert('c-price', {
     type: 'bar',
     data: {
       labels,
       datasets: [
-        { type: 'bar', label: 'Börsihind', data: values, backgroundColor: bg, hoverBackgroundColor: hours.map(h => tone(h.cents)),
-          borderColor: hours.map(h => (isNow(h) ? C.text : 'transparent')), borderWidth: hours.map(h => (isNow(h) ? 2 : 0)),
-          hoverBorderColor: C.text, hoverBorderWidth: 2, borderRadius: 6, borderSkipped: false, maxBarThickness: 28, order: 2 },
-        { type: 'line', label: 'Päeva keskmine', data: values.map(() => avg), borderColor: C.avgLine, borderDash: [6, 4], borderWidth: 1.5,
-          pointRadius: 0, pointHoverRadius: 0, order: 1 }
+        { type: 'bar', label: 'Börsihind', stack: 'hind', data: items.map(i => i.spot),
+          backgroundColor: items.map(i => (isPast(i) ? C.mix(tone(i.total), 0.55) : tone(i.total))), hoverBackgroundColor: items.map(i => tone(i.total)),
+          borderColor: border, borderWidth, borderSkipped: 'end', borderRadius: state.tariffs ? 0 : radiusTop, maxBarThickness: 28, order: 2 },
+        { type: 'bar', label: 'Tasud', stack: 'hind', data: items.map(i => i.fees),
+          backgroundColor: items.map(i => C.mix(tone(i.total), isPast(i) ? 0.28 : 0.45)), hoverBackgroundColor: items.map(i => C.mix(tone(i.total), 0.6)),
+          borderColor: border, borderWidth, borderSkipped: 'start', borderRadius: radiusTop, maxBarThickness: 28, order: 2 },
+        { type: 'line', label: 'Päeva keskmine', stack: 'keskmine', data: items.map(() => avg), borderColor: C.avgLine, borderDash: [6, 4],
+          borderWidth: 1.5, pointRadius: 0, pointHoverRadius: 0, order: 1 }
       ]
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      animation: barAnimation(),
+      animation: barAnimation(hourly ? 22 : 6),
       interaction: { mode: 'index', intersect: false },
       plugins: {
         legend: { display: false },
         tooltip: tooltip({
           filter: item => item.datasetIndex === 0,
           callbacks: {
-            title: items => { const h = hours[items[0].dataIndex]; return `${hh(new Date(h.t))}:00–${hh(new Date(h.t + HOUR_MS))}:00${isNow(h) ? ' (praegu)' : ''}`; },
-            label: item => ` ${fmtCents(item.parsed.y)}`,
-            footer: items => {
-              const v = items[0].parsed.y;
+            title: list => { const i = items[list[0].dataIndex]; return `${timeOf(i.t)}–${timeOf(i.end)}${isNow(i) ? ' (praegu)' : ''}`; },
+            label: item => {
+              const i = items[item.dataIndex];
+              if (!state.tariffs) return ` Börsihind KM-ga ${fmtCents(i.total)}`;
+              return [` Kokku ${fmtCents(i.total)}`, ` börsihind ${fmtCents(i.spot)}`, ` tasud ${fmtCents(i.fees)} (${i.tariff === 'oo' ? 'öötariif' : 'päevatariif'})`];
+            },
+            footer: list => {
+              const v = items[list[0].dataIndex].total;
               if (!avg) return '';
               const d = (v - avg) / Math.abs(avg) * 100;
-              return Math.abs(d) < 0.5 ? 'sama mis päeva keskmine' : `${NF.pct.format(Math.abs(d))}% ${d < 0 ? 'alla' : 'üle'} päeva keskmise`;
+              return Math.abs(d) < 0.5 ? 'sama mis päeva keskmine' : `${NF.pct.format(Math.abs(d))}% ${d < 0 ? 'alla' : 'üle'} päeva keskmise (${fmtCents(avg)})`;
             }
           }
         })
       },
       scales: {
-        x: axis({ grid: { display: false }, ticks: { color: C.muted, maxRotation: 0, autoSkip: true, autoSkipPadding: 8 } }),
-        y: axis({ beginAtZero: true, ticks: { color: C.muted, padding: 6, callback: v => NF.d0.format(v) } })
+        x: axis({ stacked: true, grid: { display: false }, ticks: { color: C.muted, maxRotation: 0, autoSkip: true, autoSkipPadding: hourly ? 8 : 14 } }),
+        y: axis({ stacked: true, beginAtZero: true, ticks: { color: C.muted, padding: 6, callback: v => NF.d0.format(v) } })
       }
     }
   });
@@ -900,7 +1013,99 @@ function drawMonths() {
   });
 }
 
-const DRAW = { price: drawPrice, mix: drawMix, power: drawPower, days: drawDays, profile: drawProfile, months: drawMonths };
+/** Aku: plaadid (laetus praegu, laetud ja tühjendatud valitud päeval, eilne tulu), laetus % joonena ja
+ *  laadimine (üles) / tühjenemine (alla) kW tulpadena 15 min kaupa. Kaks eraldi graafikut (ühelgi pole kahte y-telge). */
+function drawBattery() {
+  const rt = state.realTime;
+  countUp(byId('bat-soc'), rt && rt.soc != null ? rt.soc : null, v => `${NF.d0.format(v)}\u00a0%`);
+  const rtState = rt => (Math.abs(rt.kw) < BATTERY_IDLE_KW ? 'ootel' : rt.kw > 0 ? `laeb ${NF.d1.format(rt.kw)}\u00a0kW` : `tühjeneb ${NF.d1.format(-rt.kw)}\u00a0kW`);
+  byId('bat-soc-sub').textContent = rt && rt.soc != null ? `${rtState(rt)}${rt.updated ? ` · ${timeFormatter.format(rt.updated)}` : ''}` : (state.errors.solar || '');
+  const yesterday = lastDays(1)[0].rec;
+  const gain = yesterday ? num(yesterday.batteryGainEur) : null;
+  countUp(byId('bat-gain'), gain, v => fmtEur(v));
+  const month = sumOf(lastDays(CONFIG.kokkuvotePaevi).map(d => d.rec).filter(Boolean), 'batteryGainEur');
+  byId('bat-gain-sub').textContent = month ? `${CONFIG.kokkuvotePaevi} päeva ${fmtEur(month.total)}` : (state.errors.days || '');
+
+  const word = state.batteryDay ? 'eile' : 'täna';
+  byId('bat-charge-label').textContent = `Laetud ${word}`;
+  byId('bat-discharge-label').textContent = `Tühjendatud ${word}`;
+  const now = new Date();
+  const start = getTallinnDayStart(now, state.batteryDay).getTime();
+  const end = getTallinnDayStart(now, state.batteryDay + 1).getTime();
+  const frames = state.frames.filter(f => f.t >= start && f.t < end && (f.soc != null || f.charge != null || f.discharge != null));
+  if (!frames.length) {
+    for (const id of ['bat-charge', 'bat-discharge']) byId(id).textContent = '—';
+    for (const id of ['bat-charge-sub', 'bat-discharge-sub']) byId(id).textContent = '';
+    byId('battery-note').textContent = '';
+    cardNotice('section-battery', state.errors.solar || 'Selle päeva aku mõõtmisi pole.');
+    return;
+  }
+  cardNotice('section-battery', null);
+  const kwh = key => frames.reduce((s, f) => s + (f[key] || 0) * 0.25, 0);
+  const socs = frames.map(f => f.soc).filter(v => v != null);
+  const peak = key => Math.max(0, ...frames.map(f => f[key] || 0));
+  countUp(byId('bat-charge'), kwh('charge'), v => `${NF.d1.format(v)}\u00a0kWh`);
+  countUp(byId('bat-discharge'), kwh('discharge'), v => `${NF.d1.format(v)}\u00a0kWh`);
+  byId('bat-charge-sub').textContent = socs.length ? `laetus ${NF.d0.format(socs[0])} → ${NF.d0.format(socs[socs.length - 1])}\u00a0%` : '';
+  byId('bat-discharge-sub').textContent = `suurim ${NF.d1.format(peak('discharge'))}\u00a0kW, laadimine ${NF.d1.format(peak('charge'))}\u00a0kW`;
+  const last = frames[frames.length - 1];
+  byId('battery-note').textContent = `${word} kuni ${timeFormatter.format(new Date(last.t + 15 * MINUTE_MS))}`;
+  const labels = frames.map(f => timeFormatter.format(new Date(f.t)));
+  byId('c-soc').setAttribute('aria-label', `Aku laetus ${word}: ${socs.length ? `${NF.d0.format(socs[0])} % → ${NF.d0.format(socs[socs.length - 1])} %, vahemik ${NF.d0.format(Math.min(...socs))}–${NF.d0.format(Math.max(...socs))} %` : 'andmed puuduvad'}.`);
+  byId('c-batpower').setAttribute('aria-label', `Aku ${word}: laetud ${NF.d1.format(kwh('charge'))} kWh, tühjendatud ${NF.d1.format(kwh('discharge'))} kWh.`);
+  const xAxis = () => axis({ grid: { display: false }, ticks: { color: C.muted, maxRotation: 0, autoSkip: true, maxTicksLimit: 9 } });
+  upsert('c-soc', {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{ label: 'Laetus', data: frames.map(f => f.soc), borderColor: C.battery, backgroundColor: areaGradient(C.battery, 0.35), fill: 'origin',
+        borderWidth: 2.5, tension: 0.3, pointRadius: 0, pointHoverRadius: 5, pointHoverBorderColor: C.plot, pointHoverBorderWidth: 2 }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animations: lineAnimations(frames.length),
+      animation: motion() ? {} : false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { display: false }, tooltip: tooltip({ callbacks: { label: item => ` Laetus ${item.parsed.y == null ? '—' : `${NF.d1.format(item.parsed.y)}\u00a0%`}` } }) },
+      scales: {
+        x: xAxis(),
+        y: axis({ min: 0, max: 100, ticks: { color: C.muted, padding: 6, stepSize: 25, callback: v => `${v}\u00a0%` } })
+      }
+    }
+  }, true);
+  const net = frames.map(f => (f.charge == null && f.discharge == null ? null : (f.charge || 0) - (f.discharge || 0)));
+  upsert('c-batpower', {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{ label: 'Aku', data: net, backgroundColor: net.map(v => (v != null && v < 0 ? C.mix(C.battery, 0.5) : C.battery)),
+        hoverBackgroundColor: net.map(v => (v != null && v < 0 ? C.mix(C.battery, 0.7) : C.mix(C.battery, 0.85))), borderRadius: 2, borderSkipped: false,
+        barPercentage: 1, categoryPercentage: 0.85 }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: barAnimation(5),
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: tooltip({ callbacks: { label: item => {
+          const v = item.parsed.y;
+          if (v == null) return ' —';
+          return Math.abs(v) < BATTERY_IDLE_KW ? ' ootel' : v > 0 ? ` laeb ${NF.d1.format(v)}\u00a0kW` : ` tühjeneb ${NF.d1.format(-v)}\u00a0kW`;
+        } } })
+      },
+      scales: {
+        x: xAxis(),
+        y: axis({ grid: { color: ctx => (ctx.tick && ctx.tick.value === 0 ? C.axis : C.hairline), drawTicks: false },
+          ticks: { color: C.muted, padding: 6, callback: v => NF.d0.format(v) } })
+      }
+    }
+  });
+}
+
+const DRAW = { price: drawPrice, mix: drawMix, power: drawPower, battery: drawBattery, days: drawDays, profile: drawProfile, months: drawMonths };
 
 /** Kaardi graafik (kui andmed on laaditud ja Chart.js olemas); vead jäävad selle kaardi sisse. */
 function drawSection(id) {
@@ -975,6 +1180,8 @@ function setupControls() {
     for (const input of document.querySelectorAll(`input[name="${name}"]`)) input.addEventListener('change', () => { if (input.checked) apply(input.value); });
   };
   onChange('price-day', v => { state.priceDay = Number(v); drawSection('price'); });
+  onChange('price-res', v => { state.priceRes = Number(v); drawSection('price'); });
+  onChange('battery-day', v => { state.batteryDay = Number(v); drawSection('battery'); });
   onChange('power-day', v => { state.powerDay = Number(v); drawSection('power'); });
   onChange('days-range', v => { state.daysRange = Number(v); drawSection('days'); });
   onChange('months-metric', v => { state.monthsMetric = v; drawSection('months'); });

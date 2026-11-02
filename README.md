@@ -27,7 +27,7 @@ Elering API → GitHub Actions → hinnad.json → GitHub Pages → index.html b
 |---|---|
 | `index.html` | **Elektriinfo**: börsihind, odavaim aeg, päikesekaart, maja lõpphind ja üldelekter (HTML ja JS) |
 | `energy-dashboard.html` | **Energia**: päikesepark, akupank, energiavoog, soovitus, „Täna kokku“ (kWh ja €; perioodid päevast aastani), päeva graafik (eile, täna, homme), päevade/kuude graafik ja „Trendid“ (kuud ja 12 kuu libisev keskmine) |
-| `graafikud.html` | **Graafikud**: animeeritud ülevaateleht (börsihind tunni kaupa, kust energia tuli, päike/maja/võrk päeva jooksul, päevad, tarbimine kellaaja järgi, maja üldelekter kuude kaupa), vt „Graafikud“ |
+| `graafikud.html` | **Graafikud**: animeeritud ülevaateleht (elektri hind koos tasude ja KM-ga, kust energia tuli, päike/maja/võrk päeva jooksul, aku, päevad, tarbimine kellaaja järgi, maja üldelekter kuude kaupa), vt „Graafikud“ |
 | `css/common.css` | **ühine disainisüsteem** mõlemale lehele: tokenid (hele ja tume), klaaskaardid ja mesh-taust, bento-ruudustiku alus, komponendid, graafikuraam, olekud, print ja eelistuste varuvariandid |
 | `css/index.css`, `css/energy-dashboard.css`, `css/graafikud.css` | ainult lehe paigutus (`grid-template-areas`) ja lehepõhised komponendid |
 | `img/icons.svg` | piktogrammide sprite (`<symbol id="i-…">`), mida kasutavad mõlemad lehed |
@@ -520,15 +520,16 @@ ootab 15 s.
 Ülevaateleht samadest andmefailidest (`hinnad.json`, `paike.json`, `paevad.json`), sama parooli ja disainiga. Erinevalt
 kahest töölehest on graafikud siin **animeeritud**: iga kaart ilmub ja selle graafik joonistub, kui kaart kerimisel
 vaatesse jõuab (`IntersectionObserver`); tulbad kasvavad lainena, jooned joonistuvad vasakult paremale, rõngas pöörleb
-täis ja plaatide numbrid loendavad nullist. Lülitid (täna/homme, täna/eile, 30/90 päeva, kWh/€) animeerivad graafiku uutele
+täis ja plaatide numbrid loendavad nullist. Lülitid (eile/täna/homme, 1 h / 15 min, täna/eile, 30/90 päeva, kWh/€) animeerivad graafiku uutele
 väärtustele. **Vähendatud liikumise** eelistusega (`prefers-reduced-motion`) ja teemavahetusel animatsioone pole.
 
 | Kaart | Andmed | Mida näitab |
 |---|---|---|
-| Plaadid | kõik | börsihind praegu (KM-ga) ja tänane keskmine; päike, aku tulu (`batteryGainEur`) ja maja tarbimine viimase 30 lõppenud päeva kohta |
-| Börsihind tunni kaupa | `hinnad.json` `data.ee` | tunni keskmine börsihind s/kWh koos KM-ga (KM `meta.tariffs.kaibemaks`-ist, varu `CONFIG.kaibemaks`); värv on päeva sees **suhteline** (odavaim roheline → kalleim punane), mitte elektriinfo lehe hinnaklass; möödunud tunnid tuhmid, praegune raamiga, katkendjoon = päeva keskmine. Homme alates ~15:00 |
+| Plaadid | kõik | elektri hind praegu koos tasude ja KM-ga (all börsihind + tasud); päike, aku tulu (`batteryGainEur`) ja maja tarbimine viimase 30 lõppenud päeva kohta |
+| Elektri hind | `hinnad.json` `data.ee` ja `meta.tariffs` | **eile / täna / homme**, **1 h või 15 min** (vaikimisi telefonis 1 h, arvutis 15 min). Tulp = börsihind (all) + tasud (heledam, üleval), mõlemad KM-ga: tasud = müüja marginaal + võrgutasu (päeva- või öötariif; öötariif ka nädalavahetusel ja riigipühadel) + taastuvenergia- ja varustuskindluse tasu + aktsiis, KM kogu summale, kuutasud pole sees – sama arvutus mis elektriinfo lehe lõpphind (kontrollitud: kõik 96 perioodi samad). Tasud võetakse `hinnad.json` `meta.tariffs`-ist (töövoog kirjutab sinna `index.html` `CONFIG`-i väärtused); kui need puuduvad, näitab graafik börsihinda KM-ga ja teadet. Värv on päeva sees **suhteline** (odavaim roheline → kalleim punane lõpphinna järgi), mitte elektriinfo lehe hinnaklass; möödunud perioodid tuhmid, praegune raamiga, katkendjoon = päeva keskmine. Tooltip: kokku, börsihind, tasud ja tariif. Homme alates ~15:00 |
 | Kust energia tuli | `paevad.json` | 30 päeva päikesetoodang vs ost võrgust (kogu majja tulnud energia) ja päikese osa |
 | Päike, maja ja võrk | `paike.json` `frames` | 15-min keskmised võimsused täna või eile (kW) |
+| Aku | `paike.json` `frames`, `realTime`; `paevad.json` | plaadid: laetus praegu (ja laeb / tühjeneb / ootel, < 0,2 kW = ootel), laetud ja tühjendatud kWh valitud päeval (täna või eile; laetuse algus → lõpp, suurim võimsus), aku tulu eile ja 30 päeva; graafikud: laetus % ja laadimine (üles) / tühjenemine (alla) kW 15 min kaupa – kaks eraldi graafikut, et ühelgi poleks kahte y-telge |
 | Päevad | `paevad.json` | päike + ost võrgust virnas (sisse tulnud energia) ja maja tarbimine joonena, 30 või 90 päeva; tooltipis aku tulu |
 | Tarbimine kellaaja järgi | `paevad.json` `loadH` | viimase 14 päeva keskmine kW kellatunni järgi, tööpäev vs puhkepäev (nädalavahetus ja riigipühad) |
 | Maja üldelekter kuude kaupa | `hinnad.json` `data.majaElekter` | viimased 12 kuud arvesti järgi (kWh või €) ja aasta varasem sama kuu; pooleli kuu on heledam |
