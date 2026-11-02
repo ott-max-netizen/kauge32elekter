@@ -29,6 +29,19 @@ ei muutunud. `css/common.css?v=20261102` (kõik kolm lehte), `css/index.css?v=20
 
 ---
 
+## graafikud.html [1.3.0] — 2026-11-02 · aku joon graafikul „Päike, maja, võrk ja aku“
+
+- Graafikule (endine „Päike, maja ja võrk“) lisandus aku joon 15 min kaupa: **+ laeb, − tühjeneb (majja)**, sama
+  märgikokkulepe mis energialehe päeva graafikul. Laadimine selgitab, miks öösel ostetakse võrgust rohkem, kui maja
+  tarbib; tühjenemine (aku kasutus) on nulljoone all. Nulljoon telje toonis, tooltip „Aku: laeb 8,0 kW“ / „tühjeneb
+  3,0 kW (majja)“ / „ootel“ (< 0,2 kW), märkuses „akust … kWh“, `aria-label`-is laetud ja kasutatud kWh.
+- Graafiku jooned monotoonse interpolatsiooniga: astmete juures ei viska kõver üle (aku 0 → 8 kW ega päike ei näi hetkeks
+  negatiivsena).
+- Kontrollitud Playwrightiga (hele 1280, tume 390): 4 joont, täna laadimine (8 kW) ja eile tühjenemine (−3 kW, y-telg
+  alla nulli), tooltip mõlemas suunas, JS-vigu pole.
+
+---
+
 ## graafikud.html [1.2.0] — 2026-11-02 · loetavus: tekstid, suurused, legendid
 
 `APP_VERSION` `1.2.0`, `css/graafikud.css?v=20261102c`. Andmed ja arvutused ei muutunud.
