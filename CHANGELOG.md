@@ -14,6 +14,7 @@ See fail kirjeldab rakenduse `index.html` versioonimuudatusi, arhitektuurilisi k
   elektriinfo lehe lõpphinnaga samad (päeva- ja öötariif). Tooltip: kokku, börsihind, tasud ja tariif; plaat „Elektri hind
   praegu“ (börsihind + tasud). Tasude puudumisel börsihind KM-ga ja teade.
 - **Eile / Täna / Homme** ja **1 h / 15 min** hinnagraafikul (vaikimisi telefonis 1 h, arvutis 15 min).
+- **Navigatsioon:** elektriinfo ja energia lehe päises on nüüd link „Graafikud“ (muu nende lehtede sisu ei muutunud).
 - **Uus kaart „Aku“:** plaadid (laetus praegu ja olek, laetud ja tühjendatud kWh valitud päeval, aku tulu eile ja 30
   päeva), laetuse graafik (%) ja laadimise/tühjenemise graafik (kW, üles/alla) 15 min kaupa; täna / eile.
 - Kontrollitud Playwrightiga (hele 1280, tume 390): 8 graafikut, kõik lülitid, tooltip, aku eile, JS-vigu ja

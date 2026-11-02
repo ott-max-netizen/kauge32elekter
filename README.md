@@ -41,9 +41,8 @@ Elering API → GitHub Actions → hinnad.json → GitHub Pages → index.html b
 CSS-i, `js/common.js`-i või sprite'i muutmisel suurenda HTML-i linkides `?v=` väärtust (GitHub Pages hoiab faile
 vahemälus 10 min).
 
-Mõlema lehe päises on sama lehtede navigatsioon **Elektriinfo** / **Energia** (aktiivne leht on esile
-tõstetud); elektriinfo lehe päikesekaardil on lisaks link energialehele. Graafikute lehe (`graafikud.html`) päises on
-kõik kolm lehte; teiste lehtede navigatsioonis seda (veel) pole.
+Kõigi kolme lehe päises on sama lehtede navigatsioon **Elektriinfo** / **Energia** / **Graafikud** (aktiivne leht on
+esile tõstetud); elektriinfo lehe päikesekaardil on lisaks link energialehele.
 
 ## Seadete muutmine
 
