@@ -129,7 +129,7 @@
     <!-- 4. Päike, maja ja võrk 15 min kaupa (täna / eile) -->
     <section class="card reveal" id="section-power" aria-labelledby="h-power" data-chart="power">
       <div class="card__head">
-        <h2 id="h-power" class="card__title"><svg class="icon" aria-hidden="true" focusable="false"><use href="img/icons.svg?v=20261023#i-cycle"></use></svg>Päike, maja ja võrk</h2>
+        <h2 id="h-power" class="card__title"><svg class="icon" aria-hidden="true" focusable="false"><use href="img/icons.svg?v=20261023#i-cycle"></use></svg>Päike, maja, võrk ja aku</h2>
         <span class="card__hint">keskmine võimsus 15 min kaupa (inverter)</span>
       </div>
       <div class="card__controls">
@@ -145,6 +145,7 @@
         <span class="legend__item"><span class="legend__swatch legend__swatch--area" style="--swatch: var(--solar)"></span>päike</span>
         <span class="legend__item"><span class="legend__swatch" style="--swatch: var(--home); height: 3px"></span>maja tarbimine</span>
         <span class="legend__item"><span class="legend__swatch" style="--swatch: var(--grid); height: 3px"></span>ost võrgust</span>
+        <span class="legend__item"><span class="legend__swatch" style="--swatch: var(--battery); height: 3px"></span>aku: + laeb, − tühjeneb (majja)</span>
       </div>
     </section>
 
@@ -262,7 +263,7 @@ const CONFIG = {
   uuendusMinutites: 15          // vahelehele naastes laaditakse andmed uuesti, kui need on sellest vanemad
 };
 
-const APP_VERSION = '1.2.0';
+const APP_VERSION = '1.3.0';
 const BATTERY_IDLE_KW = 0.2;     // väiksem aku võimsus = „ootel“ (hoidevool), nagu energialehel
 const TARIFF_KEYS = ['marginaal', 'vorgutasuPaev', 'vorgutasuOo', 'taastuvenergiaTasu', 'aktsiis', 'kaibemaks', 'algus', 'lopp'];
 const MAX_PERIOD_MINUTES = 60;   // common.js nõue (pikim hinnaperiood)
@@ -953,7 +954,9 @@ function fitSegLabels() {
   }
 }
 
-/** Päeva võimsused 15 min kaupa: päike alana, maja ja ost võrgust joontena; joonistub vasakult paremale. */
+/** Päeva võimsused 15 min kaupa: päike alana, maja, ost võrgust ja aku joontena; joonistub vasakult paremale.
+ *  Aku märk nagu energialehel: + laeb, − tühjeneb (aku annab majale) – laadimine selgitab, miks öösel ostetakse
+ *  võrgust rohkem, kui maja tarbib. */
 function drawPower() {
   const now = new Date();
   const start = getTallinnDayStart(now, state.powerDay).getTime();
@@ -964,11 +967,16 @@ function drawPower() {
   const labels = frames.map(f => timeFormatter.format(new Date(f.t)));
   const kwh = key => frames.reduce((s, f) => s + (f[key] || 0) * 0.25, 0);
   const last = frames[frames.length - 1];
-  byId('power-note').textContent = `${state.powerDay ? 'eile' : 'täna'} kuni ${timeFormatter.format(new Date(last.t + 15 * MINUTE_MS))}: päike ${fmtKwh(kwh('pv'))}, maja ${fmtKwh(kwh('load'))}`;
-  byId('c-power').setAttribute('aria-label', `Päeva võimsused (${state.powerDay ? 'eile' : 'täna'}): päike ${fmtKwh(kwh('pv'))}, maja tarbimine ${fmtKwh(kwh('load'))}, ost võrgust ${fmtKwh(kwh('buy'))}.`);
+  // Aku võimsus kW: + laeb, − tühjeneb; null, kui kaadris aku andmeid pole
+  const battery = frames.map(f => (f.charge == null && f.discharge == null ? null : (f.charge || 0) - (f.discharge || 0)));
+  const hasBattery = battery.some(v => v != null);
+  const batteryText = hasBattery ? `, aku laetud ${fmtKwh(kwh('charge'))} ja kasutatud ${fmtKwh(kwh('discharge'))}` : '';
+  byId('power-note').textContent = `${state.powerDay ? 'eile' : 'täna'} kuni ${timeFormatter.format(new Date(last.t + 15 * MINUTE_MS))}: päike ${fmtKwh(kwh('pv'))}, maja ${fmtKwh(kwh('load'))}${hasBattery ? `, akust ${fmtKwh(kwh('discharge'))}` : ''}`;
+  byId('c-power').setAttribute('aria-label', `Päeva võimsused (${state.powerDay ? 'eile' : 'täna'}): päike ${fmtKwh(kwh('pv'))}, maja tarbimine ${fmtKwh(kwh('load'))}, ost võrgust ${fmtKwh(kwh('buy'))}${batteryText}.`);
   const line = (label, key, color, extra = {}) => Object.assign({
+    // monotone: kõver ei viska astmete juures üle (aku 0 → 8 kW ei näi hetkeks negatiivsena, päike ei lange alla nulli)
     type: 'line', label, data: frames.map(f => f[key]), borderColor: color, backgroundColor: color, borderWidth: LINE_W,
-    tension: 0.35, pointRadius: 0, pointHoverRadius: 4, pointHoverBorderWidth: 2, pointHoverBorderColor: C.plot, spanGaps: false
+    cubicInterpolationMode: 'monotone', pointRadius: 0, pointHoverRadius: 4, pointHoverBorderWidth: 2, pointHoverBorderColor: C.plot, spanGaps: false
   }, extra);
   upsert('c-power', {
     type: 'line',
@@ -978,7 +986,8 @@ function drawPower() {
       datasets: [
         line('Päike', 'pv', C.solar, { fill: 'origin', backgroundColor: areaGradient(C.solar, 0.22) }),
         line('Maja tarbimine', 'load', C.home),
-        line('Ost võrgust', 'buy', C.grid, { borderWidth: 2 })
+        line('Ost võrgust', 'buy', C.grid, { borderWidth: 2 }),
+        ...(hasBattery ? [line('Aku', 'battery', C.battery, { data: battery })] : [])
       ]
     },
     options: {
@@ -991,11 +1000,20 @@ function drawPower() {
       plugins: {
         legend: { display: false },
         unitLabel: { text: 'kW' },
-        tooltip: tooltip({ callbacks: { label: item => ` ${item.dataset.label}: ${item.parsed.y == null ? '—' : `${NF.d1.format(item.parsed.y)} kW`}` } })
+        tooltip: tooltip({ callbacks: { label: item => {
+          const v = item.parsed.y;
+          if (v == null) return ` ${item.dataset.label}: —`;
+          if (item.dataset.label === 'Aku') {
+            return Math.abs(v) < BATTERY_IDLE_KW ? ' Aku: ootel' : v > 0 ? ` Aku: laeb ${NF.d1.format(v)}\u00a0kW` : ` Aku: tühjeneb ${NF.d1.format(-v)}\u00a0kW (majja)`;
+          }
+          return ` ${item.dataset.label}: ${NF.d1.format(v)}\u00a0kW`;
+        } } })
       },
       scales: {
         x: axis({ grid: { display: false }, ticks: hourTicks(frames.map(f => f.t)) }),
-        y: axis({ beginAtZero: true, ticks: { color: C.muted, padding: 6, callback: v => `${NF.d0.format(v)}` } })
+        // Null-joon telje toonis: aku tühjenemine (−) jääb selle alla
+        y: axis({ beginAtZero: true, grid: { color: ctx => (ctx.tick && ctx.tick.value === 0 ? C.axis : C.hairline), drawTicks: false },
+          ticks: { color: C.muted, padding: 6, callback: v => `${NF.d0.format(v)}` } })
       }
     }
   }, true);   // joon joonistub igal päeva vahetusel uuesti vasakult paremale
