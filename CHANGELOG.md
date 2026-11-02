@@ -4,6 +4,25 @@ See fail kirjeldab rakenduse `index.html` versioonimuudatusi, arhitektuurilisi k
 
 ---
 
+## graafikud.html [1.0.0] — 2026-11-02 · animeeritud graafikute leht
+
+Uus leht `graafikud.html` (+ `css/graafikud.css?v=20261102`) samadest andmefailidest, sama parooli, disaini ja
+külastuste loendusega (README „Graafikud“). Elektriinfo ja energia leht ei muutunud.
+
+- Plaadid (börsihind praegu, päike, aku tulu, maja tarbimine 30 päeva) ja kuus graafikut: börsihind tunni kaupa (täna /
+  homme, päeva sees suhteline värv), kust energia tuli (rõngas, 30 päeva), päike/maja/võrk 15 min kaupa (täna / eile),
+  päevad (30 / 90), tarbimine kellaaja järgi (tööpäev vs puhkepäev) ja maja üldelekter kuude kaupa (kWh / €, aasta varem).
+- Animatsioonid: kaardid ilmuvad kerimisel vaatesse ja graafik joonistub siis (tulbad lainena, jooned vasakult paremale,
+  rõngas, loendavad numbrid); lülitid animeerivad uutele väärtustele; `prefers-reduced-motion` ja teemavahetus ilma.
+- Hõljutus: tooltip kogu veeru kohta, erinevus päeva keskmisest / aasta varasemast; tume ja hele teema tokenitest.
+- Kasutab `js/common.js` ühisosa (Tallinna aeg, `chartTokens`, `el`, `start`); Chart.js-i vaikeväärtused seab leht ise
+  (`setupCharts` lülitab animatsioonid ja sündmused välja ega sobi siia).
+- Kontrollitud Playwrightiga (hele 1280, tume 390, vähendatud liikumine; sünteetilised andmed): 6 graafikut, kõik lülitid,
+  tooltip, teemavahetus, horisontaalset kerimist pole, JS-vigu pole; parooliga leht avaneb; puuduva `paevad.json`-i korral
+  näitavad kolm kaarti teadet ja ülejäänud töötavad.
+
+---
+
 ## [3.3.0] ja energy-dashboard.html [2.5.0] — 2026-11-01 · külastuste statistika (GoatCounter)
 
 Lehtede külastusi loendab küpsisteta GoatCounter (töölaud `kauge32.goatcounter.com`, README „Külastuste statistika“).

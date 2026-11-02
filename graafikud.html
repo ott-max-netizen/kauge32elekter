@@ -1,0 +1,1001 @@
+<!DOCTYPE html>
+<html lang="et">
+<head>
+<meta charset="utf-8">
+<!-- Turvapoliitika: skriptid ja stiilid ainult sellelt saidilt (+ lehesisesed), välised päringud ainult HTTPS-iga (erand: localhost-proksi). -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https: http://localhost:* http://127.0.0.1:*; object-src 'none'; base-uri 'none'; form-action 'self'">
+<meta name="referrer" content="no-referrer">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#eef2f6" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0a1018" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="robots" content="noindex, nofollow, noarchive">
+<title>Kauge 32 graafikud</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="css/common.css?v=20261031">
+<!-- Lukk (parooliga kaitse, README „Parooliga kaitse“): ilma defer'ita, et globaal Lukk oleks lehe skriptile olemas ja .app peituks enne esimest joonistamist -->
+<script src="js/lukk.js?v=20261101"></script>
+<!-- Külastuste loendus (GoatCounter, küpsisteta; README „Külastuste statistika“). Skript on repo sees, sest CSP lubab ainult
+     sama saidi skripte; loendus läheb sendBeacon-iga (connect-src). Saadetakse lehe nimi, ekraani laius ja tulek, mitte andmeid. -->
+<script data-goatcounter="https://kauge32.goatcounter.com/count" data-goatcounter-settings='{"path":"/graafikud.html","title":"Graafikud"}' async src="js/vendor/goatcounter-count.js?v=c031008"></script>
+<link rel="stylesheet" href="css/graafikud.css?v=20261102">
+<script>
+/* Teema enne esimest joonistamist (sama reegel ja võti kauge32_theme mis teistel lehtedel):
+   <html data-theme> on alati "light" või "dark", ka „auto“ korral süsteemi eelistuse järgi (css/common.css). */
+(function () {
+  let theme = 'auto';
+  try {
+    theme = localStorage.getItem('kauge32_theme') || 'auto';
+  } catch (error) { /* salvestusruum keelatud: süsteemi teema */ }
+  const dark = theme === 'dark' || (theme !== 'light' && Boolean(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches));
+  document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+})();
+</script>
+<!-- Chart.js 4.5.1 (globaal Chart): defer, init() käivitub DOMContentLoaded-il, mil teek on juba täidetud -->
+<script src="js/vendor/chart.umd.min.js?v=4.5.1" defer></script>
+</head>
+<body>
+<!-- Lukk (js/lukk.js): parooliga kaitstud andmefailide avamisvaade; nähtav ainult siis, kui lehel on lukk.json -->
+<div id="lukk" class="lukk" role="dialog" aria-modal="true" aria-labelledby="lukk-pealkiri" hidden>
+  <form class="lukk__card" id="lukk-form" novalidate>
+    <p class="lukk__brand"><svg class="icon" aria-hidden="true" focusable="false"><use href="img/icons.svg?v=20261023#i-bolt"></use></svg>Kauge 32</p>
+    <h2 id="lukk-pealkiri" class="lukk__title">Leht on parooliga kaitstud</h2>
+    <p id="lukk-tekst" class="lukk__text">Sisesta ühistu parool, et näha maja elektri- ja päikeseandmeid.</p>
+    <div class="lukk__field">
+      <label for="lukk-parool">Parool</label>
+      <input id="lukk-parool" name="parool" type="password" autocomplete="current-password" spellcheck="false" autocapitalize="off" required>
+    </div>
+    <label class="lukk__check" for="lukk-pea-meeles"><input id="lukk-pea-meeles" name="peaMeeles" type="checkbox"> Jäta meelde selles seadmes</label>
+    <p id="lukk-viga" class="notice notice--error" role="alert" hidden></p>
+    <button type="submit" class="btn lukk__btn" id="lukk-ava">Ava</button>
+    <p class="lukk__hint">Parooli ei saadeta kuhugi: andmed on serveris krüpteeritud ja avatakse ainult selles brauseris. Märkimata unustatakse võti vahelehe sulgemisel.</p>
+  </form>
+</div>
+<div class="app">
+  <header class="app-header">
+    <div class="brand">
+      <h1 class="app-title">Kauge 32 graafikud</h1>
+      <p id="status" class="status" role="status" aria-live="polite" data-testid="status"></p>
+    </div>
+    <nav class="site-nav" aria-label="Lehed">
+      <a class="site-nav__link" href="index.html">Elektriinfo</a>
+      <a class="site-nav__link" href="energy-dashboard.html">Energia</a>
+      <a class="site-nav__link" href="graafikud.html" aria-current="page">Graafikud</a>
+    </nav>
+    <div class="header-actions">
+      <button type="button" id="theme-toggle" class="icon-btn" aria-label="Teema: automaatne" title="Teema: automaatne"><svg class="icon" aria-hidden="true" focusable="false"><use href="img/icons.svg?v=20261023#i-contrast"></use></svg></button>
+    </div>
+  </header>
+
+  <noscript><p class="notice">Graafikute kuvamiseks peab brauseris olema JavaScript lubatud.</p></noscript>
+
+  <!-- DOM-järjekord = telefoni järjekord = fookuse järjekord. Iga kaart joonistub, kui jõuab vaatesse (.reveal). -->
+  <main class="layout" id="layout">
+
+    <!-- 1. Kokkuvõte: neli plaati, numbrid loendavad nullist üles -->
+    <section class="card reveal" id="section-kpi" aria-labelledby="h-kpi">
+      <h2 id="h-kpi" class="visually-hidden">Kokkuvõte</h2>
+      <div class="stats stats--4" id="kpi-body">
+        <div class="stat"><p class="stat__label">Börsihind praegu</p><p class="stat__value" id="kpi-price">—</p><p class="stat__time" id="kpi-price-sub">&nbsp;</p></div>
+        <div class="stat"><p class="stat__label">Päike, 30 päeva</p><p class="stat__value" id="kpi-solar">—</p><p class="stat__time" id="kpi-solar-sub">&nbsp;</p></div>
+        <div class="stat"><p class="stat__label">Aku tulu, 30 päeva</p><p class="stat__value" id="kpi-battery">—</p><p class="stat__time" id="kpi-battery-sub">&nbsp;</p></div>
+        <div class="stat"><p class="stat__label">Maja tarbimine, 30 päeva</p><p class="stat__value" id="kpi-load">—</p><p class="stat__time" id="kpi-load-sub">&nbsp;</p></div>
+      </div>
+    </section>
+
+    <!-- 2. Börsihind tunni kaupa (täna / homme) -->
+    <section class="card reveal" id="section-price" aria-labelledby="h-price" data-chart="price">
+      <div class="card__head">
+        <h2 id="h-price" class="card__title"><svg class="icon" aria-hidden="true" focusable="false"><use href="img/icons.svg?v=20261023#i-bolt"></use></svg>Börsihind tunni kaupa</h2>
+        <span class="card__hint">s/kWh koos KM-ga, tunni keskmine</span>
+      </div>
+      <div class="card__controls">
+        <fieldset class="segmented segmented--small" id="price-day">
+          <legend class="visually-hidden">Päev</legend>
+          <input type="radio" name="price-day" id="price-today" value="0" checked><label for="price-today">Täna</label>
+          <input type="radio" name="price-day" id="price-tomorrow" value="1"><label for="price-tomorrow">Homme</label>
+        </fieldset>
+        <p class="card__hint" id="price-note"></p>
+      </div>
+      <div class="chart-box"><canvas id="c-price" role="img" aria-label="Börsihinna graafik"></canvas></div>
+      <div class="legend" aria-hidden="true">
+        <span class="legend__item"><span class="legend__swatch" style="--swatch: var(--cat-roheline)"></span>päeva odavaim</span>
+        <span class="legend__item"><span class="legend__swatch" style="--swatch: var(--cat-kollane)"></span>keskmine</span>
+        <span class="legend__item"><span class="legend__swatch" style="--swatch: var(--cat-punane)"></span>päeva kalleim</span>
+        <span class="legend__item"><span class="legend__swatch legend__swatch--current"></span>praegune tund</span>
+        <span class="legend__item"><span class="legend__swatch" style="--swatch: var(--avg-line); height: 2px"></span>päeva keskmine</span>
+      </div>
+    </section>
+
+    <!-- 3. Kust energia tuli: päike vs võrk (30 päeva) -->
+    <section class="card reveal" id="section-mix" aria-labelledby="h-mix" data-chart="mix">
+      <div class="card__head">
+        <h2 id="h-mix" class="card__title"><svg class="icon" aria-hidden="true" focusable="false"><use href="img/icons.svg?v=20261023#i-sun"></use></svg>Kust energia tuli</h2>
+        <span class="card__hint">viimased 30 päeva</span>
+      </div>
+      <div class="chart-box chart-box--donut">
+        <canvas id="c-mix" role="img" aria-label="Energia allikate graafik"></canvas>
+        <div class="donut__center" aria-hidden="true"><span class="donut__value" id="mix-total">—</span><span class="donut__label" id="mix-label">kWh kokku</span></div>
+      </div>
+      <div class="mix-legend" id="mix-legend">
+        <div class="stat"><p class="stat__label"><span class="legend__swatch" style="--swatch: var(--solar)"></span> Päike</p><p class="stat__value" id="mix-pv">—</p></div>
+        <div class="stat"><p class="stat__label"><span class="legend__swatch" style="--swatch: var(--grid)"></span> Ost võrgust</p><p class="stat__value" id="mix-grid">—</p></div>
+      </div>
+    </section>
+
+    <!-- 4. Päike, maja ja võrk 15 min kaupa (täna / eile) -->
+    <section class="card reveal" id="section-power" aria-labelledby="h-power" data-chart="power">
+      <div class="card__head">
+        <h2 id="h-power" class="card__title"><svg class="icon" aria-hidden="true" focusable="false"><use href="img/icons.svg?v=20261023#i-cycle"></use></svg>Päike, maja ja võrk</h2>
+        <span class="card__hint">keskmine võimsus 15 min kaupa, kW (inverter)</span>
+      </div>
+      <div class="card__controls">
+        <fieldset class="segmented segmented--small" id="power-day">
+          <legend class="visually-hidden">Päev</legend>
+          <input type="radio" name="power-day" id="power-today" value="0" checked><label for="power-today">Täna</label>
+          <input type="radio" name="power-day" id="power-yesterday" value="-1"><label for="power-yesterday">Eile</label>
+        </fieldset>
+        <p class="card__hint" id="power-note"></p>
+      </div>
+      <div class="chart-box chart-box--tall"><canvas id="c-power" role="img" aria-label="Päeva võimsuste graafik"></canvas></div>
+      <div class="legend" aria-hidden="true">
+        <span class="legend__item"><span class="legend__swatch legend__swatch--area" style="--swatch: var(--solar)"></span>päike</span>
+        <span class="legend__item"><span class="legend__swatch" style="--swatch: var(--home); height: 3px"></span>maja tarbimine</span>
+        <span class="legend__item"><span class="legend__swatch" style="--swatch: var(--grid); height: 3px"></span>ost võrgust</span>
+      </div>
+    </section>
+
+    <!-- 5. Päevad: päike + ost võrgust (tulbad) vs maja tarbimine (joon) -->
+    <section class="card reveal" id="section-days" aria-labelledby="h-days" data-chart="days">
+      <div class="card__head">
+        <h2 id="h-days" class="card__title"><svg class="icon" aria-hidden="true" focusable="false"><use href="img/icons.svg?v=20261023#i-calendar"></use></svg>Päevad</h2>
+        <span class="card__hint">kWh päevas (inverter)</span>
+      </div>
+      <div class="card__controls">
+        <fieldset class="segmented segmented--small" id="days-range">
+          <legend class="visually-hidden">Periood</legend>
+          <input type="radio" name="days-range" id="days-30" value="30" checked><label for="days-30">30 päeva</label>
+          <input type="radio" name="days-range" id="days-90" value="90"><label for="days-90">90 päeva</label>
+        </fieldset>
+        <p class="card__hint" id="days-note"></p>
+      </div>
+      <div class="chart-box chart-box--tall"><canvas id="c-days" role="img" aria-label="Päevade graafik"></canvas></div>
+      <div class="legend" aria-hidden="true">
+        <span class="legend__item"><span class="legend__swatch" style="--swatch: var(--solar)"></span>päike</span>
+        <span class="legend__item"><span class="legend__swatch" style="--swatch: var(--grid)"></span>ost võrgust</span>
+        <span class="legend__item"><span class="legend__swatch" style="--swatch: var(--home); height: 3px"></span>maja tarbimine</span>
+      </div>
+    </section>
+
+    <!-- 6. Maja tarbimine kellaaja järgi (tööpäev / puhkepäev) -->
+    <section class="card reveal" id="section-profile" aria-labelledby="h-profile" data-chart="profile">
+      <div class="card__head">
+        <h2 id="h-profile" class="card__title"><svg class="icon" aria-hidden="true" focusable="false"><use href="img/icons.svg?v=20261023#i-clock"></use></svg>Tarbimine kellaaja järgi</h2>
+        <span class="card__hint" id="profile-note">keskmine kW</span>
+      </div>
+      <div class="chart-box"><canvas id="c-profile" role="img" aria-label="Tarbimise tunniprofiili graafik"></canvas></div>
+      <div class="legend" aria-hidden="true">
+        <span class="legend__item"><span class="legend__swatch legend__swatch--area" style="--swatch: var(--home)"></span>tööpäev</span>
+        <span class="legend__item"><span class="legend__swatch" style="--swatch: var(--battery); height: 3px"></span>puhkepäev</span>
+      </div>
+    </section>
+
+    <!-- 7. Maja üldelekter kuude kaupa (Estfeed) -->
+    <section class="card reveal" id="section-months" aria-labelledby="h-months" data-chart="months">
+      <div class="card__head">
+        <h2 id="h-months" class="card__title"><svg class="icon" aria-hidden="true" focusable="false"><use href="img/icons.svg?v=20261023#i-receipt"></use></svg>Maja üldelekter kuude kaupa</h2>
+        <span class="card__hint">ost võrgust (arvesti)</span>
+      </div>
+      <div class="card__controls">
+        <fieldset class="segmented segmented--small" id="months-metric">
+          <legend class="visually-hidden">Näitaja</legend>
+          <input type="radio" name="months-metric" id="months-kwh" value="kwh" checked><label for="months-kwh">kWh</label>
+          <input type="radio" name="months-metric" id="months-eur" value="eur"><label for="months-eur">€</label>
+        </fieldset>
+        <p class="card__hint" id="months-note"></p>
+      </div>
+      <div class="chart-box"><canvas id="c-months" role="img" aria-label="Kuude graafik"></canvas></div>
+      <div class="legend" aria-hidden="true">
+        <span class="legend__item"><span class="legend__swatch" style="--swatch: var(--grid)"></span>kuu</span>
+        <span class="legend__item"><span class="legend__swatch legend__swatch--past" style="--swatch: var(--grid)"></span>aasta varem</span>
+      </div>
+    </section>
+  </main>
+
+  <footer class="app-footer">
+    <p><strong>Andmed:</strong> börsihind — Elering (Nord Pool, Eesti hinnapiirkond), käibemaksuga; päike, maja tarbimine ja ost võrgust päevade lõikes — inverter (Solarman); maja üldelekter kuude kaupa — võrguarvesti (Elering Estfeed). Värvid hinnagraafikul on päeva sees suhtelised (odavaim → kalleim), mitte elektriinfo lehe hinnaklassid.</p>
+    <div class="app-footer__meta">
+      <p id="footer-version"></p>
+      <p>Külastusi loendatakse anonüümselt (GoatCounter), küpsiseid ei kasutata.</p>
+      <p id="lukk-lukusta-wrap" hidden><button type="button" class="link-btn" id="lukk-lukusta">Lukusta leht</button></p>
+    </div>
+  </footer>
+</div>
+
+<!-- Mõlema lehe ühine skriptikood (aeg, vormindamine, DOM-abi, graafikute ühisosa); peab laadima enne põhiskripti -->
+<script src="js/common.js?v=20261101b"></script>
+<script>
+'use strict';
+
+/* ==========================================================================
+   1. CONFIG — failid ja varuväärtused (tasud ja hinnapiirid on index.html CONFIG-is, siin neid ei korrata)
+   ========================================================================== */
+const CONFIG = {
+  hinnafail: "hinnad.json",     // börsihinnad (data.ee) ja maja üldelektri kuud (data.majaElekter)
+  paikefail: "paike.json",      // inverteri 15-min kaadrid (täna ja eile)
+  paevadeFail: "paevad.json",   // inverteri päevakokkuvõtted
+  kaibemaks: 24,                // varuväärtus, %: eelistatakse hinnad.json meta.tariffs.kaibemaks-i (töövoog loeb selle index.html-ist)
+  kokkuvotePaevi: 30,           // plaatide ja rõnga periood, päeva (lõppenud päevad)
+  profiiliPaevi: 14,            // tunniprofiili periood, päeva (paevad.json loadH on viimase 14 päeva kirjetel)
+  uuendusMinutites: 15          // vahelehele naastes laaditakse andmed uuesti, kui need on sellest vanemad
+};
+
+const APP_VERSION = '1.0.0';
+const MAX_PERIOD_MINUTES = 60;   // common.js nõue (pikim hinnaperiood)
+
+/* ==========================================================================
+   2. Olek
+   ========================================================================== */
+const state = {
+  loadedAt: 0,
+  vat: 1 + CONFIG.kaibemaks / 100,
+  prices: [],        // [{ t (ms), end (ms), cents (s/kWh koos KM-ga) }]
+  frames: [],        // [{ t, pv, load, buy } kW]
+  days: [],          // paevad.json kirjed (noData-ta), kuupäeva järgi
+  months: [],        // hinnad.json majaElekter (noData-ta)
+  errors: {},        // { prices, solar, days }: veateade
+  generated: {},     // faili generatedAt (Date)
+  charts: new Map(), // canvas.id -> Chart
+  drawn: new Set(),  // kaardid, mis on vaates olnud (nende graafik joonistatakse/uuendatakse)
+  priceDay: 0,
+  powerDay: 0,
+  daysRange: 30,
+  monthsMetric: 'kwh',
+  theme: 'auto',
+  instant: false     // true = joonista ilma animatsioonita (teema vahetus)
+};
+const reducedMotion = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : { matches: false };
+
+/* ==========================================================================
+   3. Aeg ja vormindamine (ühised Tallinna aja funktsioonid on js/common.js-is)
+   ========================================================================== */
+/** Tallinna seinakella aeg UTC hetkeks (common.js getTallinnDayStart vajab seda). */
+function tallinnLocalToUtc(year, month, day, hour = 0, minute = 0) {
+  const wall = Date.UTC(year, month - 1, day, hour, minute, 0);
+  let utc = wall - tallinnOffsetMs(new Date(wall));
+  utc = wall - tallinnOffsetMs(new Date(utc));
+  return new Date(utc);
+}
+function dayKey(date) {
+  const p = getTallinnDateParts(date);
+  return `${p.year}-${String(p.month).padStart(2, '0')}-${String(p.day).padStart(2, '0')}`;
+}
+const NF = {
+  d0: new Intl.NumberFormat('et-EE', { maximumFractionDigits: 0, useGrouping: 'always' }),
+  d1: new Intl.NumberFormat('et-EE', { minimumFractionDigits: 1, maximumFractionDigits: 1, useGrouping: 'always' }),
+  d2: new Intl.NumberFormat('et-EE', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: 'always' }),
+  pct: new Intl.NumberFormat('et-EE', { maximumFractionDigits: 0 })
+};
+const monthShort = new Intl.DateTimeFormat('et-EE', { timeZone: 'UTC', month: 'short' });
+const dateTimeShort = new Intl.DateTimeFormat('et-EE', { timeZone: TIME_ZONE, day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+const fmtKwh = v => `${NF.d0.format(v)} kWh`;
+const fmtEur = v => `${NF.d2.format(v)} €`;
+const fmtCents = v => `${NF.d2.format(v)} s/kWh`;
+const hh = date => String(getTallinnDateParts(date).hour).padStart(2, '0');
+const num = v => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+
+/* ==========================================================================
+   4. Andmed
+   ========================================================================== */
+async function loadJson(file) {
+  const response = await Lukk.fetch(`${file}?v=${Date.now()}`, { cache: 'no-store' });   // avab krüpteeritud faili (js/lukk.js)
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const json = await response.json();
+  if (!json || json.success !== true || !json.data) throw new Error('success !== true või data puudub');
+  return json;
+}
+
+function readPrices(json) {
+  const tariffVat = num(json.meta && json.meta.tariffs && json.meta.tariffs.kaibemaks);
+  state.vat = 1 + (tariffVat != null && tariffVat >= 0 && tariffVat < 100 ? tariffVat : CONFIG.kaibemaks) / 100;
+  const rows = (Array.isArray(json.data.ee) ? json.data.ee : [])
+    .filter(r => r && Number.isInteger(r.timestamp) && num(r.price) != null)
+    .sort((a, b) => a.timestamp - b.timestamp);
+  state.prices = rows.map((r, i) => {
+    const t = r.timestamp * 1000;
+    const next = rows[i + 1] ? rows[i + 1].timestamp * 1000 : null;
+    const step = next && next - t <= HOUR_MS ? next - t : 15 * MINUTE_MS;   // puuduv periood ei pikenda eelmist
+    return { t, end: t + step, cents: r.price / 10 * state.vat };
+  });
+  state.months = (Array.isArray(json.data.majaElekter) ? json.data.majaElekter : [])
+    .filter(m => m && typeof m.kuu === 'string' && /^\d{4}-\d{2}$/.test(m.kuu) && !m.noData && num(m.kwh) != null);
+}
+
+function readSolar(json) {
+  state.frames = (Array.isArray(json.data.frames) ? json.data.frames : [])
+    .filter(f => f && num(f.dateTime) != null)
+    .map(f => ({
+      t: (f.dateTime > 1e11 ? f.dateTime : f.dateTime * 1000),
+      pv: num(f.generationPower) != null ? f.generationPower / 1000 : null,
+      load: num(f.usePower) != null ? f.usePower / 1000 : null,
+      buy: num(f.purchasePower) != null ? f.purchasePower / 1000 : null
+    }))
+    .sort((a, b) => a.t - b.t);
+}
+
+function readDays(json) {
+  state.days = (Array.isArray(json.data.days) ? json.data.days : [])
+    .filter(r => r && typeof r.paev === 'string' && !r.noData)
+    .sort((a, b) => (a.paev < b.paev ? -1 : 1));
+}
+
+async function loadAll() {
+  setStatus('Andmete laadimine…');
+  const [prices, solar, days] = await Promise.allSettled([loadJson(CONFIG.hinnafail), loadJson(CONFIG.paikefail), loadJson(CONFIG.paevadeFail)]);
+  const take = (key, result, reader, label) => {
+    if (result.status === 'fulfilled') {
+      reader(result.value);
+      state.errors[key] = null;
+      state.generated[key] = result.value.generatedAt ? new Date(result.value.generatedAt) : null;
+    } else {
+      console.error(`${label} laadimine ebaõnnestus:`, result.reason);
+      state.errors[key] = `${label} ei õnnestunud laadida.`;
+    }
+  };
+  take('prices', prices, readPrices, 'Hinnaandmeid (hinnad.json)');
+  take('solar', solar, readSolar, 'Päikeseandmeid (paike.json)');
+  take('days', days, readDays, 'Päevakokkuvõtteid (paevad.json)');
+  state.loadedAt = Date.now();
+  const parts = [];
+  if (state.generated.prices) parts.push(`hinnad ${dateTimeShort.format(state.generated.prices)}`);
+  if (state.generated.solar) parts.push(`päike ${dateTimeShort.format(state.generated.solar)}`);
+  if (state.generated.days) parts.push(`päevad ${dateTimeShort.format(state.generated.days)}`);
+  setStatus(parts.length ? `Andmed: ${parts.join(' · ')}` : 'Andmeid ei õnnestunud laadida.');
+  renderKpis();
+  for (const id of state.drawn) drawSection(id);
+}
+
+function setStatus(text) {
+  const status = byId('status');
+  if (status.textContent !== text) status.textContent = text;
+}
+
+/** Lõppenud päevade kirjed: viimased n Tallinna päeva enne tänast (puuduv päev = null). */
+function lastDays(n) {
+  const now = new Date();
+  const byKey = new Map(state.days.map(r => [r.paev, r]));
+  const out = [];
+  for (let i = n; i >= 1; i--) {
+    const date = getTallinnDayStart(now, -i);
+    const key = dayKey(date);
+    out.push({ key, date, rec: byKey.get(key) || null });
+  }
+  return out;
+}
+const sumOf = (list, field) => {
+  let total = 0;
+  let count = 0;
+  for (const r of list) {
+    const v = r ? num(r[field]) : null;
+    if (v != null) { total += v; count++; }
+  }
+  return count ? { total, count } : null;
+};
+
+/** Ühe Tallinna päeva tunnikeskmised (s/kWh): kestusega kaalutud 15-min perioodidest. */
+function hourlyPrices(dayOffset) {
+  const now = new Date();
+  const start = getTallinnDayStart(now, dayOffset).getTime();
+  const end = getTallinnDayStart(now, dayOffset + 1).getTime();
+  const hours = new Map();
+  for (const p of state.prices) {
+    if (p.t < start || p.t >= end) continue;
+    const h = Math.floor(p.t / HOUR_MS) * HOUR_MS;   // Tallinna nihe on täistundides: UTC tund = kohalik tund
+    const acc = hours.get(h) || { sum: 0, min: 0 };
+    const minutes = (p.end - p.t) / MINUTE_MS;
+    acc.sum += p.cents * minutes;
+    acc.min += minutes;
+    hours.set(h, acc);
+  }
+  return [...hours.entries()].sort((a, b) => a[0] - b[0]).map(([t, acc]) => ({ t, cents: acc.sum / acc.min }));
+}
+
+/* ==========================================================================
+   5. Animatsioonid ja Chart.js-i seadistus (teistel lehtedel on graafikud tahtlikult animatsioonita; see leht on
+      ülevaateleht ja animeerib, kuid mitte vähendatud liikumise eelistusega)
+   ========================================================================== */
+let C = null;   // värvid tokenitest: chartTokens() (common.js) + lehe tuletised
+
+function colors() {
+  const t = chartTokens();
+  const alpha = (color, a) => {
+    const rgb = parseColor(color);
+    return rgb ? `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${a})` : color;
+  };
+  return Object.assign(t, {
+    alpha,
+    surface: t.css('var(--surface)'),
+    border: t.css('var(--border)'),
+    avgLine: t.css('var(--avg-line)') || t.muted
+  });
+}
+
+function setupChartDefaults() {
+  if (typeof Chart === 'undefined') {
+    for (const box of document.querySelectorAll('.chart-box')) {
+      box.replaceChildren(el('p', { class: 'chart-box__fallback', text: 'Graafikut ei saanud laadida (Chart.js puudub).' }));
+    }
+    return false;
+  }
+  C = colors();
+  Chart.defaults.font.family = C.font;
+  Chart.defaults.font.size = 12;
+  Chart.defaults.color = C.muted;
+  Chart.defaults.borderColor = C.hairline;
+  return true;
+}
+
+const motion = () => !state.instant && !reducedMotion.matches;
+
+/** Tulpade sisenemine: kasvavad alusjoonest vasakult paremale lainena. */
+function barAnimation(step = 22) {
+  if (!motion()) return false;
+  return {
+    duration: 700,
+    easing: 'easeOutQuart',
+    delay: ctx => (ctx.type === 'data' && ctx.mode === 'default' ? ctx.dataIndex * step : 0)
+  };
+}
+
+/** Joon joonistub vasakult paremale (Chart.js „progressive line“): iga punkt algab eelmise punkti kõrguselt. */
+function lineAnimations(points, total = 1200) {
+  if (!motion()) return {};
+  const between = total / Math.max(1, points);
+  const previousY = ctx => {
+    if (ctx.index === 0) return ctx.chart.scales.y.getPixelForValue(0);
+    const prev = ctx.chart.getDatasetMeta(ctx.datasetIndex).data[ctx.index - 1];
+    return prev ? prev.getProps(['y'], true).y : ctx.chart.scales.y.getPixelForValue(0);
+  };
+  return {
+    x: { type: 'number', easing: 'linear', duration: between, from: NaN,
+      delay(ctx) { if (ctx.type !== 'data' || ctx.xStarted) return 0; ctx.xStarted = true; return ctx.index * between; } },
+    y: { type: 'number', easing: 'linear', duration: between, from: previousY,
+      delay(ctx) { if (ctx.type !== 'data' || ctx.yStarted) return 0; ctx.yStarted = true; return ctx.index * between; } }
+  };
+}
+
+function tooltip(extra = {}) {
+  return Object.assign({
+    enabled: true,
+    backgroundColor: C.surface,
+    titleColor: C.text,
+    bodyColor: C.text,
+    footerColor: C.muted,
+    borderColor: C.border,
+    borderWidth: 1,
+    padding: 10,
+    cornerRadius: 10,
+    boxPadding: 4,
+    usePointStyle: true,
+    titleFont: { weight: '700' },
+    footerFont: { weight: '500' },
+    caretSize: 6
+  }, extra);
+}
+
+function axis(extra = {}) {
+  return Object.assign({
+    grid: { color: C.hairline, drawTicks: false },
+    border: { display: false },
+    ticks: { color: C.muted, padding: 6 }
+  }, extra);
+}
+
+/** Püstine ala-gradient (ülal toonis, all läbipaistev). */
+function areaGradient(color, top = 0.35) {
+  return ctx => {
+    const { chart } = ctx;
+    const area = chart.chartArea;
+    if (!area) return C.alpha(color, top / 2);
+    const g = chart.ctx.createLinearGradient(0, area.top, 0, area.bottom);
+    g.addColorStop(0, C.alpha(color, top));
+    g.addColorStop(1, C.alpha(color, 0));
+    return g;
+  };
+}
+
+/** Loob graafiku või uuendab olemasolevat (sama tüüp): uuendus animeerib tulbad uutele väärtustele. */
+function upsert(id, config, recreate = false) {
+  const canvas = byId(id);
+  const existing = state.charts.get(id);
+  if (existing && !recreate && existing.config.type === config.type) {
+    existing.data.labels = config.data.labels;
+    existing.data.datasets.forEach((ds, i) => Object.assign(ds, config.data.datasets[i]));
+    if (existing.data.datasets.length !== config.data.datasets.length) existing.data.datasets = config.data.datasets;
+    existing.options = config.options;
+    existing.update();
+    return existing;
+  }
+  if (existing) existing.destroy();
+  const chart = new Chart(canvas, config);
+  state.charts.set(id, chart);
+  return chart;
+}
+
+/** Kaardi teade (andmed puuduvad või laadimine ebaõnnestus); null eemaldab selle. */
+function cardNotice(sectionId, text) {
+  const section = byId(sectionId);
+  const box = section.querySelector('.chart-box');
+  let notice = section.querySelector(':scope > .notice');
+  for (const node of section.querySelectorAll(':scope > .chart-box, :scope > .legend, :scope > .mix-legend')) node.hidden = Boolean(text);
+  if (!text) { if (notice) notice.remove(); return; }
+  if (!notice) {
+    notice = el('p', { class: 'notice' });
+    box.before(notice);
+  }
+  notice.textContent = text;
+}
+
+/* ==========================================================================
+   6. Plaadid: numbrid loendavad nullist (requestAnimationFrame, ~0,9 s)
+   ========================================================================== */
+function countUp(node, value, format) {
+  if (value == null) { node.textContent = '—'; return; }
+  node.dataset.count = '1';
+  if (!motion()) { node.textContent = format(value); return; }
+  const t0 = performance.now();
+  const duration = 900;
+  const step = now => {
+    const p = Math.min(1, (now - t0) / duration);
+    node.textContent = format(value * (1 - Math.pow(1 - p, 3)));
+    if (p < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
+function renderKpis() {
+  const nowMs = Date.now();
+  const current = state.prices.find(p => p.t <= nowMs && nowMs < p.end);
+  const today = hourlyPrices(0);
+  const avg = today.length ? today.reduce((s, h) => s + h.cents, 0) / today.length : null;
+  countUp(byId('kpi-price'), current ? current.cents : null, v => fmtCents(v));
+  byId('kpi-price-sub').textContent = avg != null ? `tänane keskmine ${fmtCents(avg)}` : (state.errors.prices || '');
+
+  const recs = lastDays(CONFIG.kokkuvotePaevi).map(d => d.rec).filter(Boolean);
+  const pv = sumOf(recs, 'pvKwh');
+  const pvEur = sumOf(recs, 'pvEur');
+  const gain = sumOf(recs, 'batteryGainEur');
+  const load = sumOf(recs, 'loadKwh');
+  const imp = sumOf(recs, 'importKwh');
+  countUp(byId('kpi-solar'), pv ? pv.total : null, v => fmtKwh(v));
+  byId('kpi-solar-sub').textContent = pvEur ? `väärtus ≈ ${fmtEur(pvEur.total)}` : (state.errors.days || '');
+  countUp(byId('kpi-battery'), gain ? gain.total : null, v => fmtEur(v));
+  byId('kpi-battery-sub').textContent = gain ? `${gain.count} päeva andmetest` : (state.errors.days || '');
+  countUp(byId('kpi-load'), load ? load.total : null, v => fmtKwh(v));
+  byId('kpi-load-sub').textContent = imp ? `võrgust ostetud ${fmtKwh(imp.total)}` : '';
+}
+
+/* ==========================================================================
+   7. Graafikud
+   ========================================================================== */
+/** Börsihind tunni kaupa: tulba värv päeva odavaimast (roheline) kalleimani (punane), praegune tund raamiga. */
+function drawPrice() {
+  const hours = hourlyPrices(state.priceDay);
+  const hasTomorrow = hourlyPrices(1).length > 0;
+  byId('price-tomorrow').disabled = !hasTomorrow;
+  byId('price-note').textContent = hasTomorrow ? '' : 'homsed hinnad alates ~15:00';
+  if (state.priceDay === 1 && !hasTomorrow) { state.priceDay = 0; byId('price-today').checked = true; return drawPrice(); }
+  if (!hours.length) { cardNotice('section-price', state.errors.prices || 'Selle päeva hindu pole.'); return; }
+  cardNotice('section-price', null);
+  const values = hours.map(h => h.cents);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const avg = values.reduce((s, v) => s + v, 0) / values.length;
+  const nowMs = Date.now();
+  const scale = v => (max > min ? (v - min) / (max - min) : 0.5);
+  const tone = v => {
+    const s = scale(v);
+    return s < 0.5 ? mixColor(C.cat.kollane, C.cat.roheline, s * 2) : mixColor(C.cat.punane, C.cat.kollane, (s - 0.5) * 2);
+  };
+  const isNow = h => h.t <= nowMs && nowMs < h.t + HOUR_MS;
+  const isPast = h => h.t + HOUR_MS <= nowMs;
+  const bg = hours.map(h => (isPast(h) ? C.mix(tone(h.cents), 0.55) : tone(h.cents)));
+  const labels = hours.map(h => hh(new Date(h.t)));
+  const cheapest = hours[values.indexOf(min)];
+  const dearest = hours[values.indexOf(max)];
+  byId('c-price').setAttribute('aria-label', `Börsihind ${state.priceDay ? 'homme' : 'täna'}: odavaim kell ${hh(new Date(cheapest.t))} ${fmtCents(min)}, kalleim kell ${hh(new Date(dearest.t))} ${fmtCents(max)}, keskmine ${fmtCents(avg)}.`);
+  upsert('c-price', {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { type: 'bar', label: 'Börsihind', data: values, backgroundColor: bg, hoverBackgroundColor: hours.map(h => tone(h.cents)),
+          borderColor: hours.map(h => (isNow(h) ? C.text : 'transparent')), borderWidth: hours.map(h => (isNow(h) ? 2 : 0)),
+          hoverBorderColor: C.text, hoverBorderWidth: 2, borderRadius: 6, borderSkipped: false, maxBarThickness: 28, order: 2 },
+        { type: 'line', label: 'Päeva keskmine', data: values.map(() => avg), borderColor: C.avgLine, borderDash: [6, 4], borderWidth: 1.5,
+          pointRadius: 0, pointHoverRadius: 0, order: 1 }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: barAnimation(),
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: tooltip({
+          filter: item => item.datasetIndex === 0,
+          callbacks: {
+            title: items => { const h = hours[items[0].dataIndex]; return `${hh(new Date(h.t))}:00–${hh(new Date(h.t + HOUR_MS))}:00${isNow(h) ? ' (praegu)' : ''}`; },
+            label: item => ` ${fmtCents(item.parsed.y)}`,
+            footer: items => {
+              const v = items[0].parsed.y;
+              if (!avg) return '';
+              const d = (v - avg) / Math.abs(avg) * 100;
+              return Math.abs(d) < 0.5 ? 'sama mis päeva keskmine' : `${NF.pct.format(Math.abs(d))}% ${d < 0 ? 'alla' : 'üle'} päeva keskmise`;
+            }
+          }
+        })
+      },
+      scales: {
+        x: axis({ grid: { display: false }, ticks: { color: C.muted, maxRotation: 0, autoSkip: true, autoSkipPadding: 8 } }),
+        y: axis({ beginAtZero: true, ticks: { color: C.muted, padding: 6, callback: v => NF.d0.format(v) } })
+      }
+    }
+  });
+}
+
+/** Rõngas: kust energia tuli viimase 30 päeva jooksul (päike vs ost võrgust); keskel kogus ja päikese osa. */
+function drawMix() {
+  const recs = lastDays(CONFIG.kokkuvotePaevi).map(d => d.rec).filter(Boolean);
+  const pv = sumOf(recs, 'pvKwh');
+  const imp = sumOf(recs, 'importKwh');
+  if (!pv && !imp) { cardNotice('section-mix', state.errors.days || 'Päevakokkuvõtteid pole veel.'); return; }
+  cardNotice('section-mix', null);
+  const pvKwh = pv ? pv.total : 0;
+  const gridKwh = imp ? imp.total : 0;
+  const total = pvKwh + gridKwh;
+  const share = total > 0 ? pvKwh / total * 100 : 0;
+  countUp(byId('mix-total'), total, v => NF.d0.format(v));
+  byId('mix-label').textContent = `kWh · päike ${NF.pct.format(share)}%`;
+  byId('mix-pv').textContent = `${fmtKwh(pvKwh)} · ${NF.pct.format(share)}%`;
+  byId('mix-grid').textContent = `${fmtKwh(gridKwh)} · ${NF.pct.format(100 - share)}%`;
+  byId('c-mix').setAttribute('aria-label', `Viimase ${CONFIG.kokkuvotePaevi} päeva energia: päike ${fmtKwh(pvKwh)} (${NF.pct.format(share)}%), ost võrgust ${fmtKwh(gridKwh)} (${NF.pct.format(100 - share)}%).`);
+  upsert('c-mix', {
+    type: 'doughnut',
+    data: {
+      labels: ['Päike', 'Ost võrgust'],
+      datasets: [{ data: [pvKwh, gridKwh], backgroundColor: [C.solar, C.grid], hoverBackgroundColor: [C.solar, C.grid],
+        borderColor: C.plot, borderWidth: 3, hoverOffset: 10, borderRadius: 8, spacing: 2 }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: '70%',
+      layout: { padding: 10 },
+      animation: motion() ? { animateRotate: true, animateScale: true, duration: 1100, easing: 'easeOutCubic' } : false,
+      plugins: {
+        legend: { display: false },
+        tooltip: tooltip({ callbacks: { label: item => ` ${item.label}: ${fmtKwh(item.parsed)} (${NF.pct.format(total ? item.parsed / total * 100 : 0)}%)` } })
+      }
+    }
+  });
+}
+
+/** Päeva võimsused 15 min kaupa: päike alana, maja ja ost võrgust joontena; joonistub vasakult paremale. */
+function drawPower() {
+  const now = new Date();
+  const start = getTallinnDayStart(now, state.powerDay).getTime();
+  const end = getTallinnDayStart(now, state.powerDay + 1).getTime();
+  const frames = state.frames.filter(f => f.t >= start && f.t < end);
+  if (!frames.length) { cardNotice('section-power', state.errors.solar || 'Selle päeva mõõtmisi pole.'); byId('power-note').textContent = ''; return; }
+  cardNotice('section-power', null);
+  const labels = frames.map(f => timeFormatter.format(new Date(f.t)));
+  const kwh = key => frames.reduce((s, f) => s + (f[key] || 0) * 0.25, 0);
+  const last = frames[frames.length - 1];
+  byId('power-note').textContent = `${state.powerDay ? 'eile' : 'täna'} kuni ${timeFormatter.format(new Date(last.t + 15 * MINUTE_MS))}: päike ${fmtKwh(kwh('pv'))}, maja ${fmtKwh(kwh('load'))}`;
+  byId('c-power').setAttribute('aria-label', `Päeva võimsused (${state.powerDay ? 'eile' : 'täna'}): päike ${fmtKwh(kwh('pv'))}, maja tarbimine ${fmtKwh(kwh('load'))}, ost võrgust ${fmtKwh(kwh('buy'))}.`);
+  const line = (label, key, color, extra = {}) => Object.assign({
+    type: 'line', label, data: frames.map(f => f[key]), borderColor: color, backgroundColor: color, borderWidth: 2.5,
+    tension: 0.35, pointRadius: 0, pointHoverRadius: 5, pointHoverBorderWidth: 2, pointHoverBorderColor: C.plot, spanGaps: false
+  }, extra);
+  upsert('c-power', {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        line('Päike', 'pv', C.solar, { fill: 'origin', backgroundColor: areaGradient(C.solar, 0.4) }),
+        line('Maja tarbimine', 'load', C.home),
+        line('Ost võrgust', 'buy', C.grid, { borderWidth: 2 })
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animations: lineAnimations(frames.length),
+      animation: motion() ? {} : false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: tooltip({ callbacks: { label: item => ` ${item.dataset.label}: ${item.parsed.y == null ? '—' : `${NF.d1.format(item.parsed.y)} kW`}` } })
+      },
+      scales: {
+        x: axis({ grid: { display: false }, ticks: { color: C.muted, maxRotation: 0, autoSkip: true, maxTicksLimit: 9 } }),
+        y: axis({ beginAtZero: true, ticks: { color: C.muted, padding: 6, callback: v => `${NF.d0.format(v)}` } })
+      }
+    }
+  }, true);   // joon joonistub igal päeva vahetusel uuesti vasakult paremale
+}
+
+/** Päevad: päike + ost võrgust virnastatud tulpadena (sisse tulnud energia), maja tarbimine joonena. */
+function drawDays() {
+  const days = lastDays(state.daysRange);
+  if (!days.some(d => d.rec)) { cardNotice('section-days', state.errors.days || 'Päevakokkuvõtteid pole veel.'); return; }
+  cardNotice('section-days', null);
+  const labels = days.map(d => { const p = getTallinnDateParts(d.date); return `${p.day}.${p.month}`; });
+  const pick = field => days.map(d => (d.rec ? num(d.rec[field]) : null));
+  const pv = pick('pvKwh');
+  const imp = pick('importKwh');
+  const load = pick('loadKwh');
+  const withData = days.filter(d => d.rec).length;
+  byId('days-note').textContent = withData < days.length ? `${withData} päeva ${days.length}-st andmetega` : '';
+  const sum = list => list.reduce((s, v) => s + (v || 0), 0);
+  byId('c-days').setAttribute('aria-label', `Viimased ${days.length} päeva: päike kokku ${fmtKwh(sum(pv))}, ost võrgust ${fmtKwh(sum(imp))}, maja tarbimine ${fmtKwh(sum(load))}.`);
+  upsert('c-days', {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { type: 'bar', label: 'Päike', data: pv, backgroundColor: C.solar, hoverBackgroundColor: C.mix(C.solar, 0.8), stack: 'sisse', borderRadius: 4, maxBarThickness: 22, order: 2 },
+        { type: 'bar', label: 'Ost võrgust', data: imp, backgroundColor: C.grid, hoverBackgroundColor: C.mix(C.grid, 0.8), stack: 'sisse', borderRadius: 4, maxBarThickness: 22, order: 2 },
+        { type: 'line', label: 'Maja tarbimine', data: load, stack: 'tarbimine', borderColor: C.home, backgroundColor: C.home, borderWidth: 2.5,
+          tension: 0.3, pointRadius: state.daysRange > 45 ? 0 : 2.5, pointHoverRadius: 5, pointBackgroundColor: C.home, order: 1 }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: barAnimation(state.daysRange > 45 ? 6 : 18),
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: tooltip({
+          callbacks: {
+            title: items => { const d = days[items[0].dataIndex]; return dateLongFormatter.format(d.date); },
+            label: item => ` ${item.dataset.label}: ${item.parsed.y == null ? '—' : fmtKwh(item.parsed.y)}`,
+            footer: items => {
+              const rec = days[items[0].dataIndex].rec;
+              const gain = rec ? num(rec.batteryGainEur) : null;
+              return gain != null ? `aku tulu ${fmtEur(gain)}` : '';
+            }
+          }
+        })
+      },
+      scales: {
+        x: axis({ stacked: true, grid: { display: false }, ticks: { color: C.muted, maxRotation: 0, autoSkip: true, autoSkipPadding: 10 } }),
+        y: axis({ stacked: true, beginAtZero: true, ticks: { color: C.muted, padding: 6, callback: v => NF.d0.format(v) } })
+      }
+    }
+  });
+}
+
+/** Tunniprofiil: maja keskmine kW kellatunni järgi viimase 14 päeva kirjetest (loadH), tööpäev vs puhkepäev. */
+function drawProfile() {
+  const groups = { work: [], rest: [] };
+  for (const d of lastDays(CONFIG.profiiliPaevi)) {
+    if (!d.rec || !Array.isArray(d.rec.loadH) || d.rec.loadH.length !== 24) continue;
+    const [y, m, day] = d.key.split('-').map(Number);
+    const weekday = new Date(Date.UTC(y, m - 1, day)).getUTCDay();
+    const rest = weekday === 0 || weekday === 6 || isPublicHoliday(y, m, day);
+    groups[rest ? 'rest' : 'work'].push(d.rec.loadH);
+  }
+  const avgProfile = list => Array.from({ length: 24 }, (_, h) => {
+    const vals = list.map(p => num(p[h])).filter(v => v != null);
+    return vals.length ? vals.reduce((s, v) => s + v, 0) / vals.length : null;
+  });
+  if (!groups.work.length && !groups.rest.length) { cardNotice('section-profile', state.errors.days || 'Tunniprofiili andmeid pole veel.'); return; }
+  cardNotice('section-profile', null);
+  const work = avgProfile(groups.work);
+  const rest = avgProfile(groups.rest);
+  byId('profile-note').textContent = `keskmine kW · ${groups.work.length} tööpäeva, ${groups.rest.length} puhkepäeva`;
+  const peak = list => { let best = -1; list.forEach((v, i) => { if (v != null && (best < 0 || v > list[best])) best = i; }); return best; };
+  const pw = peak(work);
+  const pr = peak(rest);
+  byId('c-profile').setAttribute('aria-label', `Maja tarbimine kellaaja järgi: tööpäeviti suurim kell ${String(pw).padStart(2, '0')}${pw >= 0 ? ` (${NF.d1.format(work[pw])} kW)` : ''}, puhkepäeviti kell ${String(pr).padStart(2, '0')}${pr >= 0 ? ` (${NF.d1.format(rest[pr])} kW)` : ''}.`);
+  upsert('c-profile', {
+    type: 'line',
+    data: {
+      labels: Array.from({ length: 24 }, (_, h) => String(h).padStart(2, '0')),
+      datasets: [
+        { label: 'Tööpäev', data: work, borderColor: C.home, backgroundColor: areaGradient(C.home, 0.3), fill: 'origin', borderWidth: 2.5,
+          tension: 0.4, pointRadius: 0, pointHoverRadius: 5, pointHoverBorderColor: C.plot, pointHoverBorderWidth: 2 },
+        { label: 'Puhkepäev', data: rest, borderColor: C.battery, backgroundColor: C.battery, borderWidth: 2.5, borderDash: [], tension: 0.4,
+          pointRadius: 0, pointHoverRadius: 5, pointHoverBorderColor: C.plot, pointHoverBorderWidth: 2 }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animations: lineAnimations(24, 1000),
+      animation: motion() ? {} : false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: tooltip({
+          callbacks: {
+            title: items => `kell ${items[0].label}:00–${String((Number(items[0].label) + 1) % 24).padStart(2, '0')}:00`,
+            label: item => ` ${item.dataset.label}: ${item.parsed.y == null ? '—' : `${NF.d1.format(item.parsed.y)} kW`}`
+          }
+        })
+      },
+      scales: {
+        x: axis({ grid: { display: false }, ticks: { color: C.muted, maxRotation: 0, autoSkip: true, maxTicksLimit: 9 } }),
+        y: axis({ beginAtZero: true, ticks: { color: C.muted, padding: 6, callback: v => NF.d0.format(v) } })
+      }
+    }
+  }, true);
+}
+
+/** Maja üldelekter: viimased 12 kuud (arvesti, hinnad.json majaElekter) ja aasta varasem sama kuu; kWh või €. */
+function drawMonths() {
+  if (!state.months.length) { cardNotice('section-months', state.errors.prices || 'Kuude andmeid pole.'); return; }
+  cardNotice('section-months', null);
+  const byKey = new Map(state.months.map(m => [m.kuu, m]));
+  const lastKey = state.months.map(m => m.kuu).sort().pop();
+  const [ly, lm] = lastKey.split('-').map(Number);
+  const months = Array.from({ length: 12 }, (_, i) => {
+    const d = new Date(Date.UTC(ly, lm - 12 + i, 1));
+    const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+    const prev = `${d.getUTCFullYear() - 1}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+    return { key, date: d, cur: byKey.get(key) || null, prev: byKey.get(prev) || null };
+  });
+  const metric = state.monthsMetric;
+  const value = rec => (rec ? num(rec[metric]) : null);
+  const fmt = v => (metric === 'eur' ? fmtEur(v) : fmtKwh(v));
+  const labels = months.map(m => `${monthShort.format(m.date).replace('.', '')} ${String(m.date.getUTCFullYear()).slice(2)}`);
+  const cur = months.map(m => value(m.cur));
+  const prev = months.map(m => value(m.prev));
+  const partial = months.map(m => Boolean(m.cur && m.cur.complete === false));
+  byId('months-note').textContent = partial.some(Boolean) ? 'viimane kuu on pooleli' : '';
+  const lastM = months[months.length - 1];
+  byId('c-months').setAttribute('aria-label', `Maja üldelekter, viimased 12 kuud (${metric === 'eur' ? 'eurodes' : 'kWh'}): ${labels[11]} ${value(lastM.cur) != null ? fmt(value(lastM.cur)) : '—'}${value(lastM.prev) != null ? `, aasta varem ${fmt(value(lastM.prev))}` : ''}.`);
+  upsert('c-months', {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Aasta varem', data: prev, backgroundColor: C.mix(C.grid, 0.35), hoverBackgroundColor: C.mix(C.grid, 0.5), borderRadius: 4, maxBarThickness: 18, categoryPercentage: 0.7 },
+        { label: 'Kuu', data: cur, backgroundColor: months.map((m, i) => (partial[i] ? C.alpha(C.grid, 0.55) : C.grid)), hoverBackgroundColor: C.mix(C.grid, 0.85),
+          borderColor: months.map((m, i) => (partial[i] ? C.grid : 'transparent')), borderWidth: months.map((m, i) => (partial[i] ? 1.5 : 0)),
+          borderRadius: 4, maxBarThickness: 18, categoryPercentage: 0.7 }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: barAnimation(35),
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: tooltip({
+          callbacks: {
+            title: items => { const m = months[items[0].dataIndex]; return `${monthShort.format(m.date).replace('.', '')} ${m.date.getUTCFullYear()}${partial[items[0].dataIndex] ? ' (pooleli)' : ''}`; },
+            label: item => ` ${item.dataset.label}: ${item.parsed.y == null ? '—' : fmt(item.parsed.y)}`,
+            footer: items => {
+              const i = items[0].dataIndex;
+              if (cur[i] == null || prev[i] == null || !prev[i] || partial[i]) return '';
+              const d = (cur[i] - prev[i]) / prev[i] * 100;
+              return `${d < 0 ? '−' : '+'}${NF.pct.format(Math.abs(d))}% võrreldes aasta varasemaga`;
+            }
+          }
+        })
+      },
+      scales: {
+        x: axis({ grid: { display: false }, ticks: { color: C.muted, maxRotation: 0, autoSkip: true, autoSkipPadding: 6 } }),
+        y: axis({ beginAtZero: true, ticks: { color: C.muted, padding: 6, callback: v => NF.d0.format(v) } })
+      }
+    }
+  });
+}
+
+const DRAW = { price: drawPrice, mix: drawMix, power: drawPower, days: drawDays, profile: drawProfile, months: drawMonths };
+
+/** Kaardi graafik (kui andmed on laaditud ja Chart.js olemas); vead jäävad selle kaardi sisse. */
+function drawSection(id) {
+  if (!C || !state.loadedAt || !DRAW[id]) return;
+  try {
+    DRAW[id]();
+  } catch (error) {
+    console.error(`Graafik „${id}“ ebaõnnestus:`, error);
+  }
+}
+
+/** Kaardid ilmuvad (ja nende graafikud animeeruvad), kui jõuavad vaatesse. */
+function setupReveal() {
+  const cards = [...document.querySelectorAll('.reveal')];
+  const show = card => {
+    card.classList.add('is-visible');
+    const id = card.dataset.chart;
+    if (id && !state.drawn.has(id)) { state.drawn.add(id); drawSection(id); }
+  };
+  if (typeof IntersectionObserver !== 'function' || !motion()) { cards.forEach(show); return; }
+  const observer = new IntersectionObserver(entries => {
+    for (const entry of entries) {
+      if (!entry.isIntersecting) continue;
+      show(entry.target);
+      observer.unobserve(entry.target);
+    }
+  }, { threshold: 0.15 });
+  cards.forEach(card => observer.observe(card));
+}
+
+/* ==========================================================================
+   8. Teema, juhtnupud ja käivitus
+   ========================================================================== */
+function applyTheme(theme) {
+  const dark = theme === 'dark' || (theme !== 'light' && Boolean(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches));
+  document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+  const button = byId('theme-toggle');
+  const label = THEME_LABELS[theme] || THEME_LABELS.auto;
+  button.setAttribute('aria-label', label);
+  button.title = label;
+  if (C) {   // uued värvid: graafikud joonistatakse ilma sisenemisanimatsioonita uuesti
+    C = colors();
+    Chart.defaults.color = C.muted;
+    Chart.defaults.borderColor = C.hairline;
+    for (const chart of state.charts.values()) chart.destroy();
+    state.charts.clear();
+    state.instant = true;
+    try {
+      for (const id of state.drawn) drawSection(id);
+    } finally {
+      state.instant = false;
+    }
+  }
+}
+
+function initTheme() {
+  try {
+    state.theme = localStorage.getItem('kauge32_theme') || 'auto';
+  } catch (error) { state.theme = 'auto'; }
+  applyTheme(state.theme);
+  const media = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+  if (media && media.addEventListener) media.addEventListener('change', () => { if (state.theme === 'auto') applyTheme('auto'); });
+  byId('theme-toggle').addEventListener('click', () => {
+    state.theme = { auto: 'dark', dark: 'light', light: 'auto' }[state.theme] || 'auto';
+    try { localStorage.setItem('kauge32_theme', state.theme); } catch (error) { /* salvestusruum keelatud */ }
+    applyTheme(state.theme);
+  });
+}
+
+function setupControls() {
+  const onChange = (name, apply) => {
+    for (const input of document.querySelectorAll(`input[name="${name}"]`)) input.addEventListener('change', () => { if (input.checked) apply(input.value); });
+  };
+  onChange('price-day', v => { state.priceDay = Number(v); drawSection('price'); });
+  onChange('power-day', v => { state.powerDay = Number(v); drawSection('power'); });
+  onChange('days-range', v => { state.daysRange = Number(v); drawSection('days'); });
+  onChange('months-metric', v => { state.monthsMetric = v; drawSection('months'); });
+  // Vahelehele naastes värsked andmed (graafikud uuenevad animatsiooniga uutele väärtustele)
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && Date.now() - state.loadedAt > CONFIG.uuendusMinutites * MINUTE_MS) loadAll();
+  });
+}
+
+async function init() {
+  byId('footer-version').textContent = `v${APP_VERSION}`;   // „Lukusta leht“ nuppu näitab js/lukk.js
+  setupChartDefaults();
+  initTheme();
+  setupControls();
+  setupReveal();
+  await loadAll();
+}
+
+// start() on failis js/common.js (ootab Lukk.valmis() ja kutsub siis init())
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
+else start();
+</script>
+</body>
+</html>

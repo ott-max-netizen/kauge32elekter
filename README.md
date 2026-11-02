@@ -27,8 +27,9 @@ Elering API → GitHub Actions → hinnad.json → GitHub Pages → index.html b
 |---|---|
 | `index.html` | **Elektriinfo**: börsihind, odavaim aeg, päikesekaart, maja lõpphind ja üldelekter (HTML ja JS) |
 | `energy-dashboard.html` | **Energia**: päikesepark, akupank, energiavoog, soovitus, „Täna kokku“ (kWh ja €; perioodid päevast aastani), päeva graafik (eile, täna, homme), päevade/kuude graafik ja „Trendid“ (kuud ja 12 kuu libisev keskmine) |
+| `graafikud.html` | **Graafikud**: animeeritud ülevaateleht (börsihind tunni kaupa, kust energia tuli, päike/maja/võrk päeva jooksul, päevad, tarbimine kellaaja järgi, maja üldelekter kuude kaupa), vt „Graafikud“ |
 | `css/common.css` | **ühine disainisüsteem** mõlemale lehele: tokenid (hele ja tume), klaaskaardid ja mesh-taust, bento-ruudustiku alus, komponendid, graafikuraam, olekud, print ja eelistuste varuvariandid |
-| `css/index.css`, `css/energy-dashboard.css` | ainult lehe paigutus (`grid-template-areas`) ja lehepõhised komponendid |
+| `css/index.css`, `css/energy-dashboard.css`, `css/graafikud.css` | ainult lehe paigutus (`grid-template-areas`) ja lehepõhised komponendid |
 | `img/icons.svg` | piktogrammide sprite (`<symbol id="i-…">`), mida kasutavad mõlemad lehed |
 | `js/common.js` | **mõlema lehe ühine skriptikood**: Tallinna aeg, vormindamine, hinnaarvutuste abifunktsioonid, DOM-abi ja graafikute ühisosa (Chart.js virn, tooltip, pluginad); laaditakse enne lehe põhiskripti, lehepõhine kood (`CONFIG`, olek, renderdamine) jääb HTML-i |
 | `js/vendor/chart.umd.min.js` | Chart.js 4.5.1 (MIT, `js/vendor/CHART_LICENSE.md`); graafikud joonistatakse sellega, teek on repo sees, sest CSP lubab skripte ainult samalt saidilt |
@@ -41,7 +42,8 @@ CSS-i, `js/common.js`-i või sprite'i muutmisel suurenda HTML-i linkides `?v=` v
 vahemälus 10 min).
 
 Mõlema lehe päises on sama lehtede navigatsioon **Elektriinfo** / **Energia** (aktiivne leht on esile
-tõstetud); elektriinfo lehe päikesekaardil on lisaks link energialehele.
+tõstetud); elektriinfo lehe päikesekaardil on lisaks link energialehele. Graafikute lehe (`graafikud.html`) päises on
+kõik kolm lehte; teiste lehtede navigatsioonis seda (veel) pole.
 
 ## Seadete muutmine
 
@@ -512,6 +514,34 @@ GitHub Secretsisse.
 „Värskenda“ nupp on pärast iga värskendust 30 s keelatud (nupul on loendur), et liiga tihe
 vajutamine ei koormaks Solarmani API-t ega GitHub Pagesi; elektriinfo lehe „Proovi uuesti“
 ootab 15 s.
+
+## Graafikud (`graafikud.html`)
+
+Ülevaateleht samadest andmefailidest (`hinnad.json`, `paike.json`, `paevad.json`), sama parooli ja disainiga. Erinevalt
+kahest töölehest on graafikud siin **animeeritud**: iga kaart ilmub ja selle graafik joonistub, kui kaart kerimisel
+vaatesse jõuab (`IntersectionObserver`); tulbad kasvavad lainena, jooned joonistuvad vasakult paremale, rõngas pöörleb
+täis ja plaatide numbrid loendavad nullist. Lülitid (täna/homme, täna/eile, 30/90 päeva, kWh/€) animeerivad graafiku uutele
+väärtustele. **Vähendatud liikumise** eelistusega (`prefers-reduced-motion`) ja teemavahetusel animatsioone pole.
+
+| Kaart | Andmed | Mida näitab |
+|---|---|---|
+| Plaadid | kõik | börsihind praegu (KM-ga) ja tänane keskmine; päike, aku tulu (`batteryGainEur`) ja maja tarbimine viimase 30 lõppenud päeva kohta |
+| Börsihind tunni kaupa | `hinnad.json` `data.ee` | tunni keskmine börsihind s/kWh koos KM-ga (KM `meta.tariffs.kaibemaks`-ist, varu `CONFIG.kaibemaks`); värv on päeva sees **suhteline** (odavaim roheline → kalleim punane), mitte elektriinfo lehe hinnaklass; möödunud tunnid tuhmid, praegune raamiga, katkendjoon = päeva keskmine. Homme alates ~15:00 |
+| Kust energia tuli | `paevad.json` | 30 päeva päikesetoodang vs ost võrgust (kogu majja tulnud energia) ja päikese osa |
+| Päike, maja ja võrk | `paike.json` `frames` | 15-min keskmised võimsused täna või eile (kW) |
+| Päevad | `paevad.json` | päike + ost võrgust virnas (sisse tulnud energia) ja maja tarbimine joonena, 30 või 90 päeva; tooltipis aku tulu |
+| Tarbimine kellaaja järgi | `paevad.json` `loadH` | viimase 14 päeva keskmine kW kellatunni järgi, tööpäev vs puhkepäev (nädalavahetus ja riigipühad) |
+| Maja üldelekter kuude kaupa | `hinnad.json` `data.majaElekter` | viimased 12 kuud arvesti järgi (kWh või €) ja aasta varasem sama kuu; pooleli kuu on heledam |
+
+- **Hõljutus:** iga graafik näitab tooltipi (kogu veerg korraga), hinnagraafik ka erinevust päeva keskmisest, kuude graafik
+  muutust aasta varasemaga. Puutel töötab sama toksamisega.
+- **Ligipääsetavus:** iga lõuend on `role="img"` ja selle `aria-label` on graafiku tekstikokkuvõte (nt odavaim ja kalleim
+  tund); lülitid on raadionupud (klaviatuuriga kasutatavad).
+- **Puuduvad andmed:** faili laadimise viga või puuduv päev näitab kaardil teadet, teised kaardid töötavad edasi.
+- **Seaded:** `graafikud.html` alguses `CONFIG` (failid, KM-i varuväärtus, perioodid). Tasusid ja hinnapiire siin ei ole.
+- **Uus graafik:** lisa märgistusse kaart `class="card reveal" data-chart="<nimi>"` koos `<canvas>`-iga ja skripti funktsioon
+  objekti `DRAW` alla; `upsert()` loob või uuendab graafikut, `barAnimation()` / `lineAnimations()` annavad animatsiooni,
+  `tooltip()` ja `axis()` ühise stiili, värvid tulevad tokenitest (`chartTokens`). Bento paigutus on `css/graafikud.css`-is.
 
 ## Parooliga kaitse
 

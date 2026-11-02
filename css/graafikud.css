@@ -1,0 +1,75 @@
+/* ==========================================================================
+   Kauge 32 graafikud (graafikud.html) — ainult lehe paigutus ja lehepõhised komponendid.
+   Tokenid, klaaskaart, bento-alus, plaadid, lülitid ja legend on failis css/common.css ja neid siin ei korrata.
+   NB! Pärast muutmist suurenda graafikud.html-is lingi ?v= väärtust.
+   ========================================================================== */
+
+/* ---------- 1. Bento ----------
+   Nimetatud alad alates 640 px; telefonis üks veerg DOM-järjekorras (kaartidel ei tohi seal grid-area-d olla). */
+@media (min-width: 640px) {
+  #section-kpi { grid-area: kpi; }        #section-price { grid-area: hind; }   #section-mix { grid-area: jaotus; }
+  #section-power { grid-area: voog; }     #section-days { grid-area: paevad; }  #section-profile { grid-area: profiil; }
+  #section-months { grid-area: kuud; }
+  .layout { grid-template-areas:
+    "kpi kpi kpi kpi kpi kpi"
+    "hind hind hind hind hind hind"
+    "jaotus jaotus jaotus jaotus jaotus jaotus"
+    "voog voog voog voog voog voog"
+    "paevad paevad paevad paevad paevad paevad"
+    "profiil profiil profiil profiil profiil profiil"
+    "kuud kuud kuud kuud kuud kuud"; }
+}
+@media (min-width: 1024px) {
+  .layout { grid-template-areas:
+    "kpi kpi kpi kpi kpi kpi kpi kpi kpi kpi kpi kpi"
+    "hind hind hind hind hind hind hind jaotus jaotus jaotus jaotus jaotus"
+    "voog voog voog voog voog voog voog voog voog voog voog voog"
+    "paevad paevad paevad paevad paevad paevad paevad paevad paevad paevad paevad paevad"
+    "profiil profiil profiil profiil profiil profiil kuud kuud kuud kuud kuud kuud"; }
+}
+
+/* ---------- 2. Kaardi juhtnupud (pealkirja all: lüliti vasakul, vihje paremal) ---------- */
+.card__controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s2) var(--s3); }
+
+/* ---------- 3. Graafiku kast: kõrgus on siin, Chart.js täidab selle (maintainAspectRatio: false) ---------- */
+.chart-box { position: relative; width: 100%; height: 240px; }
+.chart-box > canvas { display: block; }
+.chart-box--tall { height: 280px; }
+.chart-box--donut { height: 220px; }
+@media (min-width: 1024px) {
+  .chart-box { height: 280px; }
+  .chart-box--tall { height: 320px; }
+  .chart-box--donut { height: 240px; }
+}
+.chart-box__fallback { margin: 0; padding: var(--s4) 0; font-size: var(--fs-small); color: var(--muted); }
+
+/* ---------- 4. Rõngas: keskel kogus ja päikese osa (HTML, mitte lõuendil, et tekst oleks terav ja loetav) ---------- */
+.donut__center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  pointer-events: none;
+  text-align: center;
+}
+.donut__value { font-size: var(--fs-result); font-weight: 800; line-height: 1.1; color: var(--text); font-variant-numeric: tabular-nums; }
+.donut__label { font-size: var(--fs-micro); font-weight: 600; color: var(--muted); }
+.mix-legend { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s2); margin: 0; }
+.mix-legend .stat__value { font-size: var(--fs-secondary); }
+
+/* ---------- 5. Plaatide numbrid: tabelnumbrid, et loendamise animatsioon ei väriseks ---------- */
+.stat__value[data-count] { font-variant-numeric: tabular-nums; }
+
+/* ---------- 6. Kaardi ilmumine vaatesse (IntersectionObserver lisab .is-visible); graafik joonistub samal hetkel ---------- */
+.reveal { opacity: 0; transform: translateY(12px); transition: opacity 0.5s ease, transform 0.5s cubic-bezier(0.2, 0.7, 0.2, 1); }
+.reveal.is-visible { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) {
+  .reveal { opacity: 1; transform: none; transition: none; }
+}
+@media print {
+  .reveal { opacity: 1; transform: none; transition: none; }
+  .card__controls fieldset { display: none; }
+}
