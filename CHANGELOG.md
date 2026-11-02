@@ -4,6 +4,28 @@ See fail kirjeldab rakenduse `index.html` versioonimuudatusi, arhitektuurilisi k
 
 ---
 
+## graafikud.html [1.2.0] — 2026-11-02 · loetavus: tekstid, suurused, legendid
+
+`APP_VERSION` `1.2.0`, `css/graafikud.css?v=20261102c`. Andmed ja arvutused ei muutunud.
+
+- **Ühikud teljel:** iga graafiku ühik on plot-ala kohal (s/kWh, kW, %, kWh, €); kaartide vihjed lühenesid (nt „koos tasude
+  ja KM-ga“), plaatide ühik on numbrist väiksem (`<small>`), lõppväärtus proportsionaalsete numbritega.
+- **Hinnagraafiku otsesildid:** praegu, kalleim ja odavaim tulba kohal ning „keskmine“ joone otsas (halo-ga, kattuv
+  madalama prioriteediga silt jääb ära); legend lühem (keskmine on joone otsas). Börsihinna ja tasude vahel 2 px pinnavahe,
+  tasud tumedas teemas heledamad, tulbad kuni 24 px.
+- **Kust energia tuli:** kahe osaga rõnga asemel kolm jagatud tulpa (eile, 7 päeva, 30 päeva) – osade võrdlus on lihtsam,
+  protsent ploki sees (valge või peaaegu must teksti kontrasti järgi, ainult kui mahub), kogused rea päises ja all.
+- **Ajatelg:** 15-min graafikutel (hind 15 min, päike/maja/võrk, aku) sildid ainult täistundidel, iga 2 h (kitsal iga 3 h).
+- **Aku:** kahe graafiku y-teljed sama laiad (plot-alad joonduvad), võimsuse graafikul „laeb ↑ / tühjeneb ↓“ sildid,
+  plaatide alltekstid selgemad („suurim võimsus 8,0 kW“, „ei tühjenenud“), laetuse muutus kaardi märkuses.
+- **Märgid:** jooned 2 px, alad heledam kiht, päevade graafiku tarbimisjoonel punkte pole, päike/ost tulpade vahel 2 px
+  pinnavahe; tooltip 13 px, joontel joonevõti ja tulpadel ristkülik.
+- Seeriavärvid (päike, maja, võrk, aku) kontrollitud värvipimeduse validaatoriga: kõik kontrollid läbivad heledas ja tumedas.
+- Kontrollitud Playwrightiga (hele 1280, tume 390, vähendatud liikumine, parooliga, puuduv `paevad.json`): 7 graafikut ja 3
+  jagatud tulpa, ühikud, lülitid, tooltip, teemavahetus, laiuse muutus; JS-vigu ega horisontaalset kerimist pole.
+
+---
+
 ## graafikud.html [1.1.0] — 2026-11-02 · hind koos tasudega, eile, 1 h / 15 min, aku
 
 `APP_VERSION` `1.1.0`, `css/graafikud.css?v=20261102b`.

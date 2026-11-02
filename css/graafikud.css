@@ -37,42 +37,44 @@
 .chart-box { position: relative; width: 100%; height: 240px; }
 .chart-box > canvas { display: block; }
 .chart-box--tall { height: 280px; }
-.chart-box--donut { height: 220px; }
 .chart-box--soc { height: 160px; }
 .chart-box--batpower { height: 150px; }
 @media (min-width: 1024px) {
   .chart-box { height: 280px; }
   .chart-box--tall { height: 320px; }
-  .chart-box--donut { height: 240px; }
   .chart-box--soc { height: 180px; }
   .chart-box--batpower { height: 170px; }
 }
 .chart-box__fallback { margin: 0; padding: var(--s4) 0; font-size: var(--fs-small); color: var(--muted); }
 
-/* ---------- 4. Rõngas: keskel kogus ja päikese osa (HTML, mitte lõuendil, et tekst oleks terav ja loetav) ---------- */
-.donut__center {
-  position: absolute;
-  inset: 0;
+/* ---------- 4. Kust energia tuli: jagatud tulbad (28 px, 2 px pind osade vahel, osa protsent ploki sees) ---------- */
+.mix { display: flex; flex-direction: column; gap: var(--s4); }
+.mix-row { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.mix-row__head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s2); margin: 0; font-size: var(--fs-small); }
+.mix-row__label { font-weight: 700; color: var(--text); }
+.mix-row__total { font-weight: 600; color: var(--text); }
+.mix-row__detail { margin: 0; font-size: var(--fs-micro); line-height: 1.35; color: var(--muted); }
+.segbar { display: flex; gap: 2px; height: 28px; min-width: 0; }
+.segbar__part {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 2px;
-  pointer-events: none;
-  text-align: center;
+  min-width: 0;
+  flex: 0 1 0;                         /* laius = flex-grow (osa %), animeeritakse nullist */
+  border-radius: 4px;
+  background: var(--fill);
+  transition: flex-grow 0.9s cubic-bezier(0.2, 0.7, 0.2, 1);
 }
-.donut__value { font-size: var(--fs-result); font-weight: 800; line-height: 1.1; color: var(--text); font-variant-numeric: tabular-nums; }
-.donut__label { font-size: var(--fs-micro); font-weight: 600; color: var(--muted); }
-.mix-legend { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s2); margin: 0; }
-.mix-legend .stat__value { font-size: var(--fs-secondary); }
+.segbar__label { padding: 0 8px; font-size: var(--fs-micro); font-weight: 700; line-height: 1; white-space: nowrap; color: var(--on-fill, #fff); }
+@media (prefers-reduced-motion: reduce) { .segbar__part { transition: none; } }
+@media (forced-colors: active) { .segbar__part { border: 1px solid CanvasText; } }
 
 /* ---------- 4b. Hinnagraafiku legend: börsihind + tasud ühe tulbana; värviskaala päeva odavaimast kalleimani ---------- */
-.legend__swatch--split { background: linear-gradient(to top, var(--cat-kollane) 0 55%, color-mix(in srgb, var(--cat-kollane) 45%, var(--plot)) 55% 100%); }
+.legend__swatch--split { background: linear-gradient(to top, var(--cat-kollane) 0 50%, var(--plot) 50% 66%, color-mix(in srgb, var(--cat-kollane) 55%, var(--plot)) 66% 100%); }
 .legend__swatch--scale { width: 28px; background: linear-gradient(to right, var(--cat-roheline), var(--cat-kollane), var(--cat-punane)); }
 #price-note:empty { display: none; }
 
 /* ---------- 5. Plaatide numbrid: tabelnumbrid, et loendamise animatsioon ei väriseks ---------- */
-.stat__value[data-count] { font-variant-numeric: tabular-nums; }
+.stat__value[data-count] { font-variant-numeric: tabular-nums; }   /* ainult loendamise ajal; lõppväärtus proportsionaalsete numbritega */
 
 /* ---------- 6. Kaardi ilmumine vaatesse (IntersectionObserver lisab .is-visible); graafik joonistub samal hetkel ---------- */
 .reveal { opacity: 0; transform: translateY(12px); transition: opacity 0.5s ease, transform 0.5s cubic-bezier(0.2, 0.7, 0.2, 1); }
