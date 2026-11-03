@@ -18,7 +18,8 @@
  *         (kontroll = AES-GCM(võti, "kauge32-lukk")); puudumine (404) tähendab, et lehel pole lukku.
  *         Andmefail  {lukk, kdf, iter, salt, iv, ct}.
  * Võti (mitte parool) on mitte-eksporditav CryptoKey (extractable: false) ja seda hoitakse IndexedDB-s
- * (andmebaas kauge32-lukk, hoidla votmed): „Jäta meelde“ korral kirje „pysiv“, muidu selle vahelehe kirje
+ * (andmebaas kauge32-lukk, hoidla votmed): „Jäta meelde“ korral kirje „pysiv“ (kehtib 30 päeva salvestamisest, siis
+ * küsitakse parooli uuesti), muidu selle vahelehe kirje
  * „sessioon:<id>“, mille id on vahelehe sessionStorage'is (kauge32_lukk_sessioon). Vahelehe sulgemisel kaob id ja
  * kirjet ei saa enam kasutada; aegunud sessioonikirjed (12 h viimasest kasutusest) kustutatakse järgmisel avamisel.
  * Mitte-eksporditavat võtit ei saa ka sama saidi (*.github.io) skript välja lugeda ega teise seadmesse viia, ainult
@@ -37,7 +38,9 @@
   const IDB_POOD = 'votmed';
   const PYSIV = 'pysiv';
   const SESSIOON = 'kauge32_lukk_sessioon';         // sessionStorage: selle vahelehe IndexedDB kirje id (mitte võti)
-  const SESSIOONI_AEG_MS = 12 * 3600 * 1000;
+  const SESSIOONI_AEG_MS = 12 * 3600 * 1000;      // vahelehe kirje: 12 h viimasest kasutusest
+  const PYSIVA_AEG_MS = 30 * 24 * 3600 * 1000;      // „Jäta meelde“: 30 päeva salvestamisest, ei pikene (NIST SP 800-63B §7.2)
+  const MAX_PAROOL = 256;
   const KONTROLL = 'kauge32-lukk';
   const KDF = 'PBKDF2-SHA256';
   const MIN_ITER = 600000;          // PBKDF2 iteratsioonide lubatud vahemik (sama mis .github/scripts/lukk.py-s): vähem = nõrk
@@ -55,7 +58,7 @@
   const votmed = new Map();     // `${salt}|${iter}` -> CryptoKey
   let avamine = null;           // pooleli olev parooliküsimine { promise, resolve }
 
-  if (subtle && location.protocol !== 'file:') document.documentElement.classList.add('lukk-ootel');
+  if (location.protocol !== 'file:') document.documentElement.classList.add('lukk-ootel');
 
   /* ---------- abifunktsioonid ---------- */
   const byId = id => document.getElementById(id);
@@ -86,7 +89,7 @@
   }
 
   async function tuletaVoti(pw, saltB64, iter) {
-    const alus = await subtle.importKey('raw', utf8.encode(pw.normalize('NFC')), 'PBKDF2', false, ['deriveKey']);
+    const alus = await subtle.importKey('raw', utf8.encode(pw.normalize('NFKC')), 'PBKDF2', false, ['deriveKey']);
     return subtle.deriveKey(
       { name: 'PBKDF2', hash: 'SHA-256', salt: b64d(saltB64), iterations: iter },
       alus, { name: 'AES-GCM', length: 256 }, false, ['decrypt']
@@ -167,12 +170,15 @@
     }
   }
 
-  function kehtivKirje(obj) {
+  /** Salvestatud kirje: mitte-eksporditav AES-GCM võti (muud ei kasutata), aegumata. */
+  function kehtivKirje(obj, nyyd = Date.now()) {
     return Boolean(obj) && typeof obj.salt === 'string' && Number.isInteger(obj.iter)
-      && Boolean(obj.key) && typeof obj.key === 'object' && obj.key.type === 'secret';
+      && Boolean(obj.key) && typeof obj.key === 'object' && obj.key.type === 'secret' && obj.key.extractable === false
+      && Boolean(obj.key.algorithm) && obj.key.algorithm.name === 'AES-GCM'
+      && (obj.aegub === undefined || obj.aegub > nyyd);
   }
 
-  /** Kustutab aegunud sessioonikirjed (ka teiste, juba suletud vahelehtede omad). */
+  /** Kustutab aegunud kirjed: sessioonid (ka teiste, juba suletud vahelehtede omad) ja 30 päeva vanuse püsiva võtme. */
   function koristaAegunud() {
     const nyyd = Date.now();
     return idb('readwrite', store => {
@@ -180,7 +186,10 @@
       req.onsuccess = () => {
         const c = req.result;
         if (!c) return;
-        if (String(c.key).startsWith('sessioon:') && !(c.value && c.value.aegub > nyyd)) c.delete();
+        const k = String(c.key);
+        const v = c.value;
+        if (k.startsWith('sessioon:') && !(v && v.aegub > nyyd)) c.delete();
+        else if (k === PYSIV && v && v.aegub !== undefined && !(v.aegub > nyyd)) c.delete();   // 30 päeva täis
         c.continue();
       };
       return null;
@@ -191,7 +200,11 @@
   async function loeSalvestatud() {
     await koristaAegunud();
     const pysiv = await idb('readonly', store => store.get(PYSIV));
-    if (kehtivKirje(pysiv)) return { salt: pysiv.salt, iter: pysiv.iter, key: pysiv.key, pysiv: true };
+    if (kehtivKirje(pysiv)) {
+      // Varasem püsiv kirje oli aegumiseta: 30 päeva hakkab lugema nüüd (elanikelt ei küsita parooli kohe uuesti)
+      if (pysiv.aegub === undefined) await idb('readwrite', store => store.put({ ...pysiv, aegub: Date.now() + PYSIVA_AEG_MS }, PYSIV));
+      return { salt: pysiv.salt, iter: pysiv.iter, key: pysiv.key, pysiv: true };
+    }
     const id = sessiooniId(false);
     if (id) {
       const sess = await idb('readonly', store => store.get(`sessioon:${id}`));
@@ -222,7 +235,7 @@
   }
 
   function kirjutaKirje(voti, info, pysiv) {
-    if (pysiv) return idb('readwrite', store => store.put({ salt: info.salt, iter: info.iter, key: voti }, PYSIV));
+    if (pysiv) return idb('readwrite', store => store.put({ salt: info.salt, iter: info.iter, key: voti, aegub: Date.now() + PYSIVA_AEG_MS }, PYSIV));
     const id = sessiooniId(true);
     if (!id) return Promise.resolve();   // sessionStorage keelatud: võti jääb ainult mällu
     return idb('readwrite', store => store.put(
@@ -346,6 +359,7 @@
     if (!avamine) return;
     const pw = (ui.input ? ui.input.value : '').trim();
     if (!pw) { naitaViga('Sisesta parool.'); return; }
+    if (pw.length > MAX_PAROOL) { naitaViga(`Parool on liiga pikk (üle ${MAX_PAROOL} märgi).`); return; }
     naitaViga('');
     tooOlek(true);
     try {
@@ -412,7 +426,17 @@
   async function avaUmbrik(umbrik) {
     if (!kehtivParameetrid(umbrik) || baite(umbrik.iv) !== IV_B) throw new Error('krüpteeritud faili parameetrid on vigased');
     if (!subtle) throw new Error('brauser ei toeta WebCrypto-t (vaja on HTTPS-i)');
-    let voti = await hangiVoti(umbrik.salt, umbrik.iter);
+    let teade;
+    if (!votmed.has(votmeId(umbrik.salt, umbrik.iter))) {
+      // Tundmatu sool: kas lukk.json on vahepeal uue soolaga (parooli vahetus)? Siis kontrollitakse uut parooli selle vastu.
+      const info = await laeLukuFail().catch(() => null);
+      if (info && info.salt === umbrik.salt && info.iter === umbrik.iter && (!lukuInfo || info.salt !== lukuInfo.salt)) {
+        lukuInfo = info;
+        await unustaSalvestatud(false);
+        teade = 'Parool on vahetatud. Sisesta uus parool.';
+      }
+    }
+    let voti = await hangiVoti(umbrik.salt, umbrik.iter, teade);
     try {
       return await dekrypteeri(voti, umbrik.iv, umbrik.ct);
     } catch (error) {
@@ -436,11 +460,24 @@
 
   /* ---------- avalik liides ---------- */
   async function kaivita() {
+    // Teise lehe raamis (iframe) ei käivitu lukk üldse: IndexedDB-d ei avata, sessiooni ei pikendata, andmeid ei laadita
+    // (GitHub Pagesil, kus frame-ancestors päist pole; js/teema.js peidab lehe). Lubadus ei täitu, seega leht ei käivitu.
+    if (global.top !== global.self) return new Promise(() => {});
     unustaVanadVotmed();
-    if (!subtle || location.protocol === 'file:') {
-      // file:// või ebaturvaline kontekst: andmefaile nagunii ei loeta, lukk jääb vahele
+    if (location.protocol === 'file:') {
+      // file://: andmefaile nagunii ei loeta, lukk jääb vahele
       document.documentElement.classList.remove('lukk-ootel');
       return false;
+    }
+    if (!subtle) {
+      // Ebaturvaline ühendus (http://) või WebCrypto-ta brauser: lukuta lehel jätkatakse, lukus lehel ei avata midagi
+      let info;
+      try { info = await laeLukuFail(); } catch (error) { info = undefined; }
+      if (info === null) { lopetaAvamine(); return false; }
+      naitaVaadet(true);
+      tooOlek(true, 'Ava');
+      naitaViga('Leht tuleb avada turvalise ühendusega (https://). Siin ei saa brauser andmeid dekrüpteerida.');
+      return new Promise(() => {});
     }
     if (ui.form && !ui.form.dataset.lukkReady) {
       ui.form.dataset.lukkReady = '1';
@@ -486,7 +523,7 @@
       return true;
     }
     if (salvestatud) await unustaSalvestatud(false);
-    await kysiParool();
+    await kysiParool(salvestatud ? 'Parool on vahetatud. Sisesta uus parool.' : undefined);   // teine sool = parool vahetati
     return true;
   }
 

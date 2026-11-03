@@ -7,7 +7,7 @@ brauser (js/lukk.js) dekrypteerib need pärast parooli sisestamist. Parool on ai
 (LEHE_PAROOL) ja elanike peas; serverisse ega repo'sse seda ei jõua.
 
 Krüptograafia (sama nii siin kui js/lukk.js-is):
-  võti      = PBKDF2-HMAC-SHA256(parool NFC-kujul UTF-8, sool 16 B, 600 000 iteratsiooni) → 32 B
+  võti      = PBKDF2-HMAC-SHA256(parool NFKC-kujul UTF-8, sool 16 B, 600 000 iteratsiooni) → 32 B
   fail      = AES-256-GCM(võti, juhuslik 12 B nonss, tavatekst) → ümbrik
   ümbrik    {"lukk":1,"kdf":"PBKDF2-SHA256","iter":600000,"salt":b64,"iv":b64,"ct":b64}
   lukk.json {"lukk":1,"kdf":...,"iter":...,"salt":b64,"kontroll":{"iv":b64,"ct":b64}}
@@ -16,6 +16,13 @@ Krüptograafia (sama nii siin kui js/lukk.js-is):
              baidi täpsusega sama: parooli vahetusel kirjutavad mõlemad töövood sama faili ja git ühendab nende
              samaaegsed commit'id konfliktita (juhusliku nonsiga jäi teise töövoo andmefail vana parooli alla).
   Sool on kõigil failidel sama (lukk.json-i oma), et brauser tuletaks võtme ühe korra.
+  Sool: esimesel lukustamisel juhuslik (16 B). Parooli vahetusel uus sool = HMAC-SHA256(PBKDF2(uus parool, vana sool),
+  "kauge32-lukk-sool")[:16] (tuleta_sool): igal paroolil on oma sool (vana parooli uuesti kasutamine ei anna sama
+  lukk.json-i ja üks PBKDF2 arvutus ei kontrolli kõiki ajaloo paroole korraga), aga mõlemad töövood arvutavad sama soola,
+  nii et nende samaaegsed commit'id ühenduvad endiselt konfliktita. Soolast parooli kontrollimine maksab sama palju
+  (600 000 iteratsiooni) kui kontrollväärtusest, seega lisaoraaklit ei teki.
+  Parool: vähemalt MIN_PAROOL (12) ja kuni MAX_PAROOL (256) märki; lühemat uut parooli lukk.json-i ei kirjutata
+  (olemasolevat ei kontrollita, et töövood ei jääks seisma ega logisse tuleks vihjet parooli kohta).
 
 Käsud (töövoo sammud; keskkonnamuutujad LEHE_PAROOL ja valikuline LEHE_PAROOL_VANA):
   ava FAIL... [--loe FAIL...]
@@ -37,6 +44,7 @@ käivita mõlemad töövood (failid salvestatakse tavatekstina, lukk.json kustub
 """
 import base64
 import hashlib
+import hmac
 import json
 import os
 import secrets
@@ -50,20 +58,22 @@ MIN_ITER = 600_000      # loetavate ümbrike vahemik (sama mis js/lukk.js-is): v
 MAX_ITER = 2_000_000    # ITER-i tõstmisel üle selle suurenda ka MAX_ITER-it (ka js/lukk.js-is)
 SOOL_B = 16
 NONSS_B = 12
+MIN_PAROOL = 12        # uue parooli vähim pikkus (failid on avalikud: parooli saab proovida võrguühenduseta)
+MAX_PAROOL = 256
 LUKK_FAIL = "lukk.json"
 KONTROLL = b"kauge32-lukk"
 SEIS = "seis.json"      # kõrvalepandud failide manifest stash-kataloogis
 
 
 def viga(msg):
-    print(f"::error::{msg}")
+    print("::error::" + str(msg).replace("\r", " ").replace("\n", " "))
     sys.exit(1)
 
 
 def parool(nimi):
-    """Secret ilma äärte tühikuteta ja NFC-kujul (nagu brauseris), None kui puudub."""
+    """Secret ilma äärte tühikuteta ja NFKC-kujul (nagu brauseris, NIST SP 800-63B §5.1.1.2), None kui puudub."""
     p = os.environ.get(nimi, "")
-    p = unicodedata.normalize("NFC", p.strip())
+    p = unicodedata.normalize("NFKC", p.strip())
     return p or None
 
 
@@ -178,6 +188,11 @@ def loe_lukk(votmed, pw):
     return {"salt": sool, "iter": iteratsioone}
 
 
+def tuleta_sool(votmed, pw, vana_sool):
+    """Uue parooli sool vanast: deterministlik (mõlemad töövood saavad sama), iga parooli jaoks eri (vt mooduli kirjeldus)."""
+    return hmac.new(votmed.voti(pw, vana_sool, ITER), b"kauge32-lukk-sool", hashlib.sha256).digest()[:SOOL_B]
+
+
 def kirjuta_lukk(votmed, pw, sool):
     voti = votmed.voti(pw, sool, ITER)
     nonss, ct = krypteeri(voti, KONTROLL, kontroll_nonss(sool))
@@ -279,14 +294,17 @@ def cmd_lukusta(omad):
     if lukk:
         sool = lukk["salt"]
     else:
-        # Sool jääb samaks, kui lukk.json on olemas (ainult parool vahetus); muidu uus juhuslik sool
+        # Uus lukk või parooli vahetus: parool peab olema piisavalt pikk (kehtivat parooli ei kontrollita)
+        if not MIN_PAROOL <= len(pw) <= MAX_PAROOL:
+            viga(f"LEHE_PAROOL peab olema {MIN_PAROOL}–{MAX_PAROOL} märki pikk; lukk.json-i ega andmefaile ei muudetud")
+        # Parooli vahetus: uus sool vanast (tuleta_sool, mõlemas töövoos sama); esimene lukustamine: juhuslik sool
         sool = None
         if os.path.exists(LUKK_FAIL):
             _, vana_obj = loe_json(LUKK_FAIL)
             try:
                 kandidaat = b64d(vana_obj["salt"])
                 if len(kandidaat) >= SOOL_B:
-                    sool = kandidaat
+                    sool = tuleta_sool(votmed, pw, kandidaat)
             except (KeyError, ValueError, TypeError, AttributeError):
                 sool = None
         if sool is None:

@@ -1,6 +1,6 @@
 // GoatCounter: https://www.goatcounter.com
 // This file is released under the ISC license: https://opensource.org/licenses/ISC
-// Kauge 32 muudatus (README „Külastuste statistika“): päringustringi (location.search) ei saadeta (q: '').
+// Kauge 32 muudatused (README „Külastuste statistika“): päringustringi (location.search) ei saadeta (q: ''); localStorage try/catch-iga.
 ;(function() {
 	'use strict';
 
@@ -118,8 +118,10 @@
 			return 'localhost'
 		if (!goatcounter.allow_local && location.protocol === 'file:')
 			return 'localfile'
-		if (localStorage && localStorage.getItem('skipgc') === 't')
-			return 'disabled with #toggle-goatcounter'
+		try {  // Kauge 32: keelatud salvestusruumiga brauseris viskab localStorage SecurityError-i
+			if (localStorage && localStorage.getItem('skipgc') === 't')
+				return 'disabled with #toggle-goatcounter'
+		} catch (err) {}
 		return false
 	}
 
@@ -236,7 +238,7 @@
 	}
 
 	// Make it easy to skip your own views.
-	if (location.hash === '#toggle-goatcounter') {
+	if (location.hash === '#toggle-goatcounter') try {  // Kauge 32: try (vt filter)
 		if (localStorage.getItem('skipgc') === 't') {
 			localStorage.removeItem('skipgc', 't')
 			alert('GoatCounter tracking is now ENABLED in this browser.')
@@ -245,7 +247,7 @@
 			localStorage.setItem('skipgc', 't')
 			alert('GoatCounter tracking is now DISABLED in this browser until ' + location + ' is loaded again.')
 		}
-	}
+	} catch (err) {}
 
 	if (!goatcounter.no_onload)
 		on_load(function() {

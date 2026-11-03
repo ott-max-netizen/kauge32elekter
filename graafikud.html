@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <!-- Turvapoliitika (README „Turvalisus“): skriptid ainult failidest samalt saidilt (lehesiseseid ei käivitata), HTML-i
      stringist kirjutamine keelatud (Trusted Types), vormi ei saa saata, raame/workereid pole; välised päringud ainult külastuste loendurisse. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://kauge32.goatcounter.com; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; worker-src 'none'; manifest-src 'none'; media-src 'none'; require-trusted-types-for 'script'; trusted-types 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://kauge32.goatcounter.com; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; worker-src 'none'; manifest-src 'none'; media-src 'none'; require-trusted-types-for 'script'; trusted-types 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
@@ -15,15 +15,15 @@
 <meta name="robots" content="noindex, nofollow, noarchive">
 <title>Kauge 32 graafikud</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="css/common.css?v=20261103">
+<link rel="stylesheet" href="css/common.css?v=20261103b">
 <!-- Lukk (parooliga kaitse, README „Parooliga kaitse“): ilma defer'ita, et globaal Lukk oleks lehe skriptile olemas ja .app peituks enne esimest joonistamist -->
-<script src="js/lukk.js?v=20261103"></script>
+<script src="js/lukk.js?v=20261103b"></script>
 <!-- Külastuste loendus (GoatCounter, küpsisteta; README „Külastuste statistika“). Skript on repo sees, sest CSP lubab ainult
      sama saidi skripte; loendus läheb sendBeacon-iga (connect-src). Saadetakse lehe nimi, ekraani laius ja tulek, mitte andmeid. -->
-<script data-goatcounter="https://kauge32.goatcounter.com/count" data-goatcounter-settings='{"no_events":true,"path":"/graafikud.html","title":"Graafikud"}' async src="js/vendor/goatcounter-count.js?v=c031008-k32"></script>
-<link rel="stylesheet" href="css/graafikud.css?v=20261102c">
+<script data-goatcounter="https://kauge32.goatcounter.com/count" data-goatcounter-settings='{"no_events":true,"path":"/graafikud.html","title":"Graafikud"}' async src="js/vendor/goatcounter-count.js?v=c031008-k32b"></script>
+<link rel="stylesheet" href="css/graafikud.css?v=20261103b">
 <!-- Raamimise kaitse ja teema enne esimest joonistamist (ilma defer'ita) -->
-<script src="js/teema.js?v=20261103"></script>
+<script src="js/teema.js?v=20261103b"></script>
 <!-- Chart.js 4.5.1 (globaal Chart): defer, init() käivitub DOMContentLoaded-il, mil teek on juba täidetud -->
 <script src="js/vendor/chart.umd.min.js?v=4.5.1" defer></script>
 </head>
@@ -38,7 +38,7 @@
     <p id="lukk-tekst" class="lukk__text">Sisesta ühistu parool, et näha maja elektri- ja päikeseandmeid.</p>
     <div class="lukk__field">
       <label for="lukk-parool">Parool</label>
-      <input id="lukk-parool" type="password" autocomplete="current-password" spellcheck="false" autocapitalize="off" required>
+      <input id="lukk-parool" type="password" maxlength="256" autocomplete="current-password" spellcheck="false" autocapitalize="off" required>
     </div>
     <label class="lukk__check" for="lukk-pea-meeles"><input id="lukk-pea-meeles" name="peaMeeles" type="checkbox"> Jäta meelde selles seadmes</label>
     <p id="lukk-viga" class="notice notice--error" role="alert" hidden></p>
@@ -114,8 +114,8 @@
       </div>
       <div class="mix" id="mix-body"></div>
       <div class="legend" aria-hidden="true">
-        <span class="legend__item"><span class="legend__swatch" style="--swatch: var(--solar)"></span>päike</span>
-        <span class="legend__item"><span class="legend__swatch" style="--swatch: var(--grid)"></span>ost võrgust</span>
+        <span class="legend__item"><span class="legend__swatch swatch--solar"></span>päike</span>
+        <span class="legend__item"><span class="legend__swatch swatch--grid"></span>ost võrgust</span>
       </div>
     </section>
 
@@ -135,10 +135,10 @@
       </div>
       <div class="chart-box chart-box--tall"><canvas id="c-power" role="img" aria-label="Päeva võimsuste graafik"></canvas></div>
       <div class="legend" aria-hidden="true">
-        <span class="legend__item"><span class="legend__swatch legend__swatch--area" style="--swatch: var(--solar)"></span>päike</span>
-        <span class="legend__item"><span class="legend__swatch" style="--swatch: var(--home); height: 3px"></span>maja tarbimine</span>
-        <span class="legend__item"><span class="legend__swatch" style="--swatch: var(--grid); height: 3px"></span>ost võrgust</span>
-        <span class="legend__item"><span class="legend__swatch" style="--swatch: var(--battery); height: 3px"></span>aku: + laeb, − tühjeneb (majja)</span>
+        <span class="legend__item"><span class="legend__swatch legend__swatch--area swatch--solar"></span>päike</span>
+        <span class="legend__item"><span class="legend__swatch swatch--home legend__swatch--line"></span>maja tarbimine</span>
+        <span class="legend__item"><span class="legend__swatch swatch--grid legend__swatch--line"></span>ost võrgust</span>
+        <span class="legend__item"><span class="legend__swatch swatch--battery legend__swatch--line"></span>aku: + laeb, − tühjeneb (majja)</span>
       </div>
     </section>
 
@@ -165,9 +165,9 @@
       <div class="chart-box chart-box--soc"><canvas id="c-soc" role="img" aria-label="Aku laetuse graafik"></canvas></div>
       <div class="chart-box chart-box--batpower"><canvas id="c-batpower" role="img" aria-label="Aku laadimise ja tühjenemise graafik"></canvas></div>
       <div class="legend" aria-hidden="true">
-        <span class="legend__item"><span class="legend__swatch legend__swatch--area" style="--swatch: var(--battery)"></span>laetus</span>
-        <span class="legend__item"><span class="legend__swatch" style="--swatch: var(--battery)"></span>laeb (tulbad üles)</span>
-        <span class="legend__item"><span class="legend__swatch legend__swatch--past" style="--swatch: var(--battery)"></span>tühjeneb (tulbad alla)</span>
+        <span class="legend__item"><span class="legend__swatch legend__swatch--area swatch--battery"></span>laetus</span>
+        <span class="legend__item"><span class="legend__swatch swatch--battery"></span>laeb (tulbad üles)</span>
+        <span class="legend__item"><span class="legend__swatch legend__swatch--past swatch--battery"></span>tühjeneb (tulbad alla)</span>
       </div>
     </section>
 
@@ -187,9 +187,9 @@
       </div>
       <div class="chart-box chart-box--tall"><canvas id="c-days" role="img" aria-label="Päevade graafik"></canvas></div>
       <div class="legend" aria-hidden="true">
-        <span class="legend__item"><span class="legend__swatch" style="--swatch: var(--solar)"></span>päike</span>
-        <span class="legend__item"><span class="legend__swatch" style="--swatch: var(--grid)"></span>ost võrgust</span>
-        <span class="legend__item"><span class="legend__swatch" style="--swatch: var(--home); height: 3px"></span>maja tarbimine</span>
+        <span class="legend__item"><span class="legend__swatch swatch--solar"></span>päike</span>
+        <span class="legend__item"><span class="legend__swatch swatch--grid"></span>ost võrgust</span>
+        <span class="legend__item"><span class="legend__swatch swatch--home legend__swatch--line"></span>maja tarbimine</span>
       </div>
     </section>
 
@@ -201,8 +201,8 @@
       </div>
       <div class="chart-box"><canvas id="c-profile" role="img" aria-label="Tarbimise tunniprofiili graafik"></canvas></div>
       <div class="legend" aria-hidden="true">
-        <span class="legend__item"><span class="legend__swatch legend__swatch--area" style="--swatch: var(--home)"></span>tööpäev</span>
-        <span class="legend__item"><span class="legend__swatch" style="--swatch: var(--battery); height: 3px"></span>puhkepäev</span>
+        <span class="legend__item"><span class="legend__swatch legend__swatch--area swatch--home"></span>tööpäev</span>
+        <span class="legend__item"><span class="legend__swatch swatch--battery legend__swatch--line"></span>puhkepäev</span>
       </div>
     </section>
 
@@ -222,8 +222,8 @@
       </div>
       <div class="chart-box"><canvas id="c-months" role="img" aria-label="Kuude graafik"></canvas></div>
       <div class="legend" aria-hidden="true">
-        <span class="legend__item"><span class="legend__swatch" style="--swatch: var(--grid)"></span>kuu</span>
-        <span class="legend__item"><span class="legend__swatch legend__swatch--past" style="--swatch: var(--grid)"></span>aasta varem</span>
+        <span class="legend__item"><span class="legend__swatch swatch--grid"></span>kuu</span>
+        <span class="legend__item"><span class="legend__swatch legend__swatch--past swatch--grid"></span>aasta varem</span>
       </div>
     </section>
   </main>
@@ -255,7 +255,7 @@ const CONFIG = {
 };
 </script>
 <!-- Mõlema lehe ühine skriptikood (aeg, vormindamine, DOM-abi, graafikute ühisosa); peab laadima enne põhiskripti -->
-<script src="js/common.js?v=20261103"></script>
-<script src="js/graafikud.js?v=20261103"></script>
+<script src="js/common.js?v=20261103b"></script>
+<script src="js/graafikud.js?v=20261103b"></script>
 </body>
 </html>

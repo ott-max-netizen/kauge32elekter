@@ -4,6 +4,41 @@ See fail kirjeldab rakenduse `index.html` versioonimuudatusi, arhitektuurilisi k
 
 ---
 
+## [3.3.3], energy-dashboard.html [2.6.1] ja graafikud.html [1.3.2] — 2026-11-03 · turvaauditi järelkontroll (J1–J5)
+
+Audit `main` 737a1f6 (NIST SP 800-63B/132/38D, SLSA v1.0 + CIS GitHub, Mozilla/W3C WebAppSec, OWASP ASVS L2). Lehtede
+sisu ja arvutused ei muutunud: 184 hetktõmmise tekst sama (v.a versioon), ekraanipildid pikslini samad (v.a versioon,
+voo animatsiooni faas ja ≤ 2/255 renderdusmüra).
+
+- **J1 saladused ainult `main`-il:** andmetöövoogude tööd (`uuenda`, `paike`) käivad ainult harust `main` (ka käsitsi
+  käivitusel); andmetööd ja live-avaldamine viitavad keskkonnale `production`, PR-i eelvaade keskkonnale `preview`.
+  Secret'ite tõstmine keskkondadesse ja harureegel/kinnitajad on GitHubi seadetes (README „Saladused ainult harul main“).
+- **J2 tarneahel:** `cryptography` paigaldatakse alati esmalt räsidega venv-i (süsteemne pakett ainult hoiatusega
+  varuvariant); `PYTHONSAFEPATH=1`. `firebase-tools`-i kaudsed sõltuvused (635 paketti) on lukus repo juure
+  `package-lock.json`-iga: saladusteta samm `npm ci --ignore-scripts`, tegevuse `npx` kasutab kohalikku paigaldust
+  (kontrollitud tüngpaketiga: `npx --offline firebase-tools@15.34.0` käivitab kohaliku), versioonide kooskõla kontrollitakse.
+- **J3 krüpto ja autentimine:** uus `LEHE_PAROOL` 12–256 märki (`lukk.py`, kehtivat ei kontrollita); NFKC (enne NFC);
+  parooli vahetusel uus sool `tuleta_sool` (HMAC-SHA256(PBKDF2(uus parool, vana sool), …)) – mõlemad töövood saavad
+  identse `lukk.json`-i (kontrollitud), vana parooli uuesti kasutamine annab erineva faili; avatud leht märkab uut soola.
+  „Jäta meelde“ võti kehtib 30 päeva (vanad kirjed saavad tähtaja esimesel avamisel); salvestatud võti peab olema
+  mitte-eksporditav AES-GCM; ebaturvalisel ühendusel (WebCrypto puudub) lukus leht ei avane (teade HTTPS-i kohta);
+  paroolivälja `maxlength="256"`.
+- **J4 CSP ja raamid:** `firebase.json` saadab täieliku CSP (`default-src`, `script-src`, Trusted Types jne + `frame-ancestors`);
+  `style-src 'self'` kõikjal (enne `'unsafe-inline'`): `el()`/`svgEl()` seavad stiili CSSOM-iga, graafikute lehe 16
+  legendivärvi klassidega. Raamis ei käivitu `js/lukk.js` (IndexedDB, sessioon ja andmefailid jäävad puutumata) ja
+  `js/teema.js` lisab `html[hidden]`.
+- **J5 logid ja parserid:** tuletatud saladused (Solarmani räsi, tokenid, EIC-id) `::add-mask::`-iga; `warn`/`fail`/`viga`
+  ja välised veatekstid ühel real; ümbersuunamist mitte-HTTPS aadressile ei järgita (`NoDowngradeRedirect`, kõik
+  päringud `OPENER`-iga); CONFIG-parserid: `const CONFIG =` kohustuslik, pesastus ≤ 16, JS-is prototüübita objektid;
+  `goatcounter-count.js` `localStorage` `try`/`catch`-is (`?v=c031008-k32b`).
+- Kontrollitud: lukutestid (soolavahetus avatud lehel, püsivõtme 30 p ja aegumine, vana kirje ülekolimine, http-l lukus
+  leht ei avane / lukuta avaneb, raamis JSON-päringuid 0, varasemad 6 + 10 testi), turvatestid päisteta ja Firebase'i
+  päistega (CSP-rikkumisi pole, ka `style-src 'self'` korral), `lukk.py` soola- ja pikkusreeglid CLI-ga, töövood
+  (päikeseandmed mock-API-ga, päevakokkuvõtted 9/9, ümbersuunamise tõke, logirea puhastus, CONFIG-parser JS = Python),
+  regressioonid 18/18 ja 36/36.
+
+---
+
 ## [3.3.2], energy-dashboard.html [2.6.0] ja graafikud.html [1.3.1] — 2026-11-03 · turvalisus
 
 Lehtede sisu ja arvutused ei muutunud (kõigi 184 hetktõmmise tekst on sama, v.a versioon ja energialehe jaluses

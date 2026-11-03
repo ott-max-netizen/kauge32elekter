@@ -72,6 +72,12 @@
 .legend__swatch--split { background: linear-gradient(to top, var(--cat-kollane) 0 50%, var(--plot) 50% 66%, color-mix(in srgb, var(--cat-kollane) 55%, var(--plot)) 66% 100%); }
 .legend__swatch--scale { width: 28px; background: linear-gradient(to right, var(--cat-roheline), var(--cat-kollane), var(--cat-punane)); }
 #price-note:empty { display: none; }
+/* Legendi värvid klassidega (CSP style-src 'self' ei luba HTML-i style-atribuute) */
+.swatch--solar { --swatch: var(--solar); }
+.swatch--grid { --swatch: var(--grid); }
+.swatch--home { --swatch: var(--home); }
+.swatch--battery { --swatch: var(--battery); }
+.legend__swatch--line { height: 3px; }   /* joonseeria (maja, aku, puhkepäev) */
 
 /* ---------- 5. Plaatide numbrid: tabelnumbrid, et loendamise animatsioon ei väriseks ---------- */
 .stat__value[data-count] { font-variant-numeric: tabular-nums; }   /* ainult loendamise ajal; lõppväärtus proportsionaalsete numbritega */

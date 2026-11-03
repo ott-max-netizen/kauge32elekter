@@ -38,12 +38,20 @@ on:
 
 permissions: {}
 
+# Python ei impordi mooduleid töökataloogist (repo juurest): repo'sse lisatud nt json.py ei saaks käivituda saladustega sammus
+env:
+  PYTHONSAFEPATH: "1"
+
 concurrency:
   group: uuenda-paike
   cancel-in-progress: false
 
 jobs:
   uuenda:
+    # Ainult main: teise haru kood ei saa kunagi saladusi (ka käsitsi käivitusel, README „Turvalisus“)
+    if: github.ref == 'refs/heads/main'
+    # Saladused võivad olla keskkonnas production, mis lubab ainult haru main (README „Turvalisus“)
+    environment: production
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -63,13 +71,16 @@ jobs:
       # eraldi venv'i; runner'i süsteemi Python'i olemasolev cryptography sobib samuti. Ebaõnnestumine ei peata
       # töövoogu: lukk.py annab vea ainult siis, kui krüpteerimist päriselt vaja on (LEHE_PAROOL on seadistatud).
       - name: Paigalda krüpteerimise teek
+        # Alati esmalt räsidega kontrollitud pakett (requirements-lukk.txt, --require-hashes) eraldi venv-is. Runneri süsteemne
+        # python3-cryptography on ainult varuvariant, kui PyPI pole kättesaadav (hoiatusega), et andmed uueneksid ka siis.
         run: |
-          if python3 -c "import cryptography" 2>/dev/null; then
-            echo "LUKK_PY=python3" >> "$GITHUB_ENV"
-          elif python3 -m venv "$RUNNER_TEMP/lukk-venv" \
+          if python3 -m venv "$RUNNER_TEMP/lukk-venv" \
               && "$RUNNER_TEMP/lukk-venv/bin/pip" install --quiet --disable-pip-version-check \
                    --require-hashes --only-binary=:all: -r .github/scripts/requirements-lukk.txt; then
             echo "LUKK_PY=$RUNNER_TEMP/lukk-venv/bin/python" >> "$GITHUB_ENV"
+          elif python3 -c "import cryptography" 2>/dev/null; then
+            echo "::warning::Räsidega kontrollitud cryptography paigaldamine ebaõnnestus; kasutan runneri süsteemset paketti"
+            echo "LUKK_PY=python3" >> "$GITHUB_ENV"
           else
             echo "::warning::cryptography paigaldamine ebaõnnestus; parooliga kaitse korral jääb töövoog veaga seisma"
             echo "LUKK_PY=python3" >> "$GITHUB_ENV"
@@ -111,12 +122,22 @@ jobs:
           POWER_FIELDS = ("generationPower", "usePower", "gridPower", "purchasePower", "wirePower",
                           "chargePower", "dischargePower", "batteryPower")
 
+          def one_line(s):
+              """Logirida: reavahetused tühikuks, et välisest vastusest pärit tekst ei saaks lisada töövoo käske (nt ::error:: uuel real)."""
+              return str(s).replace("\r", " ").replace("\n", " ")
+
+          def mask(value):
+              """Tuletatud saladus (parooli räsi, token, EIC, jutumärkideta võti) maskitakse logis nagu secrets.* väärtused."""
+              v = one_line(value or "").strip()
+              if len(v) >= 4:
+                  print(f"::add-mask::{v}", flush=True)
+
           def fail(msg):
-              print(f"::error::{msg}")
+              print(f"::error::{one_line(msg)}")
               sys.exit(1)
 
           def warn(msg):
-              print(f"::warning::{msg}")
+              print(f"::warning::{one_line(msg)}")
 
           MAX_VASTUS_B = 10_000_000   # välise API vastuse ülempiir: suurem vastus on vigane (seda ei loeta mällu ega parsita)
 
@@ -127,9 +148,22 @@ jobs:
                   raise ValueError(f"vastus on suurem kui {limit // 1_000_000} MB")
               return data
 
+
+          def is_https(url):
+              return bool(re.match(r"(https://|http://(127\.0\.0\.1|localhost)(:\d+)?(/|$))", url))
+
+          class NoDowngradeRedirect(urllib.request.HTTPRedirectHandler):
+              """Ümbersuunamine ainult HTTPS-aadressile: urllib järgiks muidu vaikselt ka https:// → http:// suunamist."""
+              def redirect_request(self, req, fp, code, msg, headers, newurl):
+                  if not is_https(newurl):
+                      raise urllib.error.URLError(f"keelatud ümbersuunamine mitte-HTTPS aadressile (HTTP {code})")
+                  return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+          OPENER = urllib.request.build_opener(NoDowngradeRedirect)
+
           def require_https(url, name):
               """Välise API aadress peab olema HTTPS (võtmed ja token liiguvad krüpteeritult); erand: kohalik testserver."""
-              if not re.match(r"(https://|http://(127\.0\.0\.1|localhost)(:\d+)?(/|$))", url):
+              if not is_https(url):
                   fail(f"{name} peab algama https://-ga")
               return url
 
@@ -175,7 +209,7 @@ jobs:
               for attempt in range(1, 4):
                   try:
                       req = urllib.request.Request(url, data=data, headers=headers, method="POST")
-                      with urllib.request.urlopen(req, timeout=30) as r:
+                      with OPENER.open(req, timeout=30) as r:
                           resp = json.loads(read_limited(r), parse_constant=reject_constant)
                   except urllib.error.HTTPError as e:
                       if e.code == 429 or e.code >= 500:
@@ -185,7 +219,7 @@ jobs:
                       warn(f"{path}: HTTP {e.code}")
                       return None
                   except Exception as e:
-                      print(f"{path}: võrguviga ({attempt}/3): {e}")
+                      print(f"{path}: võrguviga ({attempt}/3): {one_line(e)}")
                       time.sleep(5 * attempt)
                       continue
                   if not isinstance(resp, dict) or resp.get("success") is not True:
@@ -231,6 +265,8 @@ jobs:
           # Solarman ootab parooli SHA-256 räsi väiketähtedega hex-kujul
           pass_hash = password.strip().lower() if re.fullmatch(r"\s*[0-9a-fA-F]{64}\s*", password) \
               else hashlib.sha256(password.encode("utf-8")).hexdigest()
+          for _v in (app_id, app_secret, email, pass_hash):
+              mask(_v)   # jutumärkideta väärtused ja räsi (Solarmani jaoks parooliga samaväärne) logis maskitud
 
           # 2. Olemasolev fail (jaama võimsuse vahemälu ja varuandmed)
           old = None
@@ -247,6 +283,7 @@ jobs:
           token = (tok or {}).get("access_token")
           if not token:
               fail("Solarmani autentimine ebaõnnestus (kontrolli App ID-d, App Secretit, e-posti ja parooli)")
+          mask(token)
 
           # 4. Jaam ja paigaldatud võimsus. Võimsus päritakse uuesti iga UTC päeva esimesel käivitusel (vana faili
           # generatedAt on eilne), et Solarmanis muudetud väärtus jõuaks lehele; päringu ebaõnnestumisel jääb vana.

@@ -5,7 +5,7 @@
 <!-- Turvapoliitika (README „Turvalisus“): skriptid ainult failidest samalt saidilt (lehesiseseid ei käivitata), HTML-i
      stringist kirjutamine keelatud (Trusted Types), vormi ei saa saata, raame/workereid pole; välised päringud ainult Eleringi API-sse (varuallikas)
      ja külastuste loendurisse. Solarmani API-t brauser ei kasuta: päikeseandmed tulevad failist paike.json (GitHub Actions). -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://dashboard.elering.ee https://kauge32.goatcounter.com; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; worker-src 'none'; manifest-src 'none'; media-src 'none'; require-trusted-types-for 'script'; trusted-types 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://dashboard.elering.ee https://kauge32.goatcounter.com; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; worker-src 'none'; manifest-src 'none'; media-src 'none'; require-trusted-types-for 'script'; trusted-types 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
@@ -16,15 +16,15 @@
 <meta name="robots" content="noindex, nofollow, noarchive">
 <title>Kauge 32 energia</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="css/common.css?v=20261103">
+<link rel="stylesheet" href="css/common.css?v=20261103b">
 <!-- Lukk (parooliga kaitse, README „Parooliga kaitse“): ilma defer'ita, et globaal Lukk oleks lehe skriptile olemas ja .app peituks enne esimest joonistamist -->
-<script src="js/lukk.js?v=20261103"></script>
+<script src="js/lukk.js?v=20261103b"></script>
 <!-- Külastuste loendus (GoatCounter, küpsisteta; README „Külastuste statistika“). Skript on repo sees, sest CSP lubab ainult
      sama saidi skripte; loendus läheb sendBeacon-iga (connect-src). Saadetakse lehe nimi, ekraani laius ja tulek, mitte andmeid. -->
-<script data-goatcounter="https://kauge32.goatcounter.com/count" data-goatcounter-settings='{"no_events":true,"path":"/energy-dashboard.html","title":"Energia"}' async src="js/vendor/goatcounter-count.js?v=c031008-k32"></script>
+<script data-goatcounter="https://kauge32.goatcounter.com/count" data-goatcounter-settings='{"no_events":true,"path":"/energy-dashboard.html","title":"Energia"}' async src="js/vendor/goatcounter-count.js?v=c031008-k32b"></script>
 <link rel="stylesheet" href="css/energy-dashboard.css?v=20261103">
 <!-- Raamimise kaitse ja teema enne esimest joonistamist (ilma defer'ita) -->
-<script src="js/teema.js?v=20261103"></script>
+<script src="js/teema.js?v=20261103b"></script>
 <!-- Chart.js 4.5.1 (globaal Chart): defer, sest init() käivitub DOMContentLoaded-il ja kutsub kõigepealt setupCharts() -->
 <script src="js/vendor/chart.umd.min.js?v=4.5.1" defer></script>
 </head>
@@ -39,7 +39,7 @@
     <p id="lukk-tekst" class="lukk__text">Sisesta ühistu parool, et näha maja elektri- ja päikeseandmeid.</p>
     <div class="lukk__field">
       <label for="lukk-parool">Parool</label>
-      <input id="lukk-parool" type="password" autocomplete="current-password" spellcheck="false" autocapitalize="off" required>
+      <input id="lukk-parool" type="password" maxlength="256" autocomplete="current-password" spellcheck="false" autocapitalize="off" required>
     </div>
     <label class="lukk__check" for="lukk-pea-meeles"><input id="lukk-pea-meeles" name="peaMeeles" type="checkbox"> Jäta meelde selles seadmes</label>
     <p id="lukk-viga" class="notice notice--error" role="alert" hidden></p>
@@ -410,7 +410,7 @@ const CONFIG = {
 };
 </script>
 <!-- Mõlema lehe ühine skriptikood (aeg, vormindamine, DOM-abi, graafikute ühisosa); peab laadima enne põhiskripti -->
-<script src="js/common.js?v=20261103"></script>
-<script src="js/energy-dashboard.js?v=20261103"></script>
+<script src="js/common.js?v=20261103b"></script>
+<script src="js/energy-dashboard.js?v=20261103b"></script>
 </body>
 </html>

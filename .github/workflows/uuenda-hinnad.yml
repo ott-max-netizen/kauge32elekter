@@ -42,6 +42,10 @@ on:
 
 permissions: {}
 
+# Python ei impordi mooduleid töökataloogist (repo juurest): repo'sse lisatud nt json.py ei saaks käivituda saladustega sammus
+env:
+  PYTHONSAFEPATH: "1"
+
 jobs:
   # Käsitsi käivitamisel (Run workflow või väline ajastaja) käivitatakse kohe ka töövoog
   # „Uuenda päikeseandmed“ (uuenda-paike.yml), paralleelselt hindade uuendusega.
@@ -51,7 +55,7 @@ jobs:
   # Järjekorralukk (concurrency) on ainult tööl `uuenda`, et see töö käivituks kohe ka siis,
   # kui eelmine käivitus alles ootab hindu (muidu võiks järgmine ajastatud käivitus selle tühistada).
   paike:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 2
     permissions:
@@ -63,6 +67,10 @@ jobs:
         run: gh workflow run uuenda-paike.yml --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME"
 
   uuenda:
+    # Ainult main: teise haru kood ei saa kunagi saladusi (ka käsitsi käivitusel, README „Turvalisus“)
+    if: github.ref == 'refs/heads/main'
+    # Saladused võivad olla keskkonnas production, mis lubab ainult haru main (README „Turvalisus“)
+    environment: production
     runs-on: ubuntu-latest
     timeout-minutes: 50   # skript ootab 15:00 akna ajal kuni 40 min
     concurrency:
@@ -85,13 +93,16 @@ jobs:
       # eraldi venv'i; runner'i süsteemi Python'i olemasolev cryptography sobib samuti. Ebaõnnestumine ei peata
       # töövoogu: lukk.py annab vea ainult siis, kui krüpteerimist päriselt vaja on (LEHE_PAROOL on seadistatud).
       - name: Paigalda krüpteerimise teek
+        # Alati esmalt räsidega kontrollitud pakett (requirements-lukk.txt, --require-hashes) eraldi venv-is. Runneri süsteemne
+        # python3-cryptography on ainult varuvariant, kui PyPI pole kättesaadav (hoiatusega), et andmed uueneksid ka siis.
         run: |
-          if python3 -c "import cryptography" 2>/dev/null; then
-            echo "LUKK_PY=python3" >> "$GITHUB_ENV"
-          elif python3 -m venv "$RUNNER_TEMP/lukk-venv" \
+          if python3 -m venv "$RUNNER_TEMP/lukk-venv" \
               && "$RUNNER_TEMP/lukk-venv/bin/pip" install --quiet --disable-pip-version-check \
                    --require-hashes --only-binary=:all: -r .github/scripts/requirements-lukk.txt; then
             echo "LUKK_PY=$RUNNER_TEMP/lukk-venv/bin/python" >> "$GITHUB_ENV"
+          elif python3 -c "import cryptography" 2>/dev/null; then
+            echo "::warning::Räsidega kontrollitud cryptography paigaldamine ebaõnnestus; kasutan runneri süsteemset paketti"
+            echo "LUKK_PY=python3" >> "$GITHUB_ENV"
           else
             echo "::warning::cryptography paigaldamine ebaõnnestus; parooliga kaitse korral jääb töövoog veaga seisma"
             echo "LUKK_PY=python3" >> "$GITHUB_ENV"
@@ -203,12 +214,22 @@ jobs:
           def tallinn_now():
               return datetime.now(TZ)
 
+          def one_line(s):
+              """Logirida: reavahetused tühikuks, et välisest vastusest pärit tekst ei saaks lisada töövoo käske (nt ::error:: uuel real)."""
+              return str(s).replace("\r", " ").replace("\n", " ")
+
+          def mask(value):
+              """Tuletatud saladus (parooli räsi, token, EIC, jutumärkideta võti) maskitakse logis nagu secrets.* väärtused."""
+              v = one_line(value or "").strip()
+              if len(v) >= 4:
+                  print(f"::add-mask::{v}", flush=True)
+
           def fail(msg):
-              print(f"::error::{msg}")
+              print(f"::error::{one_line(msg)}")
               sys.exit(1)
 
           def warn(msg):
-              print(f"::warning::{msg}")
+              print(f"::warning::{one_line(msg)}")
 
           MAX_VASTUS_B = 10_000_000   # välise API vastuse ülempiir: suurem vastus on vigane (seda ei loeta mällu ega parsita)
 
@@ -219,9 +240,22 @@ jobs:
                   raise ValueError(f"vastus on suurem kui {limit // 1_000_000} MB")
               return data
 
+
+          def is_https(url):
+              return bool(re.match(r"(https://|http://(127\.0\.0\.1|localhost)(:\d+)?(/|$))", url))
+
+          class NoDowngradeRedirect(urllib.request.HTTPRedirectHandler):
+              """Ümbersuunamine ainult HTTPS-aadressile: urllib järgiks muidu vaikselt ka https:// → http:// suunamist."""
+              def redirect_request(self, req, fp, code, msg, headers, newurl):
+                  if not is_https(newurl):
+                      raise urllib.error.URLError(f"keelatud ümbersuunamine mitte-HTTPS aadressile (HTTP {code})")
+                  return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+          OPENER = urllib.request.build_opener(NoDowngradeRedirect)
+
           def require_https(url, name):
               """Välise API aadress peab olema HTTPS (võtmed ja token liiguvad krüpteeritult); erand: kohalik testserver."""
-              if not re.match(r"(https://|http://(127\.0\.0\.1|localhost)(:\d+)?(/|$))", url):
+              if not is_https(url):
                   fail(f"{name} peab algama https://-ga")
               return url
 
@@ -263,6 +297,7 @@ jobs:
               Vigane plokk -> ValueError (rida ja veerg)."""
               src, n = text, len(text)
               pos = [0]
+              depth = [0]   # { } ja [ ] pesastus, piir 16 nagu JS-is (CONFIG_MAX_DEPTH)
 
               def fail(msg):
                   before = src[:pos[0]]
@@ -302,6 +337,8 @@ jobs:
               def value():
                   skip()
                   ch = src[pos[0]] if pos[0] < n else ""
+                  if ch in "{[" and depth[0] >= 16:
+                      fail("liiga sügav pesastus (üle 16 taseme)")
                   if ch == "{":
                       return obj()
                   if ch == "[":
@@ -319,10 +356,12 @@ jobs:
               def obj():
                   out = {}
                   pos[0] += 1
+                  depth[0] += 1
                   while True:
                       skip()
                       if pos[0] < n and src[pos[0]] == "}":
                           pos[0] += 1
+                          depth[0] -= 1
                           return out
                       if pos[0] < n and src[pos[0]] == '"':
                           key = string()
@@ -342,16 +381,19 @@ jobs:
                           continue
                       if pos[0] < n and src[pos[0]] == "}":
                           pos[0] += 1
+                          depth[0] -= 1
                           return out
                       fail("oodati koma või }")
 
               def arr():
                   out = []
                   pos[0] += 1
+                  depth[0] += 1
                   while True:
                       skip()
                       if pos[0] < n and src[pos[0]] == "]":
                           pos[0] += 1
+                          depth[0] -= 1
                           return out
                       out.append(value())
                       skip()
@@ -360,11 +402,13 @@ jobs:
                           continue
                       if pos[0] < n and src[pos[0]] == "]":
                           pos[0] += 1
+                          depth[0] -= 1
                           return out
                       fail("oodati koma või ]")
 
               skip()
-              take(r"const\s+CONFIG\s*=")
+              if not take(r"const\s+CONFIG\s*="):
+                  fail("seaded peavad algama kujul const CONFIG = {")
               skip()
               if pos[0] >= n or src[pos[0]] != "{":
                   fail("seaded peavad algama kujul const CONFIG = {")
@@ -390,7 +434,7 @@ jobs:
                           cfg = parse_config(block.group(1))
                       else:
                           warn(f"{path}: CONFIG-plokki ei leitud")
-                  except (OSError, ValueError) as e:
+                  except (OSError, ValueError, RecursionError) as e:
                       warn(f"{path}: CONFIG-it ei saanud lugeda ({e})")
                   PAGE_CONFIGS[path] = cfg if isinstance(cfg, dict) else None
               return PAGE_CONFIGS[path]
@@ -496,11 +540,11 @@ jobs:
               for attempt in range(1, 4):
                   try:
                       req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "application/json"})
-                      with urllib.request.urlopen(req, timeout=30) as r:
+                      with OPENER.open(req, timeout=30) as r:
                           raw = read_limited(r)
                       break
                   except Exception as e:
-                      print(f"NPS katse {attempt} ebaõnnestus: {e}")
+                      print(f"NPS katse {attempt} ebaõnnestus: {one_line(e)}")
                       time.sleep(5 * attempt)
               if raw is None:
                   if strict:
@@ -583,10 +627,11 @@ jobs:
               for attempt in range(1, 4):
                   try:
                       req = urllib.request.Request(TOKEN_URL, data=body, headers=headers, method="POST")
-                      with urllib.request.urlopen(req, timeout=30) as r:
+                      with OPENER.open(req, timeout=30) as r:
                           resp = json.loads(read_limited(r))
                       token = resp.get("access_token")
                       if token:
+                          mask(token)
                           return token
                   except urllib.error.HTTPError as e:
                       err_body = ""
@@ -632,7 +677,7 @@ jobs:
                       last_estfeed_ts = time.monotonic()
                       try:
                           req = urllib.request.Request(url, headers=headers)
-                          with urllib.request.urlopen(req, timeout=30) as r:
+                          with OPENER.open(req, timeout=30) as r:
                               return json.loads(read_limited(r), parse_constant=reject_constant), 200
                       except urllib.error.HTTPError as e:
                           err_text = ""
@@ -646,7 +691,7 @@ jobs:
                               continue
                           return err_text, e.code
                       except Exception as e:
-                          print(f"Estfeed võrguviga ({attempt}/3): {e}")
+                          print(f"Estfeed võrguviga ({attempt}/3): {one_line(e)}")
                           time.sleep(6 * attempt)
                   return None, 0
 
@@ -863,6 +908,8 @@ jobs:
           client_id = os.environ.get("ELERING_CLIENT_ID", "").strip().strip('"').strip("'")
           client_secret = os.environ.get("ELERING_CLIENT_SECRET", "").strip().strip('"').strip("'")
           eic = os.environ.get("ELERING_EIC", "").strip().strip('"').strip("'")
+          for _v in [client_id, client_secret, eic] + re.split(r"[,;\s]+", eic):
+              mask(_v)   # jutumärkideta ja tükeldatud väärtused erinevad toorest secret'ist
           tariff_cfg, tariff_source = load_tariff_config()
           CFG_HASH = cfg_fingerprint(tariff_cfg)
           if tariff_cfg["kuutasu"] > 0 and any(v == 0 for _, v in TASUDE_AJALUGU["kuutasu"]):
@@ -1239,7 +1286,7 @@ jobs:
               for attempt in range(1, 4):
                   try:
                       req = urllib.request.Request(f"{SOLARMAN_URL}{path}?{query}", data=json.dumps(body).encode("utf-8"), headers=headers, method="POST")
-                      with urllib.request.urlopen(req, timeout=30) as r:
+                      with OPENER.open(req, timeout=30) as r:
                           resp = json.loads(read_limited(r), parse_constant=reject_constant)
                   except urllib.error.HTTPError as e:
                       if e.code == 429 or e.code >= 500:
@@ -1248,7 +1295,7 @@ jobs:
                       warn(f"Solarman {path}: HTTP {e.code}")
                       return None
                   except Exception as e:
-                      print(f"Solarman {path}: võrguviga ({attempt}/3): {e}")
+                      print(f"Solarman {path}: võrguviga ({attempt}/3): {one_line(e)}")
                       time.sleep(5 * attempt)
                       continue
                   if not isinstance(resp, dict) or resp.get("success") is not True:
@@ -1264,11 +1311,14 @@ jobs:
               if not (app_id and app_secret and email_addr and password):
                   return None, None
               pass_hash = password.strip().lower() if re.fullmatch(r"\s*[0-9a-fA-F]{64}\s*", password) else hashlib.sha256(password.encode("utf-8")).hexdigest()
+              for _v in (app_id, app_secret, email_addr, pass_hash):
+                  mask(_v)   # räsi on Solarmani jaoks parooliga samaväärne
               tok = solarman_call("/account/v1.0/token", {"appSecret": app_secret, "email": email_addr, "password": pass_hash},
                                   query=f"appId={urllib.parse.quote(app_id)}&language=en")
               token = (tok or {}).get("access_token")
               if not token:
                   return None, None
+              mask(token)
               station = sec("SOLARMAN_STATION_ID")
               if not station:
                   lst = solarman_call("/station/v1.0/list", {"page": 1, "size": 50}, token)
