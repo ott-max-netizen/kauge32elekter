@@ -12,9 +12,12 @@ jobs:
     if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      # Mõlemad tegevused commit'i SHA-ga nagu firebase-hosting-merge.yml-is: sama teenusekonto võti (silt v0 = v0.11.0).
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5.1.0
+        with:
+          persist-credentials: false
       #- run: npm ci && npm run build
-      - uses: FirebaseExtended/action-hosting-deploy@v0
+      - uses: FirebaseExtended/action-hosting-deploy@500ac625ca2dd40cbd15f7659af953801858032a  # v0.11.0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_KAUGE32_ELEKTER }}

@@ -37,6 +37,7 @@ Elering API → GitHub Actions → hinnad.json → GitHub Pages → index.html b
 | `hinnad.json`, `paike.json`, `paevad.json` | GitHub Actionsi kirjutatud andmefailid (`paevad.json`: inverteri päevakokkuvõtted kWh ja €); parooliga kaitstud lehel krüpteeritud ümbrikud |
 | `js/lukk.js`, `lukk.json`, `.github/scripts/lukk.py`, `.github/scripts/requirements-lukk.txt` | **parooliga kaitse**: brauseri avamisvaade ja dekrüpteerimine, lehe sool ja parooli kontrollväärtus, töövoogude krüpteerimisskript ja selle räsidega lukustatud sõltuvused (vt „Parooliga kaitse“) |
 | `robots.txt` | otsingumootorite robotitele: andme- ja abifailid on blokeeritud; HTML-lehtedel on `noindex, nofollow, noarchive` |
+| `firebase.json`, `.firebaserc`, `.github/workflows/firebase-hosting-*.yml` | **Firebase Hosting** (projekt `kauge32-elekter`): GitHub Pagesi kõrval teine koopia samadest failidest (`firebase.json`: repo juur ilma punktiga algavate failide ja kaustadeta, tundmatu aadress → `index.html`). `firebase-hosting-merge.yml` avaldab live-kanalisse pärast iga `main`-i push'i **ja iga andmefailide commit'i**: andmetöövood saadavad pärast õnnestunud push'i sündmuse `repository_dispatch` `andmed-uuendatud`, muutuseta käivitused ei avalda midagi. PR-idele teeb eelvaate `firebase-hosting-pull-request.yml`. Töövood on käsitsi muudetud – ära genereeri neid `firebase init hosting:github`-iga üle (kaoksid käivitajad, õigused ja SHA-d, vt „Turvalisus“) |
 
 CSS-i, `js/common.js`-i või sprite'i muutmisel suurenda HTML-i linkides `?v=` väärtust (GitHub Pages hoiab faile
 vahemälus 10 min).
@@ -69,6 +70,13 @@ Accept: application/vnd.github+json
 
 {"ref":"main"}
 ```
+
+**Firebase'i koopia** uueneb töövooga **Deploy to Firebase Hosting on merge**: see käivitub pärast iga andmefailide
+commit'i ja iga `main`-i push'i järel. Kui GitHub Pagesi leht on värske, aga Firebase'i oma mitte, vaata selle töövoo
+viimast käivitust või käivita see käsitsi (**Run workflow**, haru `main`). Andmetöövoo hoiatus „Firebase Hostingu
+avaldamist ei õnnestunud käivitada“ tähendab, et sündmust ei saadetud; järgmine andmete commit avaldab ka need andmed.
+Iga avaldamine on Firebase'is uus versioon (praegu ~45 ööpäevas): sea Firebase'i konsoolis Hostingu väljalaskeajaloo
+menüüst *Release storage settings* hoitavate versioonide arv (nt 20), et vanad versioonid salvestusmahtu ei täidaks.
 
 ## Andmefail ja Elering Estfeed tarbimisandmed
 
@@ -665,6 +673,13 @@ tegemisega.
 - Töövood: `actions/checkout` on lukustatud commit'i SHA-ga ja `persist-credentials: false`, nii et kirjutusõigusega
   `GITHUB_TOKEN` antakse ainult commit'i ja push'i sammule. Python'i sõltuvus paigaldatakse räsidega ja eraldi sammus,
   kus secret'eid pole. Mõõteväärtusi logisse ei kirjutata (logid on avalikud).
+- Firebase Hosting (`firebase-hosting-merge.yml`): töö õigus on ainult `contents: read` ja tegevusele ei anta
+  `repoToken`-it (live-avaldamisel GitHubi API-t ei kasutata). `actions/checkout` ja `FirebaseExtended/action-hosting-deploy`
+  on lukustatud commit'i SHA-ga (ka PR-i eelvaate töövoos), sest tegevus saab teenusekonto võtme
+  `FIREBASE_SERVICE_ACCOUNT_KAUGE32_ELEKTER`; SHA uuendamisel vaata enne uue versiooni muudatused üle. Live'i avaldatakse
+  ainult harust `main`. Andmetöövood käivitavad avaldamise `repository_dispatch`-iga, mille jaoks piisab sammu
+  „Salvesta muudatus“ olemasolevast õigusest `contents: write` (`gh workflow run` vajaks lisaks `actions: write`).
+  Lukustamata on veel tegevuse käivitatav `npx firebase-tools@latest` (vajadusel sisend `firebaseToolsVersion`).
 - Lehed lisavad sisu ainult `textContent`/`createElement` kaudu (mitte `innerHTML`) ning
   `Content-Security-Policy` meta-silt lubab skripte ja stiile ainult samalt saidilt ning väliseid
   päringuid ainult HTTPS-iga. Uue välise teenuse lisamisel uuenda CSP-d. Ainus kolmanda osapoole skript on repo sees olev

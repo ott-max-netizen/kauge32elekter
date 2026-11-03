@@ -4,6 +4,42 @@ See fail kirjeldab rakenduse `index.html` versioonimuudatusi, arhitektuurilisi k
 
 ---
 
+## Töövood: Firebase Hosting uueneb koos andmetega — 2026-11-03
+
+Lehed ja andmefailide lepingud ei muutunud.
+
+- **Probleem:** `firebase-hosting-merge.yml` käivitus ainult `push`-iga `main`-i. Andmetöövood (`uuenda-hinnad.yml`,
+  `uuenda-paike.yml`) push'ivad `GITHUB_TOKEN`-iga ja GitHubi reeglite järgi ei käivita sellised sündmused (v.a
+  `workflow_dispatch` ja `repository_dispatch`) uut töövoogu. Firebase'i koopia `hinnad.json`, `paike.json` ja
+  `paevad.json` uuenesid seega ainult inimese push'i või PR-i ühendamise järel ja olid tunde või päevi vanad.
+- **Lahendus:** sammus „Salvesta muudatus“ saadetakse pärast õnnestunud push'i (ainult harul `main`) sündmus
+  `repository_dispatch` `andmed-uuendatud` (`gh api --method POST repos/…/dispatches`), millest `firebase-hosting-merge.yml`
+  käivitub. Üks andmete commit = üks avaldamine. Muutuseta käivitus, andmefailide konflikt (tulemus jäetakse salvestamata)
+  ja ebaõnnestunud push ei saada midagi. Sündmuse saatmise viga on ainult hoiatus: andmed on juba repos ja järgmine
+  andmete commit avaldab ka need.
+- **Miks mitte `workflow_run`:** see käivituks pärast iga lõpetatud andmetöövoo käivitust – ka muutuseta, sest need lõpevad
+  samuti edukalt (väline ajastaja käivitab mõlemat iga 30 min järel) – ja sündmusest ei näe, kas käivitus midagi push'is.
+  Filtreerimine vajaks avaldamistööle (millel on Firebase'i võti) lisaõigust `actions: read` või ebakindlat SHA-de võrdlust.
+- **Miks `repository_dispatch`, mitte `gh workflow run`:** `workflow_dispatch`-i saatmine vajaks õigust `actions: write`
+  (eraldi töö kummaski andmetöövoos); `repository_dispatch`-i jaoks piisab sammu olemasolevast `contents: write`
+  õigusest, seega ühtegi õigust ei lisandunud.
+- `firebase-hosting-merge.yml`: uued käivitajad `repository_dispatch` (`andmed-uuendatud`) ja `workflow_dispatch` (käsitsi
+  uuesti avaldamine); töö käib ainult harul `main`; `permissions: {}` töövoo tasemel ja `contents: read` tööl;
+  `concurrency: firebase-hosting-live` töö tasemel (korraga üks avaldamine, ootel ainult viimane – vanem seis ei saa
+  lõppeda pärast uuemat); checkout võtab haru uusima seisu (`ref: github.ref_name`); `timeout-minutes: 10`.
+- Tarneahel: `actions/checkout` SHA-ga (v5.1.0) ja `persist-credentials: false`, `FirebaseExtended/action-hosting-deploy`
+  SHA-ga `500ac625…` (v0.11.0, millele silt `v0` osutas) – ka `firebase-hosting-pull-request.yml`-is, sest mõlemad
+  annavad tegevusele sama teenusekonto võtme. Live-avaldamisel `repoToken`-it enam ei anta (tegevus kasutab seda ainult
+  PR-i check'i ja kommentaari jaoks).
+- README: failitabelis rida `firebase.json` jt, „Kui hinnad ei uuene“ lõik Firebase'i koopia kohta (sh versioonide
+  säilitamise piir), „Turvalisus“.
+- Kontrollitud: `actionlint` 1.7.7 koos shellcheckiga – neli töövoogu vigadeta. Sammu „Salvesta muudatus“ skript mõlemast
+  töövoost käivitati kohalikus git'i repos võlts-`gh`-ga: muutuseta, `paike.json` puudub, haru `feature`, andmefailide
+  konflikt → 0 sündmust; muutus ja muutus pärast `pull --rebase`-i → täpselt 1; `gh` viga → hoiatus, käivitus roheline;
+  kolm korda tagasi lükatud push → käivitus punane ja 0 sündmust (nagu enne).
+
+---
+
 ## [3.3.1] ja energy-dashboard.html [2.5.1] — 2026-11-02 · loetavus: tekstid, legendid, numbrid
 
 Sama ülevaatus mis graafikute lehel (`graafikud.html` 1.2.0), nüüd elektriinfo ja energia lehel. Graafikud ise (ühikud

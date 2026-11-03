@@ -381,8 +381,16 @@ jobs:
           echo "::add-mask::$auth"
           git config --local http.https://github.com/.extraheader "AUTHORIZATION: basic $auth"
           git commit -m "Uuenda päikeseandmed"
+          # Firebase Hostingu koopia avaldatakse uuesti ainult pärast õnnestunud push'i (firebase-hosting-merge.yml).
+          # GITHUB_TOKEN-iga push ei käivita uut töövoogu, repository_dispatch käivitab (vajab ainult contents: write).
+          # Ebaõnnestumine on ainult hoiatus: andmed on juba repos ja järgmine andmete commit avaldab ka need.
+          avalda_firebase() {
+            if [ "$GITHUB_REF_NAME" != "main" ]; then return 0; fi
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/dispatches" -f event_type=andmed-uuendatud >/dev/null \
+              || echo "::warning::Firebase Hostingu avaldamist ei õnnestunud käivitada (järgmine andmete commit või käsitsi: Deploy to Firebase Hosting on merge → Run workflow)."
+          }
           for attempt in 1 2 3; do
-            if git push origin "HEAD:${GITHUB_REF_NAME}"; then exit 0; fi
+            if git push origin "HEAD:${GITHUB_REF_NAME}"; then avalda_firebase; exit 0; fi
             echo "Push lükati tagasi (repot muudeti samal ajal), proovin uuesti ($attempt/3)..."
             if ! git pull --rebase origin "${GITHUB_REF_NAME}"; then
               # Teine käivitus kirjutas samal ajal samu andmefaile (paike.json). Need on täielikult tuletatud,
