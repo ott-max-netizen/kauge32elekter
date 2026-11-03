@@ -27,8 +27,10 @@ eemaldatud „Solarmani otseühendus“). README „Turvalisus“ ja „Seadete 
 - **Töövood:** välise API aadress peab olema HTTPS (`require_https`, `ELERING_URL` / `SOLARMAN_URL`), API vastus
   loetakse kuni 10 MB (`read_limited`), veavastuse kehast kuni 4 KB.
 - **Firebase:** `FirebaseExtended/action-hosting-deploy` lukustatud commit'iga `500ac625` (v0.11.0, sama mis silt `v0`;
-  kontrollitud, et live-juurutus ei vaja `checks: write`-i), `concurrency` ja `timeout-minutes: 10` mõlemas töövoos.
-  Firebase CLI näidisleht `public/index.html` kustutatud.
+  kontrollitud, et live-juurutus ei vaja `checks: write`-i), `concurrency` ja `timeout-minutes: 10` mõlemas töövoos,
+  tegevuse käivitatav `firebase-tools` täpse versiooniga (`firebaseToolsVersion: 15.34.0`, enne `latest`). Firebase CLI
+  näidisleht `public/index.html` kustutatud. Ühendatud haruga `claude/brave-bell-03abww` (järgmine kirje): live-avaldamise
+  töövoog on selle haru oma (käivitajad, töö tasemel `concurrency`, `repoToken`-ita), PR-i eelvaates jääb selle kirje `concurrency`.
 - **Avamisvorm:** paroolil pole `name`-i, peidetud kasutajanime väli („Kauge 32“) paroolihaldurile.
 - **GoatCounter:** `no_events: true`; `js/vendor/goatcounter-count.js` ei saada aadressi päringuosa (`q: ''`, ainus Kauge 32
   muudatus failis, `?v=c031008-k32`).
@@ -99,6 +101,42 @@ eemaldatud „Solarmani otseühendus“). README „Turvalisus“ ja „Seadete 
   `setTimeout(string)` blokeeritud (vana CSP-ga käivitusid lehesisene skript ja `setTimeout(string)`); parooliga leht
   avaneb ja URL jääb puhtaks; tariifide lugemine `index.html`-ist ja külastuste loendus töötavad;
   teise saidi raamis on leht peidetud.
+
+---
+
+## Töövood: Firebase Hosting uueneb koos andmetega — 2026-11-03
+
+Lehed ja andmefailide lepingud ei muutunud.
+
+- **Probleem:** `firebase-hosting-merge.yml` käivitus ainult `push`-iga `main`-i. Andmetöövood (`uuenda-hinnad.yml`,
+  `uuenda-paike.yml`) push'ivad `GITHUB_TOKEN`-iga ja GitHubi reeglite järgi ei käivita sellised sündmused (v.a
+  `workflow_dispatch` ja `repository_dispatch`) uut töövoogu. Firebase'i koopia `hinnad.json`, `paike.json` ja
+  `paevad.json` uuenesid seega ainult inimese push'i või PR-i ühendamise järel ja olid tunde või päevi vanad.
+- **Lahendus:** sammus „Salvesta muudatus“ saadetakse pärast õnnestunud push'i (ainult harul `main`) sündmus
+  `repository_dispatch` `andmed-uuendatud` (`gh api --method POST repos/…/dispatches`), millest `firebase-hosting-merge.yml`
+  käivitub. Üks andmete commit = üks avaldamine. Muutuseta käivitus, andmefailide konflikt (tulemus jäetakse salvestamata)
+  ja ebaõnnestunud push ei saada midagi. Sündmuse saatmise viga on ainult hoiatus: andmed on juba repos ja järgmine
+  andmete commit avaldab ka need.
+- **Miks mitte `workflow_run`:** see käivituks pärast iga lõpetatud andmetöövoo käivitust – ka muutuseta, sest need lõpevad
+  samuti edukalt (väline ajastaja käivitab mõlemat iga 30 min järel) – ja sündmusest ei näe, kas käivitus midagi push'is.
+  Filtreerimine vajaks avaldamistööle (millel on Firebase'i võti) lisaõigust `actions: read` või ebakindlat SHA-de võrdlust.
+- **Miks `repository_dispatch`, mitte `gh workflow run`:** `workflow_dispatch`-i saatmine vajaks õigust `actions: write`
+  (eraldi töö kummaski andmetöövoos); `repository_dispatch`-i jaoks piisab sammu olemasolevast `contents: write`
+  õigusest, seega ühtegi õigust ei lisandunud.
+- `firebase-hosting-merge.yml`: uued käivitajad `repository_dispatch` (`andmed-uuendatud`) ja `workflow_dispatch` (käsitsi
+  uuesti avaldamine); töö käib ainult harul `main`; `permissions: {}` töövoo tasemel ja `contents: read` tööl;
+  `concurrency: firebase-hosting-live` töö tasemel (korraga üks avaldamine, ootel ainult viimane – vanem seis ei saa
+  lõppeda pärast uuemat); checkout võtab haru uusima seisu (`ref: github.ref_name`); `timeout-minutes: 10`.
+- Tarneahel: `actions/checkout` SHA-ga (v5.1.0) ja `persist-credentials: false`, `FirebaseExtended/action-hosting-deploy`
+  SHA-ga `500ac625…` (v0.11.0, millele silt `v0` osutas) – ka `firebase-hosting-pull-request.yml`-is, sest mõlemad
+  annavad tegevusele sama teenusekonto võtme. Live-avaldamisel `repoToken`-it enam ei anta (tegevus kasutab seda ainult
+  PR-i check'i ja kommentaari jaoks).
+- README: failitabelis rida `firebase.json` jt, „Kui hinnad ei uuene“ lõik Firebase'i koopia kohta (sh versioonide
+  säilitamise piir), „Turvalisus“.
+- Kontrollitud: `actionlint` 1.7.7 koos shellcheckiga – neli töövoogu vigadeta. Sammu „Salvesta muudatus“ skript mõlemast
+  töövoost käivitati kohalikus git'i repos võlts-`gh`-ga: muutuseta, `paike.json` puudub, haru `feature`, andmefailide
+  konflikt → 0 sündmust; muutus ja muutus pärast `pull --rebase`-i → täpselt 1; `gh` viga → hoiatus, käivitus roheline;
+  kolm korda tagasi lükatud push → käivitus punane ja 0 sündmust (nagu enne).
 
 ---
 

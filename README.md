@@ -39,7 +39,7 @@ Elering API → GitHub Actions → hinnad.json → GitHub Pages → index.html b
 | `hinnad.json`, `paike.json`, `paevad.json` | GitHub Actionsi kirjutatud andmefailid (`paevad.json`: inverteri päevakokkuvõtted kWh ja €); parooliga kaitstud lehel krüpteeritud ümbrikud |
 | `js/lukk.js`, `lukk.json`, `.github/scripts/lukk.py`, `.github/scripts/requirements-lukk.txt` | **parooliga kaitse**: brauseri avamisvaade ja dekrüpteerimine, lehe sool ja parooli kontrollväärtus, töövoogude krüpteerimisskript ja selle räsidega lukustatud sõltuvused (vt „Parooliga kaitse“) |
 | `robots.txt` | otsingumootorite robotitele: andme- ja abifailid on blokeeritud; HTML-lehtedel on `noindex, nofollow, noarchive` |
-| `firebase.json`, `.firebaserc`, `.github/workflows/firebase-hosting-*.yml` | sama saidi koopia Firebase Hostingus (`kauge32-elekter`): mis faile avaldatakse ja HTTP turvapäised (vt „Turvalisus“) |
+| `firebase.json`, `.firebaserc`, `.github/workflows/firebase-hosting-*.yml` | **Firebase Hosting** (projekt `kauge32-elekter`): GitHub Pagesi kõrval teine koopia samadest failidest (`firebase.json`: ainult lehe failid, HTTP turvapäised, puuduv fail → 404, vt „Turvalisus“). `firebase-hosting-merge.yml` avaldab live-kanalisse pärast iga `main`-i push'i **ja iga andmefailide commit'i**: andmetöövood saadavad pärast õnnestunud push'i sündmuse `repository_dispatch` `andmed-uuendatud`, muutuseta käivitused ei avalda midagi. PR-idele teeb eelvaate `firebase-hosting-pull-request.yml`. Töövood on käsitsi muudetud – ära genereeri neid `firebase init hosting:github`-iga üle (kaoksid käivitajad, õigused ja SHA-d, vt „Turvalisus“) |
 
 CSS-i, `js/*.js`-i või sprite'i muutmisel suurenda HTML-i linkides `?v=` väärtust (GitHub Pages hoiab faile
 vahemälus 10 min).
@@ -82,6 +82,13 @@ Accept: application/vnd.github+json
 
 {"ref":"main"}
 ```
+
+**Firebase'i koopia** uueneb töövooga **Deploy to Firebase Hosting on merge**: see käivitub pärast iga andmefailide
+commit'i ja iga `main`-i push'i järel. Kui GitHub Pagesi leht on värske, aga Firebase'i oma mitte, vaata selle töövoo
+viimast käivitust või käivita see käsitsi (**Run workflow**, haru `main`). Andmetöövoo hoiatus „Firebase Hostingu
+avaldamist ei õnnestunud käivitada“ tähendab, et sündmust ei saadetud; järgmine andmete commit avaldab ka need andmed.
+Iga avaldamine on Firebase'is uus versioon (praegu ~45 ööpäevas): sea Firebase'i konsoolis Hostingu väljalaskeajaloo
+menüüst *Release storage settings* hoitavate versioonide arv (nt 20), et vanad versioonid salvestusmahtu ei täidaks.
 
 ## Andmefail ja Elering Estfeed tarbimisandmed
 
@@ -710,10 +717,15 @@ tegemisega.
   kehtib lisaks lehe meta-sildile (brauser rakendab mõlemat). Avaldatakse ainult lehe failid: `README.md`, `CHANGELOG.md`,
   `public/` (Firebase CLI näidisleht, kustutatud), `skills-lock.json` ja punktiga algavad failid/kaustad jäävad välja.
   Puuduv fail annab päris 404 (mitte `index.html`-i), mida `js/lukk.js` vajab (`lukk.json` puudub = lukku pole).
-  Juurutustöövood: live-juurutus saab ainult lugemisõiguse; `actions/checkout` ja `FirebaseExtended/action-hosting-deploy`
-  (saab teenusekonto võtme) on lukustatud commit'i SHA-ga, `checkout` ilma salvestatud tokenita; üks juurutus korraga
-  (`concurrency`) ja ajapiirang 10 min. Teenusekontole `FIREBASE_SERVICE_ACCOUNT_KAUGE32_ELEKTER` piisab Google Cloudi
-  IAM-is rollist **Firebase Hosting Admin** (kontrolli, et sel pole projekti Editor/Owner rolli).
+- **Firebase'i töövood:** live-avaldamise (`firebase-hosting-merge.yml`) töö õigus on ainult `contents: read` ja tegevusele
+  ei anta `repoToken`-it (live-avaldamisel GitHubi API-t ei kasutata). `actions/checkout`, `FirebaseExtended/action-hosting-deploy`
+  ja selle käivitatav `firebase-tools` (`firebaseToolsVersion`) on lukustatud täpse versiooniga (commit'i SHA / npm-i versioon,
+  ka PR-i eelvaate töövoos), sest tegevus saab teenusekonto võtme `FIREBASE_SERVICE_ACCOUNT_KAUGE32_ELEKTER`; uuendamisel
+  vaata enne uue versiooni muudatused üle. `checkout` on ilma salvestatud tokenita. Live'i avaldatakse ainult harust
+  `main`, korraga üks avaldamine (ootel ainult viimane), ajapiirang 10 min. Andmetöövood käivitavad avaldamise
+  `repository_dispatch`-iga, mille jaoks piisab sammu „Salvesta muudatus“ olemasolevast õigusest `contents: write`
+  (`gh workflow run` vajaks lisaks `actions: write`). Teenusekontole piisab Google Cloudi IAM-is rollist **Firebase Hosting
+  Admin** (kontrolli, et sel pole projekti Editor/Owner rolli).
 - **Paroolid ja tunnused brauseris:** lehe parooli ei salvestata ega hoita mälus – sellest tuletatakse kohe mitte-eksporditav
   võti ja avamisvormi väli tühjendatakse; konsooli parooli ega võtit ei logita. Brauseris pole ühtegi API võtit
   (Eleringi otsepäring ja GoatCounter ei vaja võtit). Varasema Solarmani otseühenduse brauserisse jäänud võtmed
