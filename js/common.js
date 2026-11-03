@@ -22,7 +22,8 @@
    ========================================================================== */
 /**
  * Lehe seaded on HTML-is plokis <script type="text/plain" id="lehe-config"> kujul `const CONFIG = { … };` (sama tekst, mida
- * haldaja muudab ja mida töövoog uuenda-hinnad.yml ning energialeht regexiga loevad). Plokk ei käivitu: CSP lubab ainult
+ * haldaja muudab). Energialeht loeb index.html-i tariifid sama funktsiooniga (loadTariffs) ja töövoog uuenda-hinnad.yml selle
+ * Pythoni koopiaga (parse_config) – hoia need kaks reeglit samad. Plokk ei käivitu: CSP lubab ainult
  * failidest laaditud skripte (script-src 'self', README „Turvalisus“). Lubatud on ainult literaalid – objektid { }, massiivid [ ],
  * "tekst" (jutumärkides), numbrid, true/false/null – ja kommentaarid; arvutused ja muutujad annavad selge vea (rida ja veerg).
  */

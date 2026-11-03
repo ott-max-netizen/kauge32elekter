@@ -1,5 +1,6 @@
 // GoatCounter: https://www.goatcounter.com
 // This file is released under the ISC license: https://opensource.org/licenses/ISC
+// Kauge 32 muudatus (README „Külastuste statistika“): päringustringi (location.search) ei saadeta (q: '').
 ;(function() {
 	'use strict';
 
@@ -27,7 +28,7 @@
 			e: !!(vars.event || goatcounter.event),
 			s: window.screen.width,
 			b: is_bot(),
-			q: location.search,
+			q: '',  // Kauge 32: aadressi päringuosa ei lahku lehelt
 		}
 
 		var rcb, pcb, tcb  // Save callbacks to apply later.

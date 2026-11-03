@@ -9,6 +9,38 @@ See fail kirjeldab rakenduse `index.html` versioonimuudatusi, arhitektuurilisi k
 Lehtede sisu ja arvutused ei muutunud (kõigi 184 hetktõmmise tekst on sama, v.a versioon ja energialehe jaluses
 eemaldatud „Solarmani otseühendus“). README „Turvalisus“ ja „Seadete muutmine“.
 
+### Turvaauditi järeltööd (audit `main` 23d9078)
+
+- **`Lukk.fetch` (`js/lukk.js`):** teise saidi vastust (Eleringi API, varuproksi) ei proovita enam dekrüpteerida – võõras
+  „ümbrik“ ei saa parooli küsida ega võtit kasutada. Parooliga kaitstud lehel on samalt saidilt tulnud krüpteerimata JSON
+  viga („andmefail pole krüpteeritud …“), v.a kui `lukk.json` on vahepeal kustutatud (kaitse maha võetud: leht jätkab
+  lukuta). Kaitse esmakordsel sisselülitamisel on `paike.json` paar minutit laadimisveaga, kuni päikesetöövoog on käinud.
+- **Ümbriku piirid** (`js/lukk.js` ja `.github/scripts/lukk.py`): PBKDF2 iteratsioone 600 000…2 000 000 (enne ≥ 1000,
+  ülempiirita – vigane fail oleks võinud brauseri minutiteks kinni panna), sool ≥ 16 baiti, nonss 12 baiti.
+- **Vanad Solarmani võtmed** (`kauge32.energia.*`) kustutab nüüd `js/lukk.js` igal lehel ja „Lukusta leht“ vajutamisel
+  (enne ainult energialeht avamisel).
+- **Tariifide lugemine ilma regexita:** energialeht loeb `index.html`-i `CONFIG`-i sama parseriga kui lehe enda seaded
+  (`parseConfigLiteral`), töövoog `uuenda-hinnad.yml` selle Pythoni koopiaga (`parse_config`; tulemus kõigi kolme lehe
+  peal sama mis JS-is). Väärtus tuleb oma kohast (`CONFIG.hinnad.marginaal`, `CONFIG.ootariif.algus`, `CONFIG.aku.mahtKwh`,
+  `CONFIG.paike.kasutuselAlates`); kommentaar `// vana marginaal: 0.75` ei muuda enam arvutusi (enne loeti see nii lehel
+  kui töövoos). Praeguste failidega on kõik väärtused samad mis enne.
+- **Töövood:** välise API aadress peab olema HTTPS (`require_https`, `ELERING_URL` / `SOLARMAN_URL`), API vastus
+  loetakse kuni 10 MB (`read_limited`), veavastuse kehast kuni 4 KB.
+- **Firebase:** `FirebaseExtended/action-hosting-deploy` lukustatud commit'iga `500ac625` (v0.11.0, sama mis silt `v0`;
+  kontrollitud, et live-juurutus ei vaja `checks: write`-i), `concurrency` ja `timeout-minutes: 10` mõlemas töövoos.
+  Firebase CLI näidisleht `public/index.html` kustutatud.
+- **Avamisvorm:** paroolil pole `name`-i, peidetud kasutajanime väli („Kauge 32“) paroolihaldurile.
+- **GoatCounter:** `no_events: true`; `js/vendor/goatcounter-count.js` ei saada aadressi päringuosa (`q: ''`, ainus Kauge 32
+  muudatus failis, `?v=c031008-k32`).
+- `index.html` `varuProksi` kommentaarist eemaldati avalike CORS-prokside näited; `.gitignore`-sse `.DS_Store`, `.env*`,
+  `.firebase/`, `*.pem`, `*.key` jm.
+- Auditist teadlikult tegemata (põhjendus README „Turvalisus“ / PR-is): AES-GCM AAD (failivormingu v2), `el()`-i atribuudifilter
+  (CSP ilma `'unsafe-inline'`-ita ei käivita `on*`-atribuute ega `javascript:` aadresse), SRI (kõik failid samast
+  juurutusest), HSTS päis (`.app` on brauserite HSTS-nimekirjas), Git-ajaloo ümberkirjutamine ja põhiaadressi valik.
+- Kontrollitud: 184 hetktõmmist samad; lukutestid (avamine, parooli vahetus, teine sool, teise saidi ümbrik, krüpteerimata
+  fail lukus lehel, luku eemaldamine, iter 10⁹ → viga 23 ms-ga, vanade võtmete kustutamine, vorm, GoatCounteri päring,
+  tariifid kommentaaride lõksuga); töövoo testid (päikeseandmed mock-API-ga, päevakokkuvõtted 9/9, `lukk.py ava`/`lukusta`).
+
 ### Solarmani andmed ainult töövoost (energialeht 2.6.0)
 
 - **Brauser ei suhtle enam Solarmani API-ga.** Eemaldati valikuline „Solarmani otseühendus“: jaluse link, dialoog

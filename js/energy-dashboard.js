@@ -21,8 +21,6 @@ const BATTERY_IDLE_KW = 0.2;      // aku hoidevool: alla selle ja muutumatu laet
 const EXPORT_MIN_KW = 0.3;        // müük võrku: bilansi ülejääk peab ületama kadude varu (0,3 kW või 3% toodangust)
 const BATTERY_SIGN_DEFAULT = -1;  // batteryPower < 0 = laeb (selle jaama andmetest), kui kalibreerimiseks pole kaadreid
 const SOLAR_POWER_FIELDS = ['generationPower', 'usePower', 'gridPower', 'purchasePower', 'wirePower', 'chargePower', 'dischargePower', 'batteryPower'];
-/* Varasema brauseri-otseühenduse (Solarman OpenAPI) võtmed: neid enam ei kasutata ja need kustutatakse lehe avamisel (vt forgetLegacyStorage). */
-const LEGACY_STORAGE_KEYS = ['kauge32.energia.solarman', 'kauge32.energia.solarmanToken', 'kauge32.energia.solarmanJaam'];
 
 /* Kehtivad tariifid ja päikeseandmete aegumislävi: CONFIG-i väärtused, mis kirjutatakse üle index.html-i omadega (vt loadTariffs). */
 const TARIFFS = {
@@ -197,39 +195,33 @@ async function loadTariffs() {
     const response = await fetch(file, { signal: controller.signal, cache: 'no-cache' });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const html = await response.text();
-    const block = /const\s+CONFIG\s*=\s*\{([\s\S]*?)\n\};/.exec(html);
-    if (!block) throw new Error('CONFIG objekti ei leitud');
-    const src = block[1];
-    const readNumber = key => {
-      const m = new RegExp(`\\b${key}\\s*:\\s*(-?\\d+(?:\\.\\d+)?)`).exec(src);
-      return m ? Number(m[1]) : null;
-    };
-    const readText = key => {
-      const m = new RegExp(`\\b${key}\\s*:\\s*"([^"]*)"`).exec(src);
-      return m ? m[1] : null;
-    };
+    // index.html-i CONFIG-plokk loetakse sama parseriga kui iga lehe enda seaded (parseConfigLiteral, js/common.js):
+    // väärtus võetakse õigest kohast (nt CONFIG.hinnad.marginaal), kommentaarides olevad numbrid ei sega
+    const block = /<script type="text\/plain" id="lehe-config">([\s\S]*?)<\/script>/.exec(html);
+    if (!block) throw new Error('CONFIG plokki ei leitud');
+    const cfg = parseConfigLiteral(block[1]);
+    const num = (obj, key) => (obj && typeof obj[key] === 'number' && Number.isFinite(obj[key]) ? obj[key] : null);
     for (const key of Object.keys(TARIFFS.hinnad)) {
-      const v = readNumber(key);
-      if (Number.isFinite(v)) TARIFFS.hinnad[key] = v;
+      const v = num(cfg.hinnad, key);
+      if (v != null) TARIFFS.hinnad[key] = v;
     }
     for (const key of ['algus', 'lopp']) {
-      const v = readNumber(key);
-      if (Number.isFinite(v) && v >= 0 && v <= 24) TARIFFS.ootariif[key] = v;
+      const v = num(cfg.ootariif, key);
+      if (v != null && v >= 0 && v <= 24) TARIFFS.ootariif[key] = v;
     }
-    const weekend = /\bnadalavahetusOnOo\s*:\s*(true|false)/.exec(src);
-    if (weekend) TARIFFS.ootariif.nadalavahetusOnOo = weekend[1] === 'true';
-    const holidays = /\briigipuhadOnOo\s*:\s*(true|false)/.exec(src);
-    if (holidays) TARIFFS.ootariif.riigipuhadOnOo = holidays[1] === 'true';
-    const limits = { roheline: readNumber('roheline'), kollane: readNumber('kollane'), oranz: readNumber('oranz') };
+    for (const key of ['nadalavahetusOnOo', 'riigipuhadOnOo']) {
+      if (cfg.ootariif && typeof cfg.ootariif[key] === 'boolean') TARIFFS.ootariif[key] = cfg.ootariif[key];
+    }
+    const limits = { roheline: num(cfg.hinnapiirid, 'roheline'), kollane: num(cfg.hinnapiirid, 'kollane'), oranz: num(cfg.hinnapiirid, 'oranz') };
     if ([limits.roheline, limits.kollane, limits.oranz].every(Number.isFinite) && limits.roheline < limits.kollane && limits.kollane < limits.oranz) {
       TARIFFS.hinnapiirid = limits;
     }
     for (const key of Object.keys(TARIFFS.hinnasildid)) {
-      const v = readText(key);
-      if (v) TARIFFS.hinnasildid[key] = v;
+      const v = cfg.hinnasildid && cfg.hinnasildid[key];
+      if (typeof v === 'string' && v) TARIFFS.hinnasildid[key] = v;
     }
     // Päikeseandmete aegumislävi on sama mis elektriinfo lehel (CONFIG.paike.aegunudMinutites)
-    const staleMinutes = readNumber('aegunudMinutites');
+    const staleMinutes = num(cfg.paike, 'aegunudMinutites');
     if (Number.isFinite(staleMinutes) && staleMinutes >= 5 && staleMinutes <= 24 * 60) TARIFFS.aegunudMinutites = staleMinutes;
     TARIFFS.source = file;
   } catch (error) {
@@ -549,18 +541,9 @@ function sellCents(period) { return period.spotExVatCentsKwh - (Number(TARIFFS.h
 /*
  * Brauser ei suhtle Solarmani API-ga: töövoog „Uuenda päikeseandmed“ pärib andmed GitHubi Secretsis
  * hoitud võtmetega ja kirjutab need (krüpteeritult) faili paike.json, mida leht loeb samast domeenist.
- * Brauseris pole seega ühtegi Solarmani võtit, parooli ega tokenit.
+ * Brauseris pole seega ühtegi Solarmani võtit, parooli ega tokenit. Varasema otseühenduse brauserisse salvestatud
+ * võtmed (kauge32.energia.*) kustutab js/lukk.js iga lehe avamisel ja „Lukusta leht“ vajutamisel.
  */
-
-/** Kustutab varasema otseühenduse võtmed (App Secret, e-post, parooli räsi, token) selle brauseri mälust. */
-function forgetLegacyStorage() {
-  for (const name of ['localStorage', 'sessionStorage']) {
-    try {
-      const area = window[name];
-      for (const key of LEGACY_STORAGE_KEYS) area.removeItem(key);
-    } catch (error) { /* salvestusruum pole kasutatav: seal pole ka midagi kustutada */ }
-  }
-}
 
 /** Unix sekundid (mõni Solarmani vastus annab millisekundid). */
 function toUnixSeconds(value) {
@@ -4367,7 +4350,6 @@ function setupControls() {
       updateNowMarkers(Date.now());
     }
   });
-  forgetLegacyStorage();
 }
 
 /** Kas Tallinna kuupäev on pärast viimast värskendust vahetunud (kesköö)? */

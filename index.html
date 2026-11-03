@@ -20,7 +20,7 @@
 <script src="js/lukk.js?v=20261103"></script>
 <!-- Külastuste loendus (GoatCounter, küpsisteta; README „Külastuste statistika“). Skript on repo sees, sest CSP lubab ainult
      sama saidi skripte; loendus läheb sendBeacon-iga (connect-src). Saadetakse lehe nimi, ekraani laius ja tulek, mitte andmeid. -->
-<script data-goatcounter="https://kauge32.goatcounter.com/count" data-goatcounter-settings='{"path":"/","title":"Elektriinfo"}' async src="js/vendor/goatcounter-count.js?v=c031008"></script>
+<script data-goatcounter="https://kauge32.goatcounter.com/count" data-goatcounter-settings='{"no_events":true,"path":"/","title":"Elektriinfo"}' async src="js/vendor/goatcounter-count.js?v=c031008-k32"></script>
 <link rel="stylesheet" href="css/index.css?v=20261102">
 <!-- Raamimise kaitse ja teema enne esimest joonistamist (ilma defer'ita) -->
 <script src="js/teema.js?v=20261103"></script>
@@ -31,12 +31,14 @@
 <!-- Lukk (js/lukk.js): parooliga kaitstud andmefailide avamisvaade; nähtav ainult siis, kui lehel on lukk.json -->
 <div id="lukk" class="lukk" role="dialog" aria-modal="true" aria-labelledby="lukk-pealkiri" hidden>
   <form class="lukk__card" id="lukk-form" method="post" novalidate>
+    <!-- Paroolihalduri jaoks: ühistu parool salvestatakse kasutajanimega „Kauge 32“ (väli on nähtamatu ja seda ei saadeta kuhugi) -->
+    <input type="text" autocomplete="username" value="Kauge 32" tabindex="-1" aria-hidden="true" hidden>
     <p class="lukk__brand"><svg class="icon" aria-hidden="true" focusable="false"><use href="img/icons.svg?v=20261023#i-bolt"></use></svg>Kauge 32</p>
     <h2 id="lukk-pealkiri" class="lukk__title">Leht on parooliga kaitstud</h2>
     <p id="lukk-tekst" class="lukk__text">Sisesta ühistu parool, et näha maja elektri- ja päikeseandmeid.</p>
     <div class="lukk__field">
       <label for="lukk-parool">Parool</label>
-      <input id="lukk-parool" name="parool" type="password" autocomplete="current-password" spellcheck="false" autocapitalize="off" required>
+      <input id="lukk-parool" type="password" autocomplete="current-password" spellcheck="false" autocapitalize="off" required>
     </div>
     <label class="lukk__check" for="lukk-pea-meeles"><input id="lukk-pea-meeles" name="peaMeeles" type="checkbox"> Jäta meelde selles seadmes</label>
     <p id="lukk-viga" class="notice notice--error" role="alert" hidden></p>
@@ -349,11 +351,10 @@ const CONFIG = {
   // loeb neid siit. Nimi peab kattuma töövoos salvestatava faili nimega. Tühi ("") lülitab välja.
   kohalikAndmefail: "hinnad.json",
 
-  // Teine varuvariant: avalik CORS-proksi, mille lõppu lisatakse API aadress, näiteks
-  //   "https://api.allorigins.win/raw?url="   või   "https://api.codetabs.com/v1/proxy?quest="
-  // NB! Proksi on kolmanda osapoole teenus, mis võib olla aeglane või ajutiselt kättesaamatu ja näeb päringuid.
-  // Proksi aadress tuleb lisada ka lehe päise turvapoliitikasse (Content-Security-Policy connect-src),
-  // muidu brauser päringut ei tee. Jäta tühjaks (""), kui kasutad kohalikku andmefaili.
+  // Teine varuvariant: enda hallatav CORS-proksi, mille lõppu lisatakse Eleringi API aadress. Ära kasuta avalikke
+  // kolmanda osapoole proksisid: proksi näeb päringuid ja võib hindu muuta. Proksi aadress tuleb lisada ka lehe päise
+  // turvapoliitikasse (Content-Security-Policy connect-src), muidu brauser päringut ei tee.
+  // Jäta tühjaks (""), kui kasutad kohalikku andmefaili (soovitatav).
   varuProksi: "",
 
   // Elektriauto laadimise kalkulaatori eeldused. Ohutu muuta.

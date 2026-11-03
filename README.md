@@ -58,8 +58,10 @@ nende enda seaded). Plokk ei käivitu: lehe skript (`js/<leht>.js`) loeb selle i
 `js/common.js`), sest turvapoliitika ei luba lehesiseseid skripte. Seetõttu on lubatud ainult väärtused – numbrid,
 `"tekst"` (jutumärkides), `true`/`false`/`null`, objektid `{ }` ja massiivid `[ ]` – ning kommentaarid, mitte arvutused
 (`24 * 60`) ega muutujad. Vea korral ei avane leht ja brauseri konsoolis on teade rea ja veeruga (nt
-„CONFIG: oodati koma või „}“ (rida 12, veerg 5)“). Töövoog `uuenda-hinnad.yml` ja energialeht loevad `index.html`-i
-`CONFIG`-ist tariifid samast kohast nagu enne.
+„CONFIG: oodati koma või „}“ (rida 12, veerg 5)“). Töövoog `uuenda-hinnad.yml` (Pythoni koopia `parse_config`) ja energialeht
+(`loadTariffs`) loevad `index.html`-i `CONFIG`-ist tariifid sama reegliga: iga väärtus tuleb oma kohast (nt
+`CONFIG.hinnad.marginaal`) ja kommentaarid ei sega – rida `// vana marginaal: 0.75` võib rahulikult alles jääda. Kui
+`index.html`-i `CONFIG` on vigane, kasutab töövoog vaiketasusid ja energialeht oma varukoopiat (mõlemad annavad hoiatuse).
 
 ## Kui hinnad ei uuene
 
@@ -578,8 +580,15 @@ sest see on avalikus repo's niikuinii.
    pärast viimast kasutust). Jaluse „Lukusta leht“ unustab kõik selle brauseri võtmed kohe. Varasem
    `localStorage`/`sessionStorage`-is hoitud võti kolitakse automaatselt üle ja kustutatakse.
 
-Kuni `lukk.json`-i pole, töötab leht nagu enne (parooli ei küsita). Krüpteeritud ja krüpteerimata andmefail
-loetakse mõlemad (`Lukk.fetch`), seega üleminek on sujuv ka siis, kui üks töövoog on juba käinud ja teine mitte.
+Kuni `lukk.json`-i pole, töötab leht nagu enne (parooli ei küsita) ja loeb tavatekstis andmefaile. Kui `lukk.json` on
+olemas, võtab leht samalt saidilt vastu **ainult krüpteeritud** andmefaile (`Lukk.fetch`): tavatekstis fail annab selle
+faili kohta laadimisvea, et krüpteeritud faili ei saaks vaikselt võltsitud tavafailiga asendada. Kaitse esmakordsel
+sisselülitamisel on seega `paike.json` paar minutit (kuni päikesetöövoog on käinud) laadimisveaga. Kui `lukk.json`
+vahepeal kustutatakse (kaitse võeti maha), jätkab juba avatud leht lukuta. Teise saidi vastuseid (Eleringi API,
+varuproksi) dekrüpteerija ei puuduta: võõras „ümbrik“ ei saa parooli küsida ega võtit kasutada. Brauser ja töövoog
+avavad ainult ümbrikke, mille PBKDF2 iteratsioonide arv on 600 000…2 000 000, sool vähemalt 16 ja nonss 12 baiti
+(väiksem arv oleks nõrk võti, suurem koormaks protsessorit minuteid); `ITER`-i tõstmisel üle selle tõsta ka `MAX_ITER`
+(`js/lukk.js` ja `lukk.py`).
 
 **Kuidas töövoog töötab** (`.github/scripts/lukk.py`): samm „Paigalda krüpteerimise teek“ paigaldab `cryptography`
 paketi ilma ühegi secret'ita keskkonnas ja ainult `.github/scripts/requirements-lukk.txt` räsidega (`pip --require-hashes`;
@@ -631,9 +640,10 @@ haldajal). See ei kasuta küpsiseid ega püsivaid kasutaja-ID-sid ja brauserisse
 
 **Mida loendatakse**
 
-- **Lehe avamine:** Elektriinfo (`/`) ja Energia (`/energy-dashboard.html`); nimi ja pealkiri on fikseeritud lehe
-  `<head>`-i sildi `data-goatcounter-settings`-is (sama leht ei jagune aadressi kuju järgi). Kaasa lähevad ekraani laius
-  ja tulek (eelmine leht, nt sõnumi link); riigi tuletab GoatCounter päringust.
+- **Lehe avamine:** Elektriinfo (`/`), Energia (`/energy-dashboard.html`) ja Graafikud (`/graafikud.html`); nimi ja pealkiri
+  on fikseeritud lehe `<head>`-i sildi `data-goatcounter-settings`-is (sama leht ei jagune aadressi kuju järgi). Kaasa lähevad
+  ekraani laius ja tulek (eelmine leht, nt sõnumi link); riigi tuletab GoatCounter päringust. Aadressi päringuosa
+  (`?…`) ei saadeta ja automaatseid klikiloendureid ei seota (`no_events`).
 - **Sündmused** (parooliga lehel, `js/lukk.js` → `js/common.js` `countEvent`): `lukk-kysitud` „Parooli vaade“ (avamisvaade
   näidati) ja `lukk-avatud` „Parool sisestatud“ (õige parool). Salvestatud võtmega avamine sündmust ei tee. Nende suhe
   näitab, kui paljud parooli vaatest edasi jõuavad.
@@ -649,9 +659,10 @@ lülitab selle tagasi sisse.
 
 **Tehniliselt:** skript `js/vendor/goatcounter-count.js` (GoatCounteri `count.js`, commit `c031008`) on repo sees, sest
 CSP lubab skripte ainult samalt saidilt; see laaditakse `async`, nii et lehe joonistamist ei pidurda. Loendus läheb
-`navigator.sendBeacon`-iga aadressile `https://kauge32.goatcounter.com/count` (CSP `connect-src https:`); pildipõhine
-varuvariant on CSP `img-src`-iga tahtlikult blokeeritud. Uuendamisel vaheta fail GoatCounteri repo `public/count.js`-iga,
-uuenda `js/vendor/GOATCOUNTER_LICENSE.md`-i commit ja HTML-i linkides `?v=`.
+`navigator.sendBeacon`-iga aadressile `https://kauge32.goatcounter.com/count` (CSP `connect-src`); pildipõhine
+varuvariant on CSP `img-src`-iga tahtlikult blokeeritud. Failis on üks Kauge 32 muudatus: `q: ''` (päringustringi ei
+saadeta; märgitud faili alguses). Uuendamisel vaheta fail GoatCounteri repo `public/count.js`-iga, korda seda muudatust,
+uuenda `js/vendor/GOATCOUNTER_LICENSE.md`-i commit ja HTML-i linkides `?v=` (praegu `c031008-k32`).
 
 ## Otsingumootorid
 
@@ -671,7 +682,9 @@ tegemisega.
   avatakse brauseris (vt „Parooliga kaitse“). `js/lukk.js` laaditakse samalt saidilt (CSP lubab).
 - Töövood: `actions/checkout` on lukustatud commit'i SHA-ga ja `persist-credentials: false`, nii et kirjutusõigusega
   `GITHUB_TOKEN` antakse ainult commit'i ja push'i sammule. Python'i sõltuvus paigaldatakse räsidega ja eraldi sammus,
-  kus secret'eid pole. Mõõteväärtusi logisse ei kirjutata (logid on avalikud).
+  kus secret'eid pole. Mõõteväärtusi logisse ei kirjutata (logid on avalikud). Välise API aadress peab olema HTTPS
+  (`require_https`; keskkonnamuutujaga `ELERING_URL`/`SOLARMAN_URL` saab seda muuta ainult kohalikuks testiks) ja API
+  vastus loetakse kuni 10 MB (`read_limited`), suurem vastus loetakse veaks.
 - Lehed lisavad sisu ainult `textContent`/`createElement` kaudu (mitte `innerHTML`). Lehe `Content-Security-Policy`
   meta-silt (kõigil kolmel lehel):
   - `script-src 'self'`: käivituvad ainult samalt saidilt laaditud skriptifailid – lehesiseseid skripte, inline-sündmusi,
@@ -695,12 +708,24 @@ tegemisega.
   `Referrer-Policy: no-referrer`, `Permissions-Policy` (kaamera, mikrofon, asukoht, maksed, USB, ekraanijagamine keelatud),
   `Cross-Origin-Opener-Policy` ja `Cross-Origin-Resource-Policy: same-origin` ning `X-Robots-Tag: noindex`. Päise CSP
   kehtib lisaks lehe meta-sildile (brauser rakendab mõlemat). Avaldatakse ainult lehe failid: `README.md`, `CHANGELOG.md`,
-  `public/` (Firebase'i näidisleht), `skills-lock.json` ja punktiga algavad failid/kaustad jäävad välja. Puuduv fail annab
-  päris 404 (mitte `index.html`-i), mida `js/lukk.js` vajab (`lukk.json` puudub = lukku pole). Juurutustöövoog saab ainult
-  lugemisõiguse; `actions/checkout` on lukustatud commit'i SHA-ga ja ilma salvestatud tokenita.
+  `public/` (Firebase CLI näidisleht, kustutatud), `skills-lock.json` ja punktiga algavad failid/kaustad jäävad välja.
+  Puuduv fail annab päris 404 (mitte `index.html`-i), mida `js/lukk.js` vajab (`lukk.json` puudub = lukku pole).
+  Juurutustöövood: live-juurutus saab ainult lugemisõiguse; `actions/checkout` ja `FirebaseExtended/action-hosting-deploy`
+  (saab teenusekonto võtme) on lukustatud commit'i SHA-ga, `checkout` ilma salvestatud tokenita; üks juurutus korraga
+  (`concurrency`) ja ajapiirang 10 min. Teenusekontole `FIREBASE_SERVICE_ACCOUNT_KAUGE32_ELEKTER` piisab Google Cloudi
+  IAM-is rollist **Firebase Hosting Admin** (kontrolli, et sel pole projekti Editor/Owner rolli).
 - **Paroolid ja tunnused brauseris:** lehe parooli ei salvestata ega hoita mälus – sellest tuletatakse kohe mitte-eksporditav
   võti ja avamisvormi väli tühjendatakse; konsooli parooli ega võtit ei logita. Brauseris pole ühtegi API võtit
-  (Eleringi otsepäring ja GoatCounter ei vaja võtit).
+  (Eleringi otsepäring ja GoatCounter ei vaja võtit). Varasema Solarmani otseühenduse brauserisse jäänud võtmed
+  (`kauge32.energia.*`) kustutab `js/lukk.js` iga lehe avamisel ja „Lukusta leht“ vajutamisel. Avamisvormi parooliväljal
+  pole `name`-i (vorm on `method="post"` ja CSP `form-action 'none'`), peidetud kasutajanime väli „Kauge 32“ aitab
+  paroolihalduril ühistu parooli õigesti salvestada.
+- **Teadlikult tegemata (2026-11 turvaauditi soovitused):** AES-GCM-i `additionalData` failinimega (vajaks failivormingut
+  v2; failide vahetamiseks peab niikuinii olema repo kirjutusõigus), `el()`-i atribuudifilter (CSP ilma `'unsafe-inline'`-ita
+  ei käivita `on*`-atribuute ega `javascript:` aadresse ning nimed tulevad alati koodist), SRI (`integrity`; kõik skriptid
+  tulevad samast juurutusest, nii et kes saab muuta skripti, saab muuta ka räsi), HSTS päis (`.app` on brauserite
+  HSTS-nimekirjas). Haldaja otsused: põhiaadress (`*.web.app` on eraldi päritolu, `*.github.io` jagab salvestusruumi konto
+  teiste lehtedega), vana Git-ajaloo ümberkirjutamine, Firebase'i teenusekonto IAM-i roll.
 - GitHub Pagesi leht ja avalik repo on kõigile nähtavad: lehekood on avalik, andmefailid (`hinnad.json`-i
   15-min tarbimine, `paike.json`-i võimsused) on ilma paroolita loetavad ainult siis, kui parooliga kaitse on
   välja lülitatud; varasemad commit'id on tavatekstina alles. Kõik sama konto `*.github.io` lehed jagavad brauseri

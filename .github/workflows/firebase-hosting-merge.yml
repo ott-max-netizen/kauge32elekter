@@ -9,15 +9,20 @@ on:
 # Vähimad õigused: live-juurutus loeb ainult repot (PR-i kommentaarid ja kontrollid on ainult PR-i töövoos).
 permissions:
   contents: read
+# Üks live-juurutus korraga; uuem push tühistab ootel/pooleli vanema (juurutatakse niikuinii uusim seis)
+concurrency:
+  group: firebase-deploy-live
+  cancel-in-progress: true
 jobs:
   build_and_deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5.1.0 (sama mis andmetöövoogudes)
         with:
           persist-credentials: false   # juurutus ei vaja git'i tokenit
      # - run: npm ci && npm run build
-      - uses: FirebaseExtended/action-hosting-deploy@v0
+      - uses: FirebaseExtended/action-hosting-deploy@500ac625ca2dd40cbd15f7659af953801858032a  # v0.11.0 (= silt v0); saab teenusekonto võtme, seega SHA-ga lukus
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_KAUGE32_ELEKTER }}
