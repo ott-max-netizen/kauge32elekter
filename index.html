@@ -15,9 +15,9 @@
 <meta name="robots" content="noindex, nofollow, noarchive">
 <title>Kauge 32 · Elektri ja päikese dashboard</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="css/common.css?v=20261102">
+<link rel="stylesheet" href="css/common.css?v=20261103">
 <!-- Lukk (parooliga kaitse, README „Parooliga kaitse“): ilma defer'ita, et globaal Lukk oleks lehe skriptile olemas ja .app peituks enne esimest joonistamist -->
-<script src="js/lukk.js?v=20261101"></script>
+<script src="js/lukk.js?v=20261103"></script>
 <!-- Külastuste loendus (GoatCounter, küpsisteta; README „Külastuste statistika“). Skript on repo sees, sest CSP lubab ainult
      sama saidi skripte; loendus läheb sendBeacon-iga (connect-src). Saadetakse lehe nimi, ekraani laius ja tulek, mitte andmeid. -->
 <script data-goatcounter="https://kauge32.goatcounter.com/count" data-goatcounter-settings='{"path":"/","title":"Elektriinfo"}' async src="js/vendor/goatcounter-count.js?v=c031008"></script>
@@ -351,8 +351,9 @@ const CONFIG = {
 
   // Teine varuvariant: avalik CORS-proksi, mille lõppu lisatakse API aadress, näiteks
   //   "https://api.allorigins.win/raw?url="   või   "https://api.codetabs.com/v1/proxy?quest="
-  // NB! Proksi on kolmanda osapoole teenus, mis võib olla aeglane või ajutiselt kättesaamatu.
-  // Jäta tühjaks (""), kui kasutad kohalikku andmefaili.
+  // NB! Proksi on kolmanda osapoole teenus, mis võib olla aeglane või ajutiselt kättesaamatu ja näeb päringuid.
+  // Proksi aadress tuleb lisada ka lehe päise turvapoliitikasse (Content-Security-Policy connect-src),
+  // muidu brauser päringut ei tee. Jäta tühjaks (""), kui kasutad kohalikku andmefaili.
   varuProksi: "",
 
   // Elektriauto laadimise kalkulaatori eeldused. Ohutu muuta.

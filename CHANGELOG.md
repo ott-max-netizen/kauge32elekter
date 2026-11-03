@@ -4,10 +4,47 @@ See fail kirjeldab rakenduse `index.html` versioonimuudatusi, arhitektuurilisi k
 
 ---
 
-## [3.3.2], energy-dashboard.html [2.5.2] ja graafikud.html [1.3.1] — 2026-11-03 · turvalisus
+## [3.3.2], energy-dashboard.html [2.6.0] ja graafikud.html [1.3.1] — 2026-11-03 · turvalisus
 
-Lehtede sisu ja arvutused ei muutunud (kõigi 184 hetktõmmise tekst on sama, v.a versioon). README „Turvalisus“ ja
-„Seadete muutmine“.
+Lehtede sisu ja arvutused ei muutunud (kõigi 184 hetktõmmise tekst on sama, v.a versioon ja energialehe jaluses
+eemaldatud „Solarmani otseühendus“). README „Turvalisus“ ja „Seadete muutmine“.
+
+### Solarmani andmed ainult töövoost (energialeht 2.6.0)
+
+- **Brauser ei suhtle enam Solarmani API-ga.** Eemaldati valikuline „Solarmani otseühendus“: jaluse link, dialoog
+  (App ID, App Secret, e-post, parool/räsi, jaam, CORS-proksi), selle kood `js/energy-dashboard.js`-is (tokeni ja jaama
+  päringud, parooli SHA-256, salvestus `localStorage`/`sessionStorage`-isse, allikas „otse“) ja `CONFIG.solarman.apiUrl` /
+  `proksi`. Päikese- ja akuandmed tulevad ainult failist `paike.json`, mille töövoog kirjutab GitHub Secretsis hoitud
+  võtmetega. Seni oli see lehe suurim risk: võtmed ja räsi (Solarmani jaoks parooliga samaväärne) olid brauseris
+  tavatekstina ning nähtavad kõigile sama konto `*.github.io` lehtedele ja kasutaja proksile.
+- **Vanad võtmed kustutatakse:** energialeht eemaldab avamisel võtmed `kauge32.energia.solarman`, `…solarmanToken` ja
+  `…solarmanJaam` mõlemast salvestusalast (`forgetLegacyStorage`).
+- **Energialehe CSP `connect-src`** on nüüd sama kitsas kui elektriinfo lehel: ainult sama sait, Eleringi API ja loendur
+  (enne `https:` ja `localhost`). Kontrollitud: `fetch` Solarmani API-sse, suvalisse `https://` aadressi ja localhosti
+  blokeeritakse.
+- Dialoogi CSS (`css/energy-dashboard.css` p 10, `.btn--danger` failis `css/common.css`) eemaldati.
+  `css/common.css?v=20261103` (kõik lehed), `css/energy-dashboard.css?v=20261103`.
+
+### Parool brauseris (`js/lukk.js?v=20261103`, kõik lehed)
+
+- Parooli ei hoita enam mälus kogu lehe eluea jooksul (varem muutuja `parool` teise soolaga failide jaoks): see antakse
+  ainult võtme tuletamisele ja unustatakse. Avamisvormi väli tühjendatakse ka pärast õnnestunud avamist (enne jäi parool
+  peidetud vormi). Kui mõni fail on teise soolaga (`lukk.json` loodi vahepeal uuesti), küsitakse parooli veel kord.
+- Kontrollitud: avamine, parooli vahetus („Parool on vahetatud“ → uue parooliga avaneb, uuesti laadimisel ei küsita),
+  teise soolaga `paike.json` (teine küsimine, siis avaneb), vale parool; vorm ei jäta parooli välja ega URL-i.
+
+### Firebase Hosting
+
+- `firebase.json`: HTTP turvapäised, mida GitHub Pages ei luba – `Content-Security-Policy: frame-ancestors 'none'`,
+  `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `Permissions-Policy`,
+  `Cross-Origin-Opener-Policy` ja `Cross-Origin-Resource-Policy: same-origin`, `X-Robots-Tag: noindex`.
+- Avaldatakse ainult lehe failid (`README.md`, `CHANGELOG.md`, `public/` Firebase'i näidislehega, `skills-lock.json`
+  jäävad välja). Eemaldati ümbersuunamine `** → /index.html`: puuduv fail andis 200 ja HTML-i, nii et puuduv `lukk.json`
+  oleks jätnud lehe „Lehe oleku kontroll ebaõnnestus“ tsüklisse (`js/lukk.js` vajab 404-t) ja puuduv andmefail JSON-i vea.
+- Juurutustöövoog `firebase-hosting-merge.yml` sai `permissions: contents: read` (enne repo vaikeõigused);
+  mõlemas Firebase'i töövoos on `actions/checkout` lukustatud commit'i SHA-ga ja `persist-credentials: false`.
+
+### Lehesisesed skriptid, Trusted Types ja raamimise kaitse
 
 - **Lehesiseseid skripte enam pole:** lehtede põhikood on failides `js/index.js`, `js/energy-dashboard.js`,
   `js/graafikud.js`, teema `js/teema.js`. Seetõttu on CSP-s `script-src 'self'` (enne `'unsafe-inline'`): kui kuhugi peaks
@@ -21,14 +58,14 @@ Lehtede sisu ja arvutused ei muutunud (kõigi 184 hetktõmmise tekst on sama, v.
   kirjutada; lehed ja teegid (Chart.js, GoatCounter) seda ei tee.
 - **`form-action 'none'`** ja avamisvaate vorm `method="post"`: parool ei saa vormi tavasaatmisega lehelt lahkuda ega
   URL-i sattuda. Lisaks `frame-src`, `worker-src`, `manifest-src`, `media-src 'none'`.
-- **Kitsam `connect-src`:** elektriinfo leht ainult sama sait, Eleringi API ja loendur; graafikute leht sama sait ja
-  loendur; energialeht jätab `https:` ja `localhost`-i (Solarmani otseühenduse kasutaja enda proksi).
+- **Kitsam `connect-src`:** elektriinfo ja energia leht ainult sama sait, Eleringi API ja loendur; graafikute leht sama
+  sait ja loendur.
 - **Raamimise kaitse** (`js/teema.js`): teise saidi raamis leht peidetakse ja avatakse võimalusel kogu aknas
   (GitHub Pages ei luba `X-Frame-Options` / `frame-ancestors` päist).
 - Kontrollitud Playwrightiga: tavakasutusel CSP- ja Trusted Types rikkumisi pole; süstimiskatsed (`insertAdjacentHTML`,
   `innerHTML`, skript stringist, väline skript) blokeeritakse; testlehel on lehesisene skript, `eval`, `new Function` ja
   `setTimeout(string)` blokeeritud (vana CSP-ga käivitusid lehesisene skript ja `setTimeout(string)`); parooliga leht
-  avaneb ja URL jääb puhtaks; Solarmani dialoog, tariifide lugemine `index.html`-ist ja külastuste loendus töötavad;
+  avaneb ja URL jääb puhtaks; tariifide lugemine `index.html`-ist ja külastuste loendus töötavad;
   teise saidi raamis on leht peidetud.
 
 ---

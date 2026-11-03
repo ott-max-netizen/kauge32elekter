@@ -3,8 +3,9 @@
 <head>
 <meta charset="utf-8">
 <!-- Turvapoliitika (README „Turvalisus“): skriptid ainult failidest samalt saidilt (lehesiseseid ei käivitata), HTML-i
-     stringist kirjutamine keelatud (Trusted Types), vormi ei saa saata, raame/workereid pole; välised päringud ainult HTTPS-iga (Solarmani otseühenduse kasutaja enda proksi), erand: localhost-proksi. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https: http://localhost:* http://127.0.0.1:*; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; worker-src 'none'; manifest-src 'none'; media-src 'none'; require-trusted-types-for 'script'; trusted-types 'none'">
+     stringist kirjutamine keelatud (Trusted Types), vormi ei saa saata, raame/workereid pole; välised päringud ainult Eleringi API-sse (varuallikas)
+     ja külastuste loendurisse. Solarmani API-t brauser ei kasuta: päikeseandmed tulevad failist paike.json (GitHub Actions). -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://dashboard.elering.ee https://kauge32.goatcounter.com; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; worker-src 'none'; manifest-src 'none'; media-src 'none'; require-trusted-types-for 'script'; trusted-types 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
@@ -15,13 +16,13 @@
 <meta name="robots" content="noindex, nofollow, noarchive">
 <title>Kauge 32 energia</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="css/common.css?v=20261102">
+<link rel="stylesheet" href="css/common.css?v=20261103">
 <!-- Lukk (parooliga kaitse, README „Parooliga kaitse“): ilma defer'ita, et globaal Lukk oleks lehe skriptile olemas ja .app peituks enne esimest joonistamist -->
-<script src="js/lukk.js?v=20261101"></script>
+<script src="js/lukk.js?v=20261103"></script>
 <!-- Külastuste loendus (GoatCounter, küpsisteta; README „Külastuste statistika“). Skript on repo sees, sest CSP lubab ainult
      sama saidi skripte; loendus läheb sendBeacon-iga (connect-src). Saadetakse lehe nimi, ekraani laius ja tulek, mitte andmeid. -->
 <script data-goatcounter="https://kauge32.goatcounter.com/count" data-goatcounter-settings='{"path":"/energy-dashboard.html","title":"Energia"}' async src="js/vendor/goatcounter-count.js?v=c031008"></script>
-<link rel="stylesheet" href="css/energy-dashboard.css?v=20261102">
+<link rel="stylesheet" href="css/energy-dashboard.css?v=20261103">
 <!-- Raamimise kaitse ja teema enne esimest joonistamist (ilma defer'ita) -->
 <script src="js/teema.js?v=20261103"></script>
 <!-- Chart.js 4.5.1 (globaal Chart): defer, sest init() käivitub DOMContentLoaded-il ja kutsub kõigepealt setupCharts() -->
@@ -278,62 +279,15 @@
   </main>
 
   <footer class="app-footer">
-    <p><strong>Andmeallikad:</strong> päikesepark, akupank, maja tarbimine ja ost võrgust — inverter (Solarman OpenAPI), 15-min mõõtmised; börsihind — Elering Live (Nord Pooli Eesti hinnapiirkond), sama andmefail, mida kasutab elektriinfo leht. Arve alus ehk ost võrgust võrguarvesti (Estfeed) järgi on elektriinfo lehel; inverteri mõõdetud ost erineb sellest ~2 %. Lõpphind, eurod ja soovitused on hinnangulised; tegelik arve sõltub elektri- ja võrgulepingust.</p>
+    <p><strong>Andmeallikad:</strong> päikesepark, akupank, maja tarbimine ja ost võrgust — inverter (Solarman OpenAPI GitHub Actionsi kaudu), 15-min mõõtmised; börsihind — Elering Live (Nord Pooli Eesti hinnapiirkond), sama andmefail, mida kasutab elektriinfo leht. Arve alus ehk ost võrgust võrguarvesti (Estfeed) järgi on elektriinfo lehel; inverteri mõõdetud ost erineb sellest ~2 %. Lõpphind, eurod ja soovitused on hinnangulised; tegelik arve sõltub elektri- ja võrgulepingust.</p>
     <p id="footer-data" class="app-footer__data" hidden></p>
     <div class="app-footer__meta">
       <p id="footer-sources">Andmeid pole veel laaditud</p>
-      <p><span id="lukk-lukusta-wrap" hidden><button type="button" class="link-btn" id="lukk-lukusta">Lukusta leht</button> · </span><button type="button" class="link-btn" id="direct-open">Solarmani otseühendus</button> · <span id="footer-version"></span></p>
+      <p><span id="lukk-lukusta-wrap" hidden><button type="button" class="link-btn" id="lukk-lukusta">Lukusta leht</button> · </span><span id="footer-version"></span></p>
       <p>Külastusi loendatakse anonüümselt (GoatCounter), küpsiseid ei kasutata.</p>
     </div>
   </footer>
 </div>
-
-<dialog class="dialog" id="direct-dialog" aria-labelledby="direct-title">
-  <form class="dialog__body" id="direct-form" method="dialog" novalidate>
-    <h2 id="direct-title" class="dialog__title">Solarmani otseühendus</h2>
-    <p class="dialog__text">Vaikimisi loeb leht päikeseandmeid failist <strong>paike.json</strong>, mille GitHub Actions täidab GitHub Secretsis hoitud võtmetega — see on soovitatud ja turvaline viis.</p>
-    <p class="dialog__text">Otseühendus pärib andmed brauserist otse Solarmani API-st (värskem, ~5 min). Solarmani API ei luba enamasti brauserist otse pärida (CORS), seega on tavaliselt vaja oma CORS-proksit — proksi näeb App Secretit ja parooli räsi, kasuta ainult enda hallatavat.</p>
-    <p class="dialog__text dialog__text--warn">Võtmed jäävad ainult sellesse brauserisse. Parool salvestatakse SHA-256 räsina, kuid Solarmani jaoks on räsi parooliga samaväärne. Kõik sama GitHub Pagesi konto lehed (*.github.io) jagavad brauseri salvestusruumi, seega kasuta otseühendust ainult isiklikus seadmes.</p>
-    <div class="form-grid">
-      <div class="field">
-        <label for="f-app-id">App ID</label>
-        <input id="f-app-id" name="appId" autocomplete="off" spellcheck="false" required>
-      </div>
-      <div class="field">
-        <label for="f-app-secret">App Secret</label>
-        <input id="f-app-secret" name="appSecret" type="password" autocomplete="off" spellcheck="false">
-      </div>
-      <div class="field">
-        <label for="f-email">Solarmani e-post</label>
-        <input id="f-email" name="email" type="email" autocomplete="off" spellcheck="false" required>
-      </div>
-      <div class="field">
-        <label for="f-password">Parool või selle SHA-256 räsi</label>
-        <input id="f-password" name="password" type="password" autocomplete="new-password" spellcheck="false">
-      </div>
-      <div class="field">
-        <label for="f-station">Jaama ID (valikuline)</label>
-        <input id="f-station" name="stationId" inputmode="numeric" autocomplete="off" spellcheck="false">
-        <p class="field__hint">Tühi = konto esimene jaam.</p>
-      </div>
-      <div class="field">
-        <label for="f-proxy">CORS-proksi (valikuline)</label>
-        <input id="f-proxy" name="proxy" type="url" autocomplete="off" spellcheck="false" placeholder="https://minu-proksi.example/?url=">
-        <p class="field__hint">API aadress lisatakse lõppu URL-kodeeritult.</p>
-      </div>
-      <div class="field field--wide field--check">
-        <label for="f-remember"><input id="f-remember" name="remember" type="checkbox"> Jäta meelde selles seadmes</label>
-        <p class="field__hint">Märkimata kustuvad võtmed vahelehe sulgemisel (sessionStorage); märgituna jäävad alles (localStorage), kuni vajutad „Eemalda otseühendus“.</p>
-      </div>
-    </div>
-    <p id="direct-error" class="notice notice--error" role="alert" hidden></p>
-    <div class="dialog__actions">
-      <button type="button" class="btn btn--danger" id="direct-remove">Eemalda otseühendus</button>
-      <button type="button" class="btn btn--ghost" id="direct-cancel">Sulge</button>
-      <button type="submit" class="btn" id="direct-save">Salvesta ja ühenda</button>
-    </div>
-  </form>
-</dialog>
 
 <!-- Lehe seaded (README „Seadete muutmine“). Plokk ei käivitu (type="text/plain"): js/energy-dashboard.js loeb selle ilma eval-ita
      (readPageConfig, js/common.js). Lubatud on ainult väärtused: numbrid, "tekst", true/false/null, { } ja [ ]. -->
@@ -341,8 +295,8 @@
 /* ==========================================================================
    1. CONFIG — kõik väärtused, mida maja haldaja võib muuta.
    Muuda ainult numbreid ja tekste; jäta sulud, komad ja jutumärgid alles.
-   Solarmani võtmeid EI kirjutata siia: need on GitHub Actions Secretsis
-   (vt .github/workflows/uuenda-paike.yml) või otseühenduse dialoogis.
+   Solarmani võtmeid EI kirjutata siia ega brauserisse: need on ainult GitHub Actions
+   Secretsis (vt .github/workflows/uuenda-paike.yml).
    ========================================================================== */
 const CONFIG = {
 
@@ -409,7 +363,8 @@ const CONFIG = {
   paevadeFail: "paevad.json",
 
   // Varuvariant börsihindadele: CORS-proksi, mille lõppu lisatakse Eleringi API aadress.
-  // Jäta tühjaks (""), kui kasutad kohalikku andmefaili.
+  // Jäta tühjaks (""), kui kasutad kohalikku andmefaili. NB! Proksi aadress tuleb lisada ka lehe päise
+  // turvapoliitikasse (Content-Security-Policy connect-src), muidu brauser päringut ei tee.
   varuProksi: "",
 
   solarman: {
@@ -422,14 +377,6 @@ const CONFIG = {
     // index.html-i CONFIG-ist (paike.aegunudMinutites), et mõlemal lehel kehtiks sama lävi; seda
     // väärtust kasutatakse ainult siis, kui faili lugemine ebaõnnestub – hoia need võrdsed.
     aegunudMinutites: 45,
-
-    // Solarman OpenAPI aadress (otseühenduse jaoks).
-    apiUrl: "https://globalapi.solarmanpv.com",
-
-    // Vaikimisi CORS-proksi otseühenduse jaoks. API aadress lisatakse lõppu URL-kodeeritult,
-    // nt "https://minu-proksi.example/?url=". Kasuta ainult enda hallatavat proksit:
-    // proksi näeb App Secretit ja parooli räsi. Tühi ("") = otse (CORS võib blokeerida).
-    proksi: "",
 
     // Aku võimsus on |chargePower| − |dischargePower| (+ laeb, − tühjeneb). Ühise välja batteryPower
     // märki kasutatakse ainult siis, kui need väljad puuduvad; "auto" kalibreerib selle kaadritest, kus

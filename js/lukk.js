@@ -21,7 +21,8 @@
  * kirjet ei saa enam kasutada; aegunud sessioonikirjed (12 h viimasest kasutusest) kustutatakse järgmisel avamisel.
  * Mitte-eksporditavat võtit ei saa ka sama saidi (*.github.io) skript välja lugeda ega teise seadmesse viia, ainult
  * selles brauseris kasutada. Varasem eksporditud võti (localStorage/sessionStorage kauge32_lukk) kolitakse üle ja
- * kustutatakse. Parool ise jääb lehe sulgemiseni ainult mällu (teise soolaga faili jaoks).
+ * kustutatakse. Parooli ennast ei salvestata ega hoita mälus: sellest tuletatakse võti ja vormi väli tühjendatakse.
+ * Kui mõni andmefail on teise soolaga (lukk.json loodi vahepeal uuesti), küsitakse parooli selle faili jaoks veel kord.
  * Skript laaditakse <head>-is ilma defer'ita, et globaal Lukk oleks lehe skriptile olemas ja .app saaks
  * peita enne esimest joonistamist.
  */
@@ -45,7 +46,6 @@
 
   let lukuInfo = null;          // lukk.json sisu (null = lukku pole)
   let valmisLubadus = null;     // Lukk.valmis() tulemus (üks kord)
-  let parool = null;            // ainult mälus; teise soolaga faili võtme tuletamiseks
   const votmed = new Map();     // `${salt}|${iter}` -> CryptoKey
   let avamine = null;           // pooleli olev parooliküsimine { promise, resolve }
 
@@ -284,8 +284,8 @@
       if (nahtav) app.setAttribute('aria-hidden', 'true');
       else app.removeAttribute('aria-hidden');
     }
+    if (ui.input) ui.input.value = '';   // parool ei jää lehe vormi ka pärast avamist (peidetud vaates)
     if (nahtav && ui.input) {
-      ui.input.value = '';
       try { ui.input.focus({ preventScroll: true }); } catch (error) { /* fookus pole kriitiline */ }
     }
   }
@@ -300,7 +300,10 @@
     if (ui.input) ui.input.disabled = toos;
   }
 
-  /** Näitab avamisvaadet ja täitub, kui õige parool on sisestatud (võti tuletatud ja kontrollitud). */
+  /**
+   * Näitab avamisvaadet ja täitub, kui õige parool on sisestatud (võti tuletatud ja kontrollitud). Tulemus on sisestatud
+   * parool (ainult ootajale, kes vajab teise soolaga võtit; seda ei salvestata) või '', kui lukk vahepeal eemaldati.
+   */
   function kysiParool(teade) {
     if (avamine) {
       if (teade) naitaViga(teade);
@@ -333,11 +336,10 @@
         if (ui.input) { ui.input.select(); }
         return;
       }
-      parool = pw;
       votmed.set(votmeId(lukuInfo.salt, lukuInfo.iter), voti);
       await salvestaVoti(voti, lukuInfo, Boolean(ui.remember && ui.remember.checked));
       teata('avatud');
-      lopetaAvamine();
+      lopetaAvamine(pw);
     } catch (error) {
       console.error('Lukk: avamine ebaõnnestus', error);
       tooOlek(false);
@@ -345,13 +347,13 @@
     }
   }
 
-  function lopetaAvamine() {
+  function lopetaAvamine(pw = '') {
     naitaVaadet(false);
     document.documentElement.classList.remove('lukk-ootel');
     naitaLukustusnupp();
     const a = avamine;
     avamine = null;
-    if (a) a.resolve();
+    if (a) a.resolve(pw);
   }
 
   function naitaLukustusnupp() {
@@ -366,26 +368,20 @@
 
   async function lukusta() {
     votmed.clear();
-    parool = null;
     await unustaSalvestatud(true);
     location.reload();
   }
 
   /* ---------- võtme hankimine ja ümbriku avamine ---------- */
-  /** Võti antud soola ja iteratsioonidega: vahemälust, mälus olevast paroolist või küsides parooli uuesti. */
+  /** Võti antud soola ja iteratsioonidega: vahemälust või küsides parooli (parool on ainult selle funktsiooni muutujas). */
   async function hangiVoti(salt, iter, teade) {
     const id = votmeId(salt, iter);
     if (votmed.has(id)) return votmed.get(id);
-    if (parool) {
-      const voti = await tuletaVoti(parool, salt, iter);
-      votmed.set(id, voti);
-      return voti;
-    }
-    await kysiParool(teade);
+    const pw = await kysiParool(teade);
     if (votmed.has(id)) return votmed.get(id);
-    if (!parool) throw new Error('lukk eemaldati avamise ajal, laadi leht uuesti');
-    // parool sisestati lukk.json-i soolaga; see fail kasutab teist soola (nt parooli vahetus pooleli)
-    const voti = await tuletaVoti(parool, salt, iter);
+    if (!pw) throw new Error('lukk eemaldati avamise ajal, laadi leht uuesti');
+    // parool sisestati lukk.json-i soolaga; see fail kasutab teist soola (lukk.json loodi vahepeal uuesti)
+    const voti = await tuletaVoti(pw, salt, iter);
     votmed.set(id, voti);
     return voti;
   }
@@ -408,7 +404,6 @@
       }
       // Võti ei sobi: parool on vahetatud (salvestatud võti on vana) – küsi uuesti ja proovi veel üks kord
       votmed.delete(votmeId(umbrik.salt, umbrik.iter));
-      parool = null;
       await unustaSalvestatud(false);
       lukuInfo = info || lukuInfo;
       voti = await hangiVoti(umbrik.salt, umbrik.iter, 'Parool on vahetatud. Sisesta uus parool.');

@@ -545,7 +545,6 @@ a { color: var(--focus); text-underline-offset: 2px; }
   transition: background-color 0.12s ease, border-color 0.12s ease;
 }
 .btn--ghost { padding: 0 16px 0 14px; border-color: var(--border); background: var(--surface); color: var(--text); }
-.btn--danger { border-color: var(--cat-punane); background: var(--surface); color: var(--bad-fg); }
 .btn .icon,
 .btn__icon { flex: none; width: 18px; height: 18px; }
 .btn__icon { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
@@ -1093,7 +1092,6 @@ a { color: var(--focus); text-underline-offset: 2px; }
   .view-pill:not(.is-active):not([aria-pressed="true"]):hover,
   .segmented input:not(:checked):not(:disabled) + label:hover,
   .btn--ghost:not([disabled]):hover,
-  .btn--danger:not([disabled]):hover,
   .icon-btn:not([disabled]):hover,
   .table-view > summary:hover,
   .legend__toggle:not([aria-disabled="true"]):hover { background: var(--surface-2); }

@@ -9,11 +9,11 @@ const CONFIG = readPageConfig();
 
 /* Tehnilised konstandid — neid ei ole tavakasutuses vaja muuta. Mõlema lehe ühised (TIME_ZONE, API_URL,
    MINUTE_MS, HOUR_MS, DAY_MS) on failis js/common.js. */
-const APP_VERSION = '2.5.2';
+const APP_VERSION = '2.6.0';
 const PRICE_TIMEOUT_MS = 20000;
 const SOLAR_TIMEOUT_MS = 30000;
 const TARIFF_TIMEOUT_MS = 5000;
-const REFRESH_COOLDOWN_MS = 30 * 1000; // käsitsi värskendamise vähim vahe (kaitseb ka Solarmani API päringupiirangut)
+const REFRESH_COOLDOWN_MS = 30 * 1000; // käsitsi värskendamise vähim vahe (liiga tihe vajutamine ei koorma GitHub Pagesi)
 const MAX_PERIOD_MINUTES = 60;
 const FRAME_SECONDS = 900;        // päikeseandmete kaadri vaikesamm (15 min, nagu hinnad), kui paike.json-is pole frameSeconds-i
 const FLOW_MIN_KW = 0.05;         // väiksem võimsus loetakse nulliks
@@ -21,11 +21,8 @@ const BATTERY_IDLE_KW = 0.2;      // aku hoidevool: alla selle ja muutumatu laet
 const EXPORT_MIN_KW = 0.3;        // müük võrku: bilansi ülejääk peab ületama kadude varu (0,3 kW või 3% toodangust)
 const BATTERY_SIGN_DEFAULT = -1;  // batteryPower < 0 = laeb (selle jaama andmetest), kui kalibreerimiseks pole kaadreid
 const SOLAR_POWER_FIELDS = ['generationPower', 'usePower', 'gridPower', 'purchasePower', 'wirePower', 'chargePower', 'dischargePower', 'batteryPower'];
-const STORAGE = {
-  credentials: 'kauge32.energia.solarman',
-  token: 'kauge32.energia.solarmanToken',
-  station: 'kauge32.energia.solarmanJaam'
-};
+/* Varasema brauseri-otseühenduse (Solarman OpenAPI) võtmed: neid enam ei kasutata ja need kustutatakse lehe avamisel (vt forgetLegacyStorage). */
+const LEGACY_STORAGE_KEYS = ['kauge32.energia.solarman', 'kauge32.energia.solarmanToken', 'kauge32.energia.solarmanJaam'];
 
 /* Kehtivad tariifid ja päikeseandmete aegumislävi: CONFIG-i väärtused, mis kirjutatakse üle index.html-i omadega (vt loadTariffs). */
 const TARIFFS = {
@@ -49,7 +46,7 @@ const state = {
     error: null,          // veateade, kui hindu pole kordagi saadud
     refreshFailed: false, // viimane uuendus ebaõnnestus, kuvatakse varasemaid andmeid
     lastUpdated: null,
-    meta: null,           // hinnad.json-i meta (andmetoru olek), vt readDataMeta; otsepäringul null
+    meta: null,           // hinnad.json-i meta (andmetoru olek), vt readDataMeta; Eleringi otsepäringul null
     maja: null,           // hinnad.json-i majaElekter (võrguarvesti kuusummad, Estfeed): Map "AAAA-KK" -> kirje, vt normalizeMaja
     signature: null,      // viimati kasutatud vastuse tekst: muutuseta vastus ei suurenda versiooni
     version: 0
@@ -59,8 +56,6 @@ const state = {
     loaded: false,
     error: null,
     refreshFailed: false,
-    source: null,         // 'fail' | 'otse'
-    note: null,           // lisateade (nt otseühendus ebaõnnestus, kasutati faili)
     lastUpdated: null,
     version: 0
   },
@@ -78,7 +73,7 @@ const state = {
   loading: false,
   lastRefresh: null,
   lastRefreshStartedAt: 0, // viimase värskenduse algus (ms), ooteaja arvutamiseks
-  pendingRefresh: false,   // seadete muutmise ajal käis värskendus: tee pärast seda kohe uus
+  pendingRefresh: false,   // sunnitud värskenduse (force) ajal käis juba värskendus: tee pärast seda kohe uus
   nextRefreshAt: null,
   refreshTimer: null,
   cooldownTimer: null,
@@ -102,7 +97,7 @@ function tallinnLocalToUtc(year, month, day, hour = 0, minute = 0) {
   return new Date(utc);
 }
 
-/** Tallinna kuupäev kujul "AAAA-KK-PP" (Solarmani päringute jaoks). */
+/** Tallinna kuupäev kujul "AAAA-KK-PP". */
 function tallinnDateKey(date) {
   const p = getTallinnDateParts(date);
   return `${p.year}-${String(p.month).padStart(2, '0')}-${String(p.day).padStart(2, '0')}`;
@@ -549,162 +544,22 @@ function finalCents(period) {
 function sellCents(period) { return period.spotExVatCentsKwh - (Number(TARIFFS.hinnad.muugitasu) || 0); }
 
 /* ==========================================================================
-   7. Solarman — andmefail (GitHub Actions) või otseühendus (Solarman OpenAPI)
+   7. Solarman — andmefail paike.json (GitHub Actions)
    ========================================================================== */
-/**
- * Otseühenduse andmed (võtmed, token, jaam) on kõik samas kohas: localStorage-is, kui kasutaja
- * valis „Jäta meelde selles seadmes“, muidu sessionStorage-is (kustub vahelehe sulgemisel).
+/*
+ * Brauser ei suhtle Solarmani API-ga: töövoog „Uuenda päikeseandmed“ pärib andmed GitHubi Secretsis
+ * hoitud võtmetega ja kirjutab need (krüpteeritult) faili paike.json, mida leht loeb samast domeenist.
+ * Brauseris pole seega ühtegi Solarmani võtit, parooli ega tokenit.
  */
-function storageArea(persist) {
-  try {
-    return persist ? window.localStorage : window.sessionStorage;
-  } catch (error) {
-    return null; // nt keelatud saidiandmete korral viskab juba omaduse lugemine vea
-  }
-}
-/** Ala, kus on salvestatud otseühenduse võtmed; null, kui otseühendust pole seadistatud. */
-function directStorage() {
-  for (const persist of [false, true]) {
-    const area = storageArea(persist);
+
+/** Kustutab varasema otseühenduse võtmed (App Secret, e-post, parooli räsi, token) selle brauseri mälust. */
+function forgetLegacyStorage() {
+  for (const name of ['localStorage', 'sessionStorage']) {
     try {
-      if (area && area.getItem(STORAGE.credentials)) return area;
-    } catch (error) { /* salvestusruum pole kasutatav */ }
+      const area = window[name];
+      for (const key of LEGACY_STORAGE_KEYS) area.removeItem(key);
+    } catch (error) { /* salvestusruum pole kasutatav: seal pole ka midagi kustutada */ }
   }
-  return null;
-}
-function readStore(key) {
-  try {
-    const raw = directStorage()?.getItem(key);
-    return raw ? JSON.parse(raw) : null;
-  } catch (error) {
-    return null;
-  }
-}
-function writeStore(key, value, area = directStorage()) {
-  if (!area) return false;
-  try {
-    if (value == null) area.removeItem(key);
-    else area.setItem(key, JSON.stringify(value));
-    return true;
-  } catch (error) {
-    console.error('Brauseri salvestusruum pole kasutatav:', error);
-    return false;
-  }
-}
-/** Kustutab otseühenduse andmed (vaikimisi mõlemast salvestusalast). */
-function clearDirectStorage(areas = [false, true]) {
-  for (const persist of areas) {
-    const area = storageArea(persist);
-    for (const key of Object.values(STORAGE)) {
-      try { area?.removeItem(key); } catch (error) { /* salvestusruum pole kasutatav */ }
-    }
-  }
-}
-
-/** SHA-256 räsi väiketähtedega hex-kujul (Solarman ootab parooli sellisena). */
-async function sha256Hex(text) {
-  if (!globalThis.crypto || !crypto.subtle) {
-    throw new Error('Brauser ei luba siin räsida (crypto.subtle vajab HTTPS-i või localhosti). Sisesta parooli asemel selle SHA-256 räsi.');
-  }
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
-  return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
-/** Parool -> räsi. 64 hex-märgiga sisend loetakse juba räsituks. */
-async function toPasswordHash(input) {
-  if (/^[0-9a-f]{64}$/i.test(input.trim())) return input.trim().toLowerCase();
-  return sha256Hex(input);
-}
-
-/** Otseühenduse võtmed sellest brauserist; null, kui otseühendust pole seadistatud. */
-function loadCredentials() {
-  const c = readStore(STORAGE.credentials);
-  if (!c || typeof c !== 'object') return null;
-  const ok = ['appId', 'appSecret', 'email', 'passwordHash'].every(k => typeof c[k] === 'string' && c[k]);
-  if (!ok || !/^[0-9a-f]{64}$/.test(c.passwordHash)) return null;
-  return {
-    appId: c.appId, appSecret: c.appSecret, email: c.email, passwordHash: c.passwordHash,
-    stationId: typeof c.stationId === 'string' ? c.stationId : '',
-    proxy: typeof c.proxy === 'string' ? c.proxy : ''
-  };
-}
-
-function credentialFingerprint(cred) { return `${cred.appId}|${cred.email}|${cred.passwordHash.slice(0, 16)}`; }
-
-function solarmanUrl(path, query, cred) {
-  const base = String(CONFIG.solarman.apiUrl || '').replace(/\/+$/, '');
-  const target = `${base}${path}?${new URLSearchParams(query)}`;
-  const proxy = String(cred.proxy || CONFIG.solarman.proksi || '').trim();
-  return proxy ? proxy + encodeURIComponent(target) : target;
-}
-
-/** POST Solarman OpenAPI-le. Viskab vea (auth = true, kui token/sisselogimine lükati tagasi). */
-async function solarmanPost(path, body, { token = null, query = { language: 'en' }, cred, signal }) {
-  const headers = { 'Content-Type': 'application/json', Accept: 'application/json' };
-  if (token) headers.Authorization = `Bearer ${token}`;
-  let response;
-  try {
-    response = await fetch(solarmanUrl(path, query, cred), { method: 'POST', headers, body: JSON.stringify(body), signal, cache: 'no-store' });
-  } catch (error) {
-    if (error.name === 'AbortError') throw error;
-    throw Object.assign(new Error('võrgu- või CORS-viga'), { network: true });
-  }
-  if (response.status === 401 || response.status === 403) throw Object.assign(new Error(`HTTP ${response.status}`), { auth: true });
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  let json;
-  try {
-    json = await response.json();
-  } catch (parseError) {
-    throw new Error('Vigane JSON: ' + parseError.message);
-  }
-  if (!json || json.success !== true) {
-    const info = json ? `${json.code ?? ''} ${json.msg ?? ''}`.trim() : '';
-    throw Object.assign(new Error(`Solarman: ${info || 'success !== true'}`), { auth: /token|auth|password|appsecret|login/i.test(info) });
-  }
-  return json;
-}
-
-/** Bearer token: brauseri salvestusruumist (koos aegumisajaga) või uus päring. */
-async function getSolarmanToken(cred, signal, force = false) {
-  const fp = credentialFingerprint(cred);
-  const cached = readStore(STORAGE.token);
-  if (!force && cached && cached.fp === fp && typeof cached.token === 'string' && Date.now() < cached.refreshAt) return cached.token;
-  let json;
-  try {
-    json = await solarmanPost('/account/v1.0/token',
-      { appSecret: cred.appSecret, email: cred.email, password: cred.passwordHash },
-      { query: { appId: cred.appId, language: 'en' }, cred, signal });
-  } catch (error) {
-    if (error.auth) error.login = true; // võtmed on valed: uus tokenipäring ei aitaks
-    throw error;
-  }
-  if (!json.access_token) throw new Error('Solarman ei tagastanud access_token-it');
-  const expiresSec = Number(json.expires_in);
-  const ttl = Number.isFinite(expiresSec) && expiresSec > 0 ? expiresSec * 1000 : DAY_MS;
-  // Uuenda tokenit enne aegumist (10% või max 1 h varem), et päring ei jääks kunagi aegunud tokeniga
-  writeStore(STORAGE.token, { fp, token: json.access_token, refreshAt: Date.now() + ttl - Math.min(HOUR_MS, ttl * 0.1) });
-  return json.access_token;
-}
-
-/** Jaama ID ja paigaldatud võimsus (kW): vahemälust või /station/v1.0/list päringust. */
-async function resolveStation(cred, token, signal) {
-  const fp = credentialFingerprint(cred);
-  const cached = readStore(STORAGE.station);
-  if (cached && cached.fp === fp && cached.id && (!cred.stationId || String(cached.id) === cred.stationId)) return cached;
-  let stations = [];
-  try {
-    const json = await solarmanPost('/station/v1.0/list', { page: 1, size: 50 }, { token, cred, signal });
-    stations = Array.isArray(json.stationList) ? json.stationList.filter(s => s && typeof s === 'object') : [];
-  } catch (error) {
-    if (!cred.stationId || error.auth) throw error;
-    console.error('Jaamade nimekirja ei õnnestunud laadida:', error);
-  }
-  const chosen = cred.stationId ? stations.find(s => String(s.id) === cred.stationId) : stations[0];
-  if (!chosen && !cred.stationId) throw new Error('Solarmani kontol ei leitud ühtegi jaama');
-  const capacity = chosen ? finiteOrNull(chosen.installedCapacity) : null;
-  const station = { fp, id: chosen ? String(chosen.id) : cred.stationId, capacityKw: capacity > 0 ? capacity : null };
-  writeStore(STORAGE.station, station);
-  return station;
 }
 
 /** Unix sekundid (mõni Solarmani vastus annab millisekundid). */
@@ -736,57 +591,6 @@ function bucketFrames(items, startSec, frameSeconds = FRAME_SECONDS) {
     for (const [field, [sum, count]] of Object.entries(buckets.get(key))) row[field] = sum / count;
     return row;
   });
-}
-
-/**
- * Solarmani toorvastused -> sama kuju, mida kirjutab töövoog faili paike.json (data). Solarmani
- * päevakoguseid (data.day) ei pärita: selle jaama puhul on need ~10× liiga väikesed.
- */
-function buildSolarPayload({ realTime, frameItems, capacityKw, now }) {
-  const rt = {};
-  for (const field of SOLAR_POWER_FIELDS) {
-    const v = finiteOrNull(realTime[field]);
-    if (v != null) rt[field] = v;
-  }
-  const soc = finiteOrNull(realTime.batterySoc);
-  if (soc != null && soc >= 0 && soc <= 100) rt.batterySoc = soc;
-  const dayStartSec = Math.floor(getTallinnDayStart(now, 0).getTime() / 1000);
-  return {
-    lastUpdateTime: toUnixSeconds(realTime.lastUpdateTime),
-    installedCapacityKw: capacityKw,
-    realTime: rt,
-    frames: bucketFrames(Array.isArray(frameItems) ? frameItems : [], dayStartSec, FRAME_SECONDS),
-    frameSeconds: FRAME_SECONDS
-  };
-}
-
-/** Otseühendus: token -> jaam -> realTime + tänased 5-min kaadrid. Aegunud tokeni korral küsitakse kord uus. */
-async function fetchSolarDirect(cred, signal) {
-  const run = async forceToken => {
-    const token = await getSolarmanToken(cred, signal, forceToken);
-    const station = await resolveStation(cred, token, signal);
-    const stationId = /^\d+$/.test(station.id) ? Number(station.id) : station.id;
-    const now = new Date();
-    const today = tallinnDateKey(now);
-    // Päringud järjest, et mitte ületada Solarmani päringusageduse piirangut
-    const realTime = await solarmanPost('/station/v1.0/realTime', { stationId }, { token, cred, signal });
-    let frameItems = null;
-    try {
-      const json = await solarmanPost('/station/v1.0/history', { stationId, startTime: today, endTime: today, timeType: 1 }, { token, cred, signal });
-      frameItems = Array.isArray(json.stationDataItems) ? json.stationDataItems : [];
-    } catch (error) {
-      if (error.auth || error.name === 'AbortError') throw error;
-      console.error('Solarmani ajaloo päring ebaõnnestus:', error);
-    }
-    return buildSolarPayload({ realTime, frameItems, capacityKw: station.capacityKw, now });
-  };
-  try {
-    return await run(false);
-  } catch (error) {
-    if (!error.auth || error.login) throw error;
-    writeStore(STORAGE.token, null);
-    return run(true);
-  }
 }
 
 /** GitHub Actionsi kirjutatud paike.json samast domeenist. */
@@ -944,7 +748,7 @@ function frameSecondsOf(data) {
 }
 
 /**
- * paike.json / otseühenduse andmed -> { updated, capacityKw, now, series, frameSeconds, signs, meta }.
+ * paike.json-i andmed -> { updated, capacityKw, now, series, frameSeconds, signs, meta }.
  * series sisaldab kõiki failis olevaid kaadreid alates eilsest 00:00-st (fail võib sisaldada ka eilseid);
  * tänased valitakse igal renderdamisel (derive), et keskööl vahetuks päev ka avatud lehel.
  */
@@ -990,12 +794,7 @@ function metaDate(value) {
   return sec ? new Date(sec * 1000) : null;
 }
 
-function solarErrorMessage(error, mode) {
-  if (mode === 'otse') {
-    if (error.network) return 'Solarmani API-le ei saanud brauserist ühendust (tõenäoliselt CORS-piirang). Lisa otseühenduse seadetes CORS-proksi.';
-    if (error.auth) return 'Solarman lükkas sisselogimise tagasi. Kontrolli App ID-d, App Secretit, e-posti ja parooli.';
-    return `Solarmani otseühendus ebaõnnestus (${error.message}).`;
-  }
+function solarErrorMessage(error) {
   if (location.protocol === 'file:') return 'Päikeseandmeid ei saa laadida, sest leht on avatud otse failina (file://). Ava leht GitHub Pagesi kaudu.';
   if (error.missing) return 'Faili paike.json ei leitud. Lisa GitHubi repositooriumi Secrets SOLARMAN_APP_ID, SOLARMAN_APP_SECRET, SOLARMAN_EMAIL ja SOLARMAN_PASSWORD ning käivita töövoog „Uuenda päikeseandmed“.';
   return `Päikeseandmete laadimine ebaõnnestus (${error.message}).`;
@@ -1003,61 +802,30 @@ function solarErrorMessage(error, mode) {
 
 async function refreshSolar(signal) {
   const s = state.solar;
-  const cred = loadCredentials();
-  const fileEnabled = Boolean(String(CONFIG.solarman.andmefail || '').trim());
-  let payload = null;
-  let source = null;
-  let fallbackTime = null;
-  let directError = null;
-  let fileError = null;
-
-  if (cred) {
-    try {
-      payload = await fetchSolarDirect(cred, signal);
-      source = 'otse';
-      fallbackTime = new Date();
-    } catch (error) {
-      directError = error;
-      console.error('Solarmani otseühendus ebaõnnestus:', error);
-    }
+  if (!String(CONFIG.solarman.andmefail || '').trim()) {
+    s.error = 'Päikeseandmete allikas pole seadistatud (CONFIG.solarman.andmefail on tühi).';
+    s.loaded = true;
+    return;
   }
-  if (!payload && fileEnabled && !signal.aborted) {
+  let message = null;
+  try {
+    const file = await fetchSolarFile(signal);
     try {
-      const file = await fetchSolarFile(signal);
-      payload = file.data;
-      fallbackTime = file.generatedAt;
-      source = 'fail';
+      const normalized = normalizeSolar(file.data, file.generatedAt);
+      s.data = normalized;
+      s.error = null;
+      s.refreshFailed = false;
+      s.lastUpdated = new Date();
+      s.version += 1;
     } catch (error) {
-      fileError = error;
-      console.error('paike.json laadimine ebaõnnestus:', error);
-    }
-  }
-
-  let normalized = null;
-  let normalizeError = null;
-  if (payload) {
-    try {
-      normalized = normalizeSolar(payload, fallbackTime);
-    } catch (error) {
-      normalizeError = error;
       console.error('Päikeseandmed on vigased:', error);
+      message = `Päikeseandmed on vigased (${error.message}).`;
     }
+  } catch (error) {
+    console.error('paike.json laadimine ebaõnnestus:', error);   // ka ajalõpp (SOLAR_TIMEOUT_MS): leht ei jää laadima
+    message = solarErrorMessage(error);
   }
-
-  s.note = directError && normalized ? `${solarErrorMessage(directError, 'otse')} Kuvatakse andmefaili paike.json andmeid.` : null;
-  if (normalized) {
-    s.data = normalized;
-    s.source = source;
-    s.error = null;
-    s.refreshFailed = false;
-    s.lastUpdated = new Date();
-    s.version += 1;
-  } else {
-    const message = normalizeError
-      ? `Päikeseandmed on vigased (${normalizeError.message}).`
-      : directError ? `${solarErrorMessage(directError, 'otse')}${fileError ? ' Ka andmefaili paike.json ei õnnestunud laadida.' : ''}`
-        : fileError ? solarErrorMessage(fileError, 'fail')
-          : 'Päikeseandmete allikas pole seadistatud (CONFIG.solarman.andmefail on tühi).';
+  if (message) {
     if (s.data) s.refreshFailed = true;
     s.error = message;
   }
@@ -1465,7 +1233,7 @@ function refreshCooldownLeftMs() {
 
 /**
  * „Värskenda“ ja „Proovi uuesti“ on laadimise ajal ning REFRESH_COOLDOWN_MS jooksul pärast iga
- * värskendust keelatud (liiga tihe vajutamine ei koorma Solarmani API-t ega GitHub Pagesi).
+ * värskendust keelatud (liiga tihe vajutamine ei koorma GitHub Pagesi ega Eleringi API-t).
  * aria-disabled (mitte disabled): nupp jääb Tab-järjekorda ja ekraanilugeja ütleb, et see pole praegu kasutatav;
  * vajutus ei tee midagi (refreshNow kontrollib laadimist ja ooteaega). Loendur on aria-hidden, et ekraanilugeja ei
  * loeks nuppu iga sekund uuesti ette.
@@ -1577,7 +1345,6 @@ function renderStatus() {
         ? 'Hinnaandmed on aegunud: praegust hetke katvaid hindu ei õnnestunud laadida.'
         : `Börsihindade uuendamine ebaõnnestus, kuvatakse kell ${formatTime(state.prices.lastUpdated)} laaditud hindu.`);
       if (state.solar.refreshFailed) lines.push(`Päikeseandmete uuendamine ebaõnnestus, kuvatakse kell ${formatTime(state.solar.lastUpdated)} laaditud andmeid.`);
-      if (state.solar.note) lines.push(state.solar.note);
       // Ilma minutiti muutuva vanuseta (see on energiavoo märgil): role="alert" teade ei kordu iga minut
       if (d && d.solar && !d.solarFresh) lines.push(`Solarmani mõõtmised on aegunud (viimane ${describeTime(d.solar.updated, d.now)}). Soovitus ei arvesta päikese ja aku hetkeseisu.`);
       if (TARIFFS.fallback) lines.push('Tariifid loeti energialehe varukoopiast (index.html-i ei õnnestunud lugeda), lõpphind võib erineda elektriinfo lehe omast.');
@@ -1599,8 +1366,7 @@ function renderStatus() {
   // Jalus: andmeallikad ja nende värskus
   const parts = [];
   if (state.solar.data) {
-    const src = state.solar.source === 'otse' ? ', otseühendus' : '';
-    parts.push(`Päike, aku ja maja: inverter (Solarman)${src}${state.solar.data.updated ? `, mõõdetud ${formatTime(state.solar.data.updated)}` : ''}`);
+    parts.push(`Päike, aku ja maja: inverter (Solarman)${state.solar.data.updated ? `, mõõdetud ${formatTime(state.solar.data.updated)}` : ''}`);
   }
   if (state.prices.periods.length) parts.push('Börsihinnad: Elering');
   parts.push(`Tariifid: ${TARIFFS.fallback ? 'sisemine koopia' : 'elektriinfo lehe seaded'}`);
@@ -1996,9 +1762,9 @@ function renderFlowAge(d) {
   if (!d.solar || !d.solar.updated) { badge.hidden = true; return; }
   badge.hidden = false;
   badge.className = stale ? 'badge badge--warn' : 'badge badge--neutral';
-  badge.title = state.solar.source === 'otse' ? 'Inverter (Solarman), otseühendus' : 'Inverter (Solarman), paike.json';
+  badge.title = 'Inverter (Solarman), paike.json';
   badge.replaceChildren(...[stale ? iconEl('alert-triangle') : null,
-    `Mõõdetud ${describeTime(d.solar.updated, d.now)} · ${formatAgo(d.solarAgeMin)}${state.solar.source === 'otse' ? ' · otse' : ''}`].filter(Boolean));
+    `Mõõdetud ${describeTime(d.solar.updated, d.now)} · ${formatAgo(d.solarAgeMin)}`].filter(Boolean));
 }
 
 function renderFlow(d, remeasured = false) {
@@ -4476,8 +4242,8 @@ function scheduleNextRefresh() {
 
 /**
  * Värskendab kohe ja ajastab järgmise automaatse värskenduse. Ilma force'ita (nupud) ei tehta midagi,
- * kui eelmisest värskendusest on möödas vähem kui REFRESH_COOLDOWN_MS. force (ajastus, seadete
- * muutmine) jätab ooteaja vahele; kui värskendus juba käib, tehakse pärast seda kohe uus.
+ * kui eelmisest värskendusest on möödas vähem kui REFRESH_COOLDOWN_MS. force (ajastus, kesköö,
+ * lehe avamine) jätab ooteaja vahele; kui värskendus juba käib, tehakse pärast seda kohe uus.
  */
 async function refreshNow({ force = false } = {}) {
   if (state.loading) {
@@ -4502,73 +4268,6 @@ function selectDay(day) {
   }
   byId('chart-panel').setAttribute('aria-labelledby', `tab-${day}`);
   if (state.derived) renderChart(state.derived);
-}
-
-function setupDirectDialog() {
-  const dialog = byId('direct-dialog');
-  const errorEl = byId('direct-error');
-  const showError = text => { errorEl.textContent = text; errorEl.hidden = !text; };
-  const fill = () => {
-    const cred = loadCredentials();
-    byId('f-app-id').value = cred ? cred.appId : '';
-    byId('f-app-secret').value = '';
-    byId('f-app-secret').placeholder = cred ? 'salvestatud (tühi = jääb samaks)' : '';
-    byId('f-email').value = cred ? cred.email : '';
-    byId('f-password').value = '';
-    byId('f-password').placeholder = cred ? 'salvestatud räsina (tühi = jääb samaks)' : '';
-    byId('f-station').value = cred ? cred.stationId : '';
-    byId('f-proxy').value = cred ? cred.proxy : String(CONFIG.solarman.proksi || '');
-    byId('f-remember').checked = Boolean(cred) && directStorage() === storageArea(true);
-    byId('direct-remove').hidden = !cred;
-    showError('');
-  };
-  byId('direct-open').addEventListener('click', () => {
-    fill();
-    if (typeof dialog.showModal === 'function') dialog.showModal();
-    else dialog.setAttribute('open', '');
-  });
-  byId('direct-cancel').addEventListener('click', () => dialog.close());
-  byId('direct-remove').addEventListener('click', () => {
-    clearDirectStorage();
-    dialog.close();
-    refreshNow({ force: true });
-  });
-  byId('direct-form').addEventListener('submit', async event => {
-    event.preventDefault();
-    const existing = loadCredentials();
-    const appId = byId('f-app-id').value.trim();
-    const appSecret = byId('f-app-secret').value.trim() || (existing ? existing.appSecret : '');
-    const email = byId('f-email').value.trim();
-    const passwordInput = byId('f-password').value;
-    const stationId = byId('f-station').value.trim();
-    const proxy = byId('f-proxy').value.trim();
-    if (!appId || !appSecret || !email) { showError('Täida App ID, App Secret ja e-post.'); return; }
-    if (stationId && !/^[\w-]+$/.test(stationId)) { showError('Jaama ID võib sisaldada ainult numbreid ja tähti.'); return; }
-    // Krüpteerimata ühendus on lubatud ainult samas arvutis töötavale proksile (mitte nt http://localhost.evil.example)
-    if (proxy && !/^https:\/\//i.test(proxy) && !/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?([/?#]|$)/i.test(proxy)) {
-      showError('CORS-proksi aadress peab algama https://-ga (erand: http://localhost).');
-      return;
-    }
-    let passwordHash = existing && existing.email === email && existing.appId === appId ? existing.passwordHash : '';
-    try {
-      if (passwordInput) passwordHash = await toPasswordHash(passwordInput);
-    } catch (error) {
-      showError(error.message);
-      return;
-    }
-    if (!passwordHash) { showError('Sisesta parool või selle SHA-256 räsi.'); return; }
-    const persist = byId('f-remember').checked;
-    const area = storageArea(persist);
-    const saved = writeStore(STORAGE.credentials, { appId, appSecret, email, passwordHash, stationId, proxy }, area);
-    if (!saved) { showError('Brauser ei luba seadeid salvestada (saidiandmete salvestamine on keelatud).'); return; }
-    clearDirectStorage([!persist]);       // võtmed ainult ühes kohas
-    writeStore(STORAGE.token, null, area); // uued võtmed => uus token ja jaam
-    writeStore(STORAGE.station, null, area);
-    byId('f-password').value = '';
-    byId('f-app-secret').value = '';
-    dialog.close();
-    refreshNow({ force: true });
-  });
 }
 
 function setupControls() {
@@ -4668,7 +4367,7 @@ function setupControls() {
       updateNowMarkers(Date.now());
     }
   });
-  setupDirectDialog();
+  forgetLegacyStorage();
 }
 
 /** Kas Tallinna kuupäev on pärast viimast värskendust vahetunud (kesköö)? */

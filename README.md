@@ -39,6 +39,7 @@ Elering API → GitHub Actions → hinnad.json → GitHub Pages → index.html b
 | `hinnad.json`, `paike.json`, `paevad.json` | GitHub Actionsi kirjutatud andmefailid (`paevad.json`: inverteri päevakokkuvõtted kWh ja €); parooliga kaitstud lehel krüpteeritud ümbrikud |
 | `js/lukk.js`, `lukk.json`, `.github/scripts/lukk.py`, `.github/scripts/requirements-lukk.txt` | **parooliga kaitse**: brauseri avamisvaade ja dekrüpteerimine, lehe sool ja parooli kontrollväärtus, töövoogude krüpteerimisskript ja selle räsidega lukustatud sõltuvused (vt „Parooliga kaitse“) |
 | `robots.txt` | otsingumootorite robotitele: andme- ja abifailid on blokeeritud; HTML-lehtedel on `noindex, nofollow, noarchive` |
+| `firebase.json`, `.firebaserc`, `.github/workflows/firebase-hosting-*.yml` | sama saidi koopia Firebase Hostingus (`kauge32-elekter`): mis faile avaldatakse ja HTTP turvapäised (vt „Turvalisus“) |
 
 CSS-i, `js/*.js`-i või sprite'i muutmisel suurenda HTML-i linkides `?v=` väärtust (GitHub Pages hoiab faile
 vahemälus 10 min).
@@ -512,17 +513,13 @@ Elering API      → GitHub Actions (uuenda-hinnad.yml) → hinnad.json ┴→ G
   rida graafiku kohal (hiir, puudutus, nooleklahvid), legend, selgitus ja tabelivaade. Kulu ei sisalda kuutasu, kui see
   on seadetes 0.
 
-**Otseühendus (valikuline):** jaluse lingi „Solarmani otseühendus“ kaudu saab ühes
-seadmes pärida andmed brauserist otse Solarmani API-st. Võtmed ja token salvestatakse
-vaikimisi `sessionStorage`-isse (kustuvad vahelehe sulgemisel); valikuga „Jäta meelde selles
-seadmes“ `localStorage`-isse. Parool salvestatakse SHA-256 räsina, kuid Solarmani jaoks on räsi
-parooliga samaväärne. Solarmani API ei luba enamasti brauserist otse pärida (CORS), seega on
-vaja enda hallatavat CORS-proksit (`https://` või `http://localhost`), mille lõppu lisatakse API
-aadress URL-kodeeritult. Kasuta seda ainult isiklikus seadmes; avalikul lehel jäävad võtmed
-GitHub Secretsisse.
+**Brauser ei suhtle Solarmani API-ga:** päikese- ja akuandmed tulevad ainult failist `paike.json`, mille kirjutab
+töövoog GitHub Secretsis hoitud võtmetega. Brauseris pole ühtegi Solarmani võtit, parooli ega tokenit. (Varasem
+valikuline „Solarmani otseühendus“ eemaldati versioonis 2.6.0; selle brauserisse salvestatud võtmed kustutatakse
+lehe esimesel avamisel.)
 
 „Värskenda“ nupp on pärast iga värskendust 30 s keelatud (nupul on loendur), et liiga tihe
-vajutamine ei koormaks Solarmani API-t ega GitHub Pagesi; elektriinfo lehe „Proovi uuesti“
+vajutamine ei koormaks GitHub Pagesi ega Eleringi API-t; elektriinfo lehe „Proovi uuesti“
 ootab 15 s.
 
 ## Graafikud (`graafikud.html`)
@@ -685,19 +682,30 @@ tegemisega.
   - `form-action 'none'`: vormi ei saa tavaviisil saata – parool jääb brauserisse ka siis, kui JS peaks ebaõnnestuma
     (avamisvaate vorm on lisaks `method="post"`, nii et parool ei satuks URL-i ka vanas brauseris).
   - `frame-src`, `worker-src`, `manifest-src`, `media-src`, `object-src 'none'`, `base-uri 'none'`.
-  - `connect-src`: elektriinfo leht ainult sama sait, Eleringi API (`https://dashboard.elering.ee`, varuallikas) ja
-    külastuste loendur; graafikute leht sama sait ja loendur; energialeht `https:` ja `http://localhost` (Solarmani
-    otseühenduse kasutaja enda proksi). Uue välise teenuse (nt `CONFIG.varuProksi`) lisamisel lisa selle aadress lehe CSP-sse.
+  - `connect-src`: elektriinfo ja energia leht ainult sama sait, Eleringi API (`https://dashboard.elering.ee`, varuallikas)
+    ja külastuste loendur; graafikute leht sama sait ja loendur. Ükski leht ei ühendu Solarmani API-ga (selle päringud
+    teeb ainult töövoog). Uue välise teenuse (nt `CONFIG.varuProksi`) lisamisel lisa selle aadress lehe CSP-sse.
   - `style-src 'unsafe-inline'` jääb (lehtedel on tokenitega `style` atribuudid); stiilidega skripti käivitada ei saa.
   Ainus kolmanda osapoole skript on repo sees olev GoatCounteri loendusskript (`js/vendor/goatcounter-count.js`, vt
   „Külastuste statistika“); see saadab ainult lehe nime, pealkirja, ekraani laiuse ja tuleku, mitte lehe andmeid.
 - **Raamimise kaitse:** GitHub Pages ei luba saata `X-Frame-Options` ega `frame-ancestors` päist, seega peidab
   `js/teema.js` lehe, kui see on avatud teise saidi raamis (iframe), ja proovib avada selle kogu aknas („clickjacking“).
+- **Firebase Hosting** (`firebase.json`) saadab päris HTTP päised, mida GitHub Pages ei luba: `Content-Security-Policy:
+  frame-ancestors 'none'` ja `X-Frame-Options: DENY` (raamimise keeld serveri poolel), `X-Content-Type-Options: nosniff`,
+  `Referrer-Policy: no-referrer`, `Permissions-Policy` (kaamera, mikrofon, asukoht, maksed, USB, ekraanijagamine keelatud),
+  `Cross-Origin-Opener-Policy` ja `Cross-Origin-Resource-Policy: same-origin` ning `X-Robots-Tag: noindex`. Päise CSP
+  kehtib lisaks lehe meta-sildile (brauser rakendab mõlemat). Avaldatakse ainult lehe failid: `README.md`, `CHANGELOG.md`,
+  `public/` (Firebase'i näidisleht), `skills-lock.json` ja punktiga algavad failid/kaustad jäävad välja. Puuduv fail annab
+  päris 404 (mitte `index.html`-i), mida `js/lukk.js` vajab (`lukk.json` puudub = lukku pole). Juurutustöövoog saab ainult
+  lugemisõiguse; `actions/checkout` on lukustatud commit'i SHA-ga ja ilma salvestatud tokenita.
+- **Paroolid ja tunnused brauseris:** lehe parooli ei salvestata ega hoita mälus – sellest tuletatakse kohe mitte-eksporditav
+  võti ja avamisvormi väli tühjendatakse; konsooli parooli ega võtit ei logita. Brauseris pole ühtegi API võtit
+  (Eleringi otsepäring ja GoatCounter ei vaja võtit).
 - GitHub Pagesi leht ja avalik repo on kõigile nähtavad: lehekood on avalik, andmefailid (`hinnad.json`-i
   15-min tarbimine, `paike.json`-i võimsused) on ilma paroolita loetavad ainult siis, kui parooliga kaitse on
   välja lülitatud; varasemad commit'id on tavatekstina alles. Kõik sama konto `*.github.io` lehed jagavad brauseri
-  salvestusruumi, seega ära salvesta otseühenduse võtmeid ega lehe võtit („Jäta meelde“) jagatud seadmes. Lehe võti on
-  mitte-eksporditav (IndexedDB), otseühenduse võtmed aga tavatekstina `localStorage`/`sessionStorage`-is.
+  salvestusruumi (Firebase'i `*.web.app` aadress on eraldi), seega ära vali „Jäta meelde“ jagatud seadmes. Lehe võti on
+  mitte-eksporditav (IndexedDB): teine sama saidi leht saab seda selles brauseris kasutada, aga mitte välja lugeda.
 
 ## Piirangud
 
@@ -716,6 +724,6 @@ tegemisega.
 
 ## Versioon ja muudatuste ajalugu
 
-- Praegune versioon: **v3.1.0** (`APP_VERSION` failis `index.html`), energialehel **v2.1.0**
-  (`APP_VERSION` failis `energy-dashboard.html`).
+- Praegune versioon: **v3.3.2** (`APP_VERSION` failis `js/index.js`), energialehel **v2.6.0**
+  (`js/energy-dashboard.js`), graafikute lehel **v1.3.1** (`js/graafikud.js`).
 - Üksikasjalik ülevaade UI/UX muudatustest, komponentide klassidest ja arhitektuurireeglitest (sh juhised Claude AI-le) asub failis [CHANGELOG.md](CHANGELOG.md).
