@@ -7,7 +7,7 @@
 
 const CONFIG = readPageConfig();
 
-const APP_VERSION = '1.3.1';
+const APP_VERSION = '1.3.2';
 const BATTERY_IDLE_KW = 0.2;     // väiksem aku võimsus = „ootel“ (hoidevool), nagu energialehel
 const TARIFF_KEYS = ['marginaal', 'vorgutasuPaev', 'vorgutasuOo', 'taastuvenergiaTasu', 'aktsiis', 'kaibemaks', 'algus', 'lopp'];
 const MAX_PERIOD_MINUTES = 60;   // common.js nõue (pikim hinnaperiood)

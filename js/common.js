@@ -33,9 +33,12 @@ function readPageConfig(id = 'lehe-config') {
   return parseConfigLiteral(node.textContent);
 }
 
+const CONFIG_MAX_DEPTH = 16;   // { } ja [ ] pesastus: sügavam on vigane (kaitse lõputu rekursiooni eest)
+
 function parseConfigLiteral(text) {
   const src = String(text);
   let i = 0;
+  let depth = 0;
   const fail = message => {
     const before = src.slice(0, i);
     throw new SyntaxError(`CONFIG: ${message} (rida ${before.split('\n').length}, veerg ${i - before.lastIndexOf('\n')})`);
@@ -58,6 +61,7 @@ function parseConfigLiteral(text) {
   const value = () => {
     skip();
     const ch = src[i];
+    if ((ch === '{' || ch === '[') && depth >= CONFIG_MAX_DEPTH) fail(`liiga sügav pesastus (üle ${CONFIG_MAX_DEPTH} taseme)`);
     if (ch === '{') return object();
     if (ch === '[') return array();
     if (ch === '"') return string();
@@ -68,11 +72,12 @@ function parseConfigLiteral(text) {
     return fail(ch === undefined ? 'seaded lõppesid ootamatult' : `oodati väärtust (number, "tekst", true/false/null, { } või [ ]), leiti „${src.slice(i, i + 12).split('\n')[0]}“`);
   };
   const object = () => {
-    const obj = {};
+    const obj = Object.create(null);   // prototüübita: võtmed nagu „toString“ või „__proto__“ on ainult seaded
     i++;   // {
+    depth++;
     for (;;) {
       skip();
-      if (src[i] === '}') { i++; return obj; }
+      if (src[i] === '}') { i++; depth--; return obj; }
       const key = src[i] === '"' ? string() : (take(/[A-Za-z_$][\w$]*/y) || fail('oodati võtit'))[0];
       skip();
       if (src[i] !== ':') fail(`võtme „${key}“ järel peab olema koolon`);
@@ -81,25 +86,26 @@ function parseConfigLiteral(text) {
       Object.defineProperty(obj, key, { value: value(), enumerable: true, writable: true, configurable: true });
       skip();
       if (src[i] === ',') { i++; continue; }
-      if (src[i] === '}') { i++; return obj; }
+      if (src[i] === '}') { i++; depth--; return obj; }
       fail('oodati koma või „}“');
     }
   };
   const array = () => {
     const list = [];
     i++;   // [
+    depth++;
     for (;;) {
       skip();
-      if (src[i] === ']') { i++; return list; }
+      if (src[i] === ']') { i++; depth--; return list; }
       list.push(value());
       skip();
       if (src[i] === ',') { i++; continue; }
-      if (src[i] === ']') { i++; return list; }
+      if (src[i] === ']') { i++; depth--; return list; }
       fail('oodati koma või „]“');
     }
   };
   skip();
-  take(/const\s+CONFIG\s*=/y);
+  if (!take(/const\s+CONFIG\s*=/y)) fail('seaded peavad algama kujul „const CONFIG = {“');
   skip();
   if (src[i] !== '{') fail('seaded peavad algama kujul „const CONFIG = {“');
   const config = value();
@@ -352,6 +358,7 @@ function el(tag, attrs = {}, children = []) {
     if (value == null || value === false) continue;
     if (key === 'class') node.className = value;
     else if (key === 'text') node.textContent = value;
+    else if (key === 'style') node.style.cssText = value;   // CSSOM: CSP style-src 'self' keelab style-atribuudi, mitte CSSOM-i
     else node.setAttribute(key, value === true ? '' : value);
   }
   for (const child of [].concat(children)) {
@@ -366,6 +373,7 @@ function svgEl(tag, attrs = {}, children = []) {
   for (const [key, value] of Object.entries(attrs)) {
     if (value == null || value === false) continue;
     if (key === 'text') node.textContent = value;
+    else if (key === 'style') node.style.cssText = value;   // CSSOM (vt el)
     else node.setAttribute(key, value);
   }
   for (const child of [].concat(children)) if (child) node.append(child);

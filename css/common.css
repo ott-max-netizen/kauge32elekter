@@ -13,6 +13,9 @@
    NB! Pärast muutmist suurenda mõlemas HTML-failis linkide ?v= väärtust.
    ========================================================================== */
 
+/* Teise saidi raamis peidab js/teema.js lehe (html[hidden]); !important, et ükski lehe reegel seda ei kataks */
+html[hidden] { display: none !important; }
+
 /* ---------- 1. Tokenid: hele komplekt (vaikimisi, kehtib ka printimisel) ---------- */
 :root {
   color-scheme: light;

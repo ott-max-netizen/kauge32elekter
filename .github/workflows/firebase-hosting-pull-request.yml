@@ -14,7 +14,12 @@ concurrency:
 jobs:
   build_and_preview:
     if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+    # Eelvaate võti keskkonnas preview: seal saab nõuda inimese kinnitust enne käivitumist (Required reviewers), sest
+    # PR käivitab oma haru töövoofaili. Keskkond production (live-võti) eelvaatele ei avane (ainult haru main).
+    environment: preview
     runs-on: ubuntu-latest
+    env:
+      FIREBASE_TOOLS_VERSION: 15.34.0   # sama mis package.json / package-lock.json (uuenda kõik koos)
     timeout-minutes: 10
     steps:
       # Mõlemad tegevused commit'i SHA-ga nagu firebase-hosting-merge.yml-is: sama teenusekonto võti (silt v0 = v0.11.0).
@@ -22,6 +27,16 @@ jobs:
         with:
           persist-credentials: false
       #- run: npm ci && npm run build
+      - name: Paigalda firebase-tools lukustatud sõltuvustega (saladusteta samm)
+        # package-lock.json lukustab ka kaudsed npm-paketid (integrity-räsid); --ignore-scripts: paigaldusskripte ei käivitata.
+        # Järgmise sammu `npx firebase-tools@<versioon>` kasutab seda kohalikku paigaldust (sama versioon), mitte npm-i registrit.
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          v="$(node -p "require('./node_modules/firebase-tools/package.json').version")"
+          if [ "$v" != "$FIREBASE_TOOLS_VERSION" ]; then
+            echo "::error::package-lock.json-i firebase-tools $v ei vasta FIREBASE_TOOLS_VERSION-ile $FIREBASE_TOOLS_VERSION"
+            exit 1
+          fi
       - uses: FirebaseExtended/action-hosting-deploy@500ac625ca2dd40cbd15f7659af953801858032a  # v0.11.0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
@@ -29,4 +44,4 @@ jobs:
           projectId: kauge32-elekter
           # Tegevus käivitab `npx firebase-tools@<versioon>` teenusekonto võtmega: täpne versioon (npm-is muutumatu), mitte
           # vaikimisi `latest`. Uuendamisel vali vähemalt paar nädalat vana väljalase ja vaata selle muudatused üle.
-          firebaseToolsVersion: 15.34.0
+          firebaseToolsVersion: ${{ env.FIREBASE_TOOLS_VERSION }}

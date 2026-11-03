@@ -1,0 +1,8 @@
+{
+  "name": "kauge32-firebase-tools",
+  "private": true,
+  "description": "Firebase Hostingu avaldamise tööriist lukustatud sõltuvustega (README „Turvalisus“); lehe kood seda ei kasuta.",
+  "devDependencies": {
+    "firebase-tools": "15.34.0"
+  }
+}
