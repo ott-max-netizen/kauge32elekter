@@ -4,6 +4,35 @@ See fail kirjeldab rakenduse `index.html` versioonimuudatusi, arhitektuurilisi k
 
 ---
 
+## [3.3.2], energy-dashboard.html [2.5.2] ja graafikud.html [1.3.1] — 2026-11-03 · turvalisus
+
+Lehtede sisu ja arvutused ei muutunud (kõigi 184 hetktõmmise tekst on sama, v.a versioon). README „Turvalisus“ ja
+„Seadete muutmine“.
+
+- **Lehesiseseid skripte enam pole:** lehtede põhikood on failides `js/index.js`, `js/energy-dashboard.js`,
+  `js/graafikud.js`, teema `js/teema.js`. Seetõttu on CSP-s `script-src 'self'` (enne `'unsafe-inline'`): kui kuhugi peaks
+  tekkima süstimisviga, süstitud skript ei käivitu; `eval`, `new Function` ja `setTimeout(string)` on samuti keelatud.
+- **Seaded jäid HTML-i:** `CONFIG` on samal kujul plokis `<script type="text/plain" id="lehe-config">` (haldaja muudab seda
+  samast kohast; töövoog ja energialeht loevad `index.html`-i tariife sama regexiga – kontrollitud, väärtused samad). Plokk
+  loetakse ilma `eval`-ita uue parseriga `readPageConfig` / `parseConfigLiteral` (`js/common.js`): ainult literaalid ja
+  kommentaarid, vea korral teade rea ja veeruga, võti `__proto__` ei muuda prototüüpi. Kontrollitud: kõigi kolme lehe
+  seaded annavad sama tulemuse kui varem.
+- **Trusted Types** (`require-trusted-types-for 'script'; trusted-types 'none'`): HTML-i ega skripti ei saa stringist
+  kirjutada; lehed ja teegid (Chart.js, GoatCounter) seda ei tee.
+- **`form-action 'none'`** ja avamisvaate vorm `method="post"`: parool ei saa vormi tavasaatmisega lehelt lahkuda ega
+  URL-i sattuda. Lisaks `frame-src`, `worker-src`, `manifest-src`, `media-src 'none'`.
+- **Kitsam `connect-src`:** elektriinfo leht ainult sama sait, Eleringi API ja loendur; graafikute leht sama sait ja
+  loendur; energialeht jätab `https:` ja `localhost`-i (Solarmani otseühenduse kasutaja enda proksi).
+- **Raamimise kaitse** (`js/teema.js`): teise saidi raamis leht peidetakse ja avatakse võimalusel kogu aknas
+  (GitHub Pages ei luba `X-Frame-Options` / `frame-ancestors` päist).
+- Kontrollitud Playwrightiga: tavakasutusel CSP- ja Trusted Types rikkumisi pole; süstimiskatsed (`insertAdjacentHTML`,
+  `innerHTML`, skript stringist, väline skript) blokeeritakse; testlehel on lehesisene skript, `eval`, `new Function` ja
+  `setTimeout(string)` blokeeritud (vana CSP-ga käivitusid lehesisene skript ja `setTimeout(string)`); parooliga leht
+  avaneb ja URL jääb puhtaks; Solarmani dialoog, tariifide lugemine `index.html`-ist ja külastuste loendus töötavad;
+  teise saidi raamis on leht peidetud.
+
+---
+
 ## [3.3.1] ja energy-dashboard.html [2.5.1] — 2026-11-02 · loetavus: tekstid, legendid, numbrid
 
 Sama ülevaatus mis graafikute lehel (`graafikud.html` 1.2.0), nüüd elektriinfo ja energia lehel. Graafikud ise (ühikud

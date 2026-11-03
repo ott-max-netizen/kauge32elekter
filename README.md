@@ -31,6 +31,8 @@ Elering API → GitHub Actions → hinnad.json → GitHub Pages → index.html b
 | `css/common.css` | **ühine disainisüsteem** mõlemale lehele: tokenid (hele ja tume), klaaskaardid ja mesh-taust, bento-ruudustiku alus, komponendid, graafikuraam, olekud, print ja eelistuste varuvariandid |
 | `css/index.css`, `css/energy-dashboard.css`, `css/graafikud.css` | ainult lehe paigutus (`grid-template-areas`) ja lehepõhised komponendid |
 | `img/icons.svg` | piktogrammide sprite (`<symbol id="i-…">`), mida kasutavad mõlemad lehed |
+| `js/index.js`, `js/energy-dashboard.js`, `js/graafikud.js` | **lehtede põhiskriptid** (olek, andmete laadimine, arvutused, renderdamine); failides, sest turvapoliitika lubab ainult samalt saidilt laaditud skripte (vt „Turvalisus“). Lehe seaded (`CONFIG`) on HTML-is (vt „Seadete muutmine“) |
+| `js/teema.js` | raamimise kaitse ja teema valik enne esimest joonistamist (kõigil lehtedel `<head>`-is) |
 | `js/common.js` | **mõlema lehe ühine skriptikood**: Tallinna aeg, vormindamine, hinnaarvutuste abifunktsioonid, DOM-abi ja graafikute ühisosa (Chart.js virn, tooltip, pluginad); laaditakse enne lehe põhiskripti, lehepõhine kood (`CONFIG`, olek, renderdamine) jääb HTML-i |
 | `js/vendor/chart.umd.min.js` | Chart.js 4.5.1 (MIT, `js/vendor/CHART_LICENSE.md`); graafikud joonistatakse sellega, teek on repo sees, sest CSP lubab skripte ainult samalt saidilt |
 | `js/vendor/goatcounter-count.js` | GoatCounteri loendusskript (`count.js`, ISC, `js/vendor/GOATCOUNTER_LICENSE.md`): anonüümne külastuste statistika, vt „Külastuste statistika“ |
@@ -38,7 +40,7 @@ Elering API → GitHub Actions → hinnad.json → GitHub Pages → index.html b
 | `js/lukk.js`, `lukk.json`, `.github/scripts/lukk.py`, `.github/scripts/requirements-lukk.txt` | **parooliga kaitse**: brauseri avamisvaade ja dekrüpteerimine, lehe sool ja parooli kontrollväärtus, töövoogude krüpteerimisskript ja selle räsidega lukustatud sõltuvused (vt „Parooliga kaitse“) |
 | `robots.txt` | otsingumootorite robotitele: andme- ja abifailid on blokeeritud; HTML-lehtedel on `noindex, nofollow, noarchive` |
 
-CSS-i, `js/common.js`-i või sprite'i muutmisel suurenda HTML-i linkides `?v=` väärtust (GitHub Pages hoiab faile
+CSS-i, `js/*.js`-i või sprite'i muutmisel suurenda HTML-i linkides `?v=` väärtust (GitHub Pages hoiab faile
 vahemälus 10 min).
 
 Kõigi kolme lehe päises on sama lehtede navigatsioon **Elektriinfo** / **Energia** / **Graafikud** (aktiivne leht on
@@ -46,9 +48,17 @@ esile tõstetud); elektriinfo lehe päikesekaardil on lisaks link energialehele.
 
 ## Seadete muutmine
 
-Tasud, tariifid ja maja andmed on `index.html` alguses objektis `CONFIG` (iga rea
+Tasud, tariifid ja maja andmed on `index.html`-is objektis `CONFIG` (iga rea
 juures on selgitus). Muuda ainult numbreid ja tekste; jäta sulud, komad ja
 jutumärgid alles. Muudatus jõuab lehele mõne minuti jooksul.
+
+`CONFIG` on HTML-is plokis `<script type="text/plain" id="lehe-config">` (energialehel ja graafikute lehel samamoodi
+nende enda seaded). Plokk ei käivitu: lehe skript (`js/<leht>.js`) loeb selle ilma `eval`-ita (`readPageConfig`,
+`js/common.js`), sest turvapoliitika ei luba lehesiseseid skripte. Seetõttu on lubatud ainult väärtused – numbrid,
+`"tekst"` (jutumärkides), `true`/`false`/`null`, objektid `{ }` ja massiivid `[ ]` – ning kommentaarid, mitte arvutused
+(`24 * 60`) ega muutujad. Vea korral ei avane leht ja brauseri konsoolis on teade rea ja veeruga (nt
+„CONFIG: oodati koma või „}“ (rida 12, veerg 5)“). Töövoog `uuenda-hinnad.yml` ja energialeht loevad `index.html`-i
+`CONFIG`-ist tariifid samast kohast nagu enne.
 
 ## Kui hinnad ei uuene
 
@@ -665,11 +675,24 @@ tegemisega.
 - Töövood: `actions/checkout` on lukustatud commit'i SHA-ga ja `persist-credentials: false`, nii et kirjutusõigusega
   `GITHUB_TOKEN` antakse ainult commit'i ja push'i sammule. Python'i sõltuvus paigaldatakse räsidega ja eraldi sammus,
   kus secret'eid pole. Mõõteväärtusi logisse ei kirjutata (logid on avalikud).
-- Lehed lisavad sisu ainult `textContent`/`createElement` kaudu (mitte `innerHTML`) ning
-  `Content-Security-Policy` meta-silt lubab skripte ja stiile ainult samalt saidilt ning väliseid
-  päringuid ainult HTTPS-iga. Uue välise teenuse lisamisel uuenda CSP-d. Ainus kolmanda osapoole skript on repo sees olev
-  GoatCounteri loendusskript (`js/vendor/goatcounter-count.js`, vt „Külastuste statistika“); see saadab ainult lehe nime,
-  pealkirja, ekraani laiuse ja tuleku, mitte lehe andmeid.
+- Lehed lisavad sisu ainult `textContent`/`createElement` kaudu (mitte `innerHTML`). Lehe `Content-Security-Policy`
+  meta-silt (kõigil kolmel lehel):
+  - `script-src 'self'`: käivituvad ainult samalt saidilt laaditud skriptifailid – lehesiseseid skripte, inline-sündmusi,
+    `eval`-i, `new Function`-it ega `setTimeout(string)`-i ei käivitata (ka siis, kui kuhugi peaks tekkima süstimisviga).
+    Seepärast on lehtede kood failides `js/*.js` ja seaded mittekäivitatavas plokis (vt „Seadete muutmine“).
+  - `require-trusted-types-for 'script'; trusted-types 'none'` (Trusted Types, Chromium-põhised brauserid): HTML-i ega
+    skripti ei saa stringist kirjutada (`innerHTML`, `insertAdjacentHTML`, `script.src` stringist jms viskab vea).
+  - `form-action 'none'`: vormi ei saa tavaviisil saata – parool jääb brauserisse ka siis, kui JS peaks ebaõnnestuma
+    (avamisvaate vorm on lisaks `method="post"`, nii et parool ei satuks URL-i ka vanas brauseris).
+  - `frame-src`, `worker-src`, `manifest-src`, `media-src`, `object-src 'none'`, `base-uri 'none'`.
+  - `connect-src`: elektriinfo leht ainult sama sait, Eleringi API (`https://dashboard.elering.ee`, varuallikas) ja
+    külastuste loendur; graafikute leht sama sait ja loendur; energialeht `https:` ja `http://localhost` (Solarmani
+    otseühenduse kasutaja enda proksi). Uue välise teenuse (nt `CONFIG.varuProksi`) lisamisel lisa selle aadress lehe CSP-sse.
+  - `style-src 'unsafe-inline'` jääb (lehtedel on tokenitega `style` atribuudid); stiilidega skripti käivitada ei saa.
+  Ainus kolmanda osapoole skript on repo sees olev GoatCounteri loendusskript (`js/vendor/goatcounter-count.js`, vt
+  „Külastuste statistika“); see saadab ainult lehe nime, pealkirja, ekraani laiuse ja tuleku, mitte lehe andmeid.
+- **Raamimise kaitse:** GitHub Pages ei luba saata `X-Frame-Options` ega `frame-ancestors` päist, seega peidab
+  `js/teema.js` lehe, kui see on avatud teise saidi raamis (iframe), ja proovib avada selle kogu aknas („clickjacking“).
 - GitHub Pagesi leht ja avalik repo on kõigile nähtavad: lehekood on avalik, andmefailid (`hinnad.json`-i
   15-min tarbimine, `paike.json`-i võimsused) on ilma paroolita loetavad ainult siis, kui parooliga kaitse on
   välja lülitatud; varasemad commit'id on tavatekstina alles. Kõik sama konto `*.github.io` lehed jagavad brauseri
