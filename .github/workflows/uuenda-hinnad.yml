@@ -210,6 +210,23 @@ jobs:
           def warn(msg):
               print(f"::warning::{msg}")
 
+          MAX_VASTUS_B = 10_000_000   # välise API vastuse ülempiir: suurem vastus on vigane (seda ei loeta mällu ega parsita)
+
+          def read_limited(r, limit=MAX_VASTUS_B):
+              """HTTP vastuse sisu kuni limit baiti; suurem vastus -> ValueError (käsitletakse nagu võrguviga)."""
+              data = r.read(limit + 1)
+              if len(data) > limit:
+                  raise ValueError(f"vastus on suurem kui {limit // 1_000_000} MB")
+              return data
+
+          def require_https(url, name):
+              """Välise API aadress peab olema HTTPS (võtmed ja token liiguvad krüpteeritult); erand: kohalik testserver."""
+              if not re.match(r"(https://|http://(127\.0\.0\.1|localhost)(:\d+)?(/|$))", url):
+                  fail(f"{name} peab algama https://-ga")
+              return url
+
+          require_https(API, "ELERING_URL")
+
           def note(msg, detail=""):
               """Hoiatus logisse ja faili meta.warnings-isse. Lehed näitavad meta.warnings-i elanikele (olekumärgi vihje,
               jalus), seega msg on tavakeeles; tehniline täpsustus (sisemised nimed) ainult logisse (detail)."""
@@ -239,34 +256,179 @@ jobs:
           def reject_constant(name):  # Python lubaks NaN/Infinity, brauseri JSON.parse mitte
               raise ValueError(f"lubamatu JSON väärtus {name}")
 
-          def load_tariff_config():
-              """Loeb index.html CONFIG-plokist (sama regex mis energy-dashboard.html loadTariffs) maja
-              elektripaketi tariifid ja tasud. Tagastab (cfg, allikas), allikas = "index.html" või "default"."""
-              cfg = dict(TARIFF_DEFAULTS)
-              try:
-                  with open("index.html", encoding="utf-8") as f:
-                      html = f.read()
-              except OSError:
-                  note("Tasude seadeid ei saanud lugeda; lõpphinnad on arvutatud vaiketasudega", "index.html-i ei saanud lugeda")
-                  return cfg, "default"
-              block = re.search(r"const\s+CONFIG\s*=\s*\{([\s\S]*?)\n\};", html)
-              if not block:
-                  note("Tasude seadeid ei saanud lugeda; lõpphinnad on arvutatud vaiketasudega", "index.html-ist ei leitud CONFIG-plokki")
-                  return cfg, "default"
-              src = block.group(1)
-              missing = []
-              for key in ("marginaal", "vorgutasuPaev", "vorgutasuOo", "taastuvenergiaTasu", "aktsiis", "kuutasu", "kaibemaks", "algus", "lopp"):
-                  m = re.search(rf"\b{key}\s*:\s*(-?\d+(?:\.\d+)?)", src)
+          def parse_config(text):
+              """Lehe CONFIG-ploki tekst (`const CONFIG = { … };`) -> dict. Sama reegel mis js/common.js parseConfigLiteral-is:
+              ainult literaalid ({ }, [ ], "tekst", numbrid, true/false/null) ja kommentaarid, nii et kommentaaris olev number
+              (nt `// vana marginaal: 0.75`) ei saa kunagi väärtuseks ja iga väärtus loetakse oma kohast (CONFIG.hinnad.marginaal).
+              Vigane plokk -> ValueError (rida ja veerg)."""
+              src, n = text, len(text)
+              pos = [0]
+
+              def fail(msg):
+                  before = src[:pos[0]]
+                  raise ValueError(f"CONFIG: {msg} (rida {before.count(chr(10)) + 1}, veerg {pos[0] - before.rfind(chr(10))})")
+
+              def skip():
+                  while pos[0] < n:
+                      i = pos[0]
+                      if src[i].isspace():
+                          pos[0] += 1
+                      elif src.startswith("//", i):
+                          j = src.find("\n", i)
+                          pos[0] = n if j < 0 else j
+                      elif src.startswith("/*", i):
+                          j = src.find("*/", i + 2)
+                          if j < 0:
+                              fail("lõpetamata kommentaar")
+                          pos[0] = j + 2
+                      else:
+                          return
+
+              def take(pattern):
+                  m = re.compile(pattern).match(src, pos[0])
                   if m:
-                      cfg[key] = float(m.group(1))
+                      pos[0] = m.end()
+                  return m
+
+              def string():
+                  m = take(r'"(?:[^"\\\n]|\\.)*"')
+                  if not m:
+                      fail("lõpetamata tekst (jutumärk puudu)")
+                  try:
+                      return json.loads(m.group(0))
+                  except ValueError:
+                      fail("vigane tekst")
+
+              def value():
+                  skip()
+                  ch = src[pos[0]] if pos[0] < n else ""
+                  if ch == "{":
+                      return obj()
+                  if ch == "[":
+                      return arr()
+                  if ch == '"':
+                      return string()
+                  m = take(r"[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?(?![\w$.])")
+                  if m:
+                      return float(m.group(0))
+                  m = take(r"(?:true|false|null)(?![\w$])")
+                  if m:
+                      return {"true": True, "false": False, "null": None}[m.group(0)]
+                  fail("oodati väärtust")
+
+              def obj():
+                  out = {}
+                  pos[0] += 1
+                  while True:
+                      skip()
+                      if pos[0] < n and src[pos[0]] == "}":
+                          pos[0] += 1
+                          return out
+                      if pos[0] < n and src[pos[0]] == '"':
+                          key = string()
+                      else:
+                          m = take(r"[A-Za-z_$][\w$]*")
+                          if not m:
+                              fail("oodati võtit")
+                          key = m.group(0)
+                      skip()
+                      if pos[0] >= n or src[pos[0]] != ":":
+                          fail(f"võtme {key} järel peab olema koolon")
+                      pos[0] += 1
+                      out[key] = value()
+                      skip()
+                      if pos[0] < n and src[pos[0]] == ",":
+                          pos[0] += 1
+                          continue
+                      if pos[0] < n and src[pos[0]] == "}":
+                          pos[0] += 1
+                          return out
+                      fail("oodati koma või }")
+
+              def arr():
+                  out = []
+                  pos[0] += 1
+                  while True:
+                      skip()
+                      if pos[0] < n and src[pos[0]] == "]":
+                          pos[0] += 1
+                          return out
+                      out.append(value())
+                      skip()
+                      if pos[0] < n and src[pos[0]] == ",":
+                          pos[0] += 1
+                          continue
+                      if pos[0] < n and src[pos[0]] == "]":
+                          pos[0] += 1
+                          return out
+                      fail("oodati koma või ]")
+
+              skip()
+              take(r"const\s+CONFIG\s*=")
+              skip()
+              if pos[0] >= n or src[pos[0]] != "{":
+                  fail("seaded peavad algama kujul const CONFIG = {")
+              config = value()
+              skip()
+              if pos[0] < n and src[pos[0]] == ";":
+                  pos[0] += 1
+              skip()
+              if pos[0] < n:
+                  fail("pärast seadeid on liigset teksti")
+              return config
+
+          PAGE_CONFIGS = {}
+
+          def read_page_config(path):
+              """Lehe <script type="text/plain" id="lehe-config"> seaded (dict) või None (fail puudub, plokk puudub või on vigane)."""
+              if path not in PAGE_CONFIGS:
+                  cfg = None
+                  try:
+                      with open(path, encoding="utf-8") as f:
+                          block = re.search(r'<script type="text/plain" id="lehe-config">([\s\S]*?)</script>', f.read())
+                      if block:
+                          cfg = parse_config(block.group(1))
+                      else:
+                          warn(f"{path}: CONFIG-plokki ei leitud")
+                  except (OSError, ValueError) as e:
+                      warn(f"{path}: CONFIG-it ei saanud lugeda ({e})")
+                  PAGE_CONFIGS[path] = cfg if isinstance(cfg, dict) else None
+              return PAGE_CONFIGS[path]
+
+          def config_value(cfg, *keys):
+              """Pesastatud väärtus (nt config_value(cfg, "hinnad", "marginaal")) või None."""
+              for key in keys:
+                  if not isinstance(cfg, dict) or key not in cfg:
+                      return None
+                  cfg = cfg[key]
+              return cfg
+
+          def config_number(cfg, *keys):
+              v = config_value(cfg, *keys)
+              return float(v) if isinstance(v, float) and math.isfinite(v) else None
+
+          def load_tariff_config():
+              """Loeb index.html CONFIG-plokist (sama parseriga mis energy-dashboard.html loadTariffs) maja elektripaketi tariifid
+              ja tasud: CONFIG.hinnad.* ja CONFIG.ootariif.*. Tagastab (cfg, allikas), allikas = "index.html" või "default"."""
+              cfg = dict(TARIFF_DEFAULTS)
+              page = read_page_config("index.html")
+              if page is None:
+                  note("Tasude seadeid ei saanud lugeda; lõpphinnad on arvutatud vaiketasudega", "index.html CONFIG-plokk puudub või on vigane")
+                  return cfg, "default"
+              missing = []
+              for group, key in (("hinnad", "marginaal"), ("hinnad", "vorgutasuPaev"), ("hinnad", "vorgutasuOo"), ("hinnad", "taastuvenergiaTasu"),
+                                 ("hinnad", "aktsiis"), ("hinnad", "kuutasu"), ("hinnad", "kaibemaks"), ("ootariif", "algus"), ("ootariif", "lopp")):
+                  v = config_number(page, group, key)
+                  if v is not None:
+                      cfg[key] = v
                   else:
-                      missing.append(key)
+                      missing.append(f"{group}.{key}")
               for key in ("nadalavahetusOnOo", "riigipuhadOnOo"):
-                  m_bool = re.search(rf"\b{key}\s*:\s*(true|false)", src)
-                  if m_bool:
-                      cfg[key] = (m_bool.group(1) == "true")
+                  v = config_value(page, "ootariif", key)
+                  if isinstance(v, bool):
+                      cfg[key] = v
                   else:
-                      missing.append(key)
+                      missing.append(f"ootariif.{key}")
               if missing:
                   note("Osa tasude seadeid puudub; nende asemel on kasutatud vaikeväärtusi", f"index.html CONFIG-is puudub {', '.join(missing)}")
               return cfg, "index.html"
@@ -335,7 +497,7 @@ jobs:
                   try:
                       req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "application/json"})
                       with urllib.request.urlopen(req, timeout=30) as r:
-                          raw = r.read()
+                          raw = read_limited(r)
                       break
                   except Exception as e:
                       print(f"NPS katse {attempt} ebaõnnestus: {e}")
@@ -422,14 +584,14 @@ jobs:
                   try:
                       req = urllib.request.Request(TOKEN_URL, data=body, headers=headers, method="POST")
                       with urllib.request.urlopen(req, timeout=30) as r:
-                          resp = json.loads(r.read())
+                          resp = json.loads(read_limited(r))
                       token = resp.get("access_token")
                       if token:
                           return token
                   except urllib.error.HTTPError as e:
                       err_body = ""
                       try:
-                          err_body = e.read().decode("utf-8", errors="replace")[:200]
+                          err_body = e.read(4096).decode("utf-8", errors="replace")[:200]
                       except Exception:
                           pass
                       warn(f"Estfeed OAuth2 autentimine ebaõnnestus (HTTP {e.code}): {err_body}")
@@ -471,11 +633,11 @@ jobs:
                       try:
                           req = urllib.request.Request(url, headers=headers)
                           with urllib.request.urlopen(req, timeout=30) as r:
-                              return json.loads(r.read(), parse_constant=reject_constant), 200
+                              return json.loads(read_limited(r), parse_constant=reject_constant), 200
                       except urllib.error.HTTPError as e:
                           err_text = ""
                           try:
-                              err_text = e.read().decode("utf-8", errors="replace")[:240]
+                              err_text = e.read(4096).decode("utf-8", errors="replace")[:240]
                           except Exception:
                               pass
                           if e.code == 429 or e.code >= 500:
@@ -901,7 +1063,7 @@ jobs:
           MAX_PAEVAD = 800            # kirjeid failis (vanemad jäetakse välja)
           PROFIIL_PAEVI = 14          # viimaste päevade kirjetel on maja tarbimise tunniprofiil loadH (energialehe prognoos)
           SOLAR_FRAME_S = 900
-          SOLARMAN_URL = os.environ.get("SOLARMAN_URL", "https://globalapi.solarmanpv.com").rstrip("/")
+          SOLARMAN_URL = require_https(os.environ.get("SOLARMAN_URL", "https://globalapi.solarmanpv.com").rstrip("/"), "SOLARMAN_URL")
           PAEVAD_HOIATUSED = []       # paevad.json meta.warnings (lehele nähtav, tavakeeles)
 
           def paevad_note(msg, detail=""):
@@ -911,25 +1073,16 @@ jobs:
 
           def read_sell_fee():
               """Müügitasu s/kWh index.html CONFIG.hinnad.muugitasu-st (sama väärtus, mida energialeht kasutab müügihinnaks)."""
-              try:
-                  with open("index.html", encoding="utf-8") as f:
-                      block = re.search(r"const\s+CONFIG\s*=\s*\{([\s\S]*?)\n\};", f.read())
-                  m = re.search(r"\bmuugitasu\s*:\s*(-?\d+(?:\.\d+)?)", block.group(1)) if block else None
-                  if m:
-                      return float(m.group(1))
-              except OSError:
-                  pass
+              fee = config_number(read_page_config("index.html"), "hinnad", "muugitasu")
+              if fee is not None:
+                  return fee
               paevad_note("Müügitasu ei saanud lugeda; müügihind on börsihind ilma KM-ta", "index.html CONFIG.hinnad.muugitasu puudub")
               return 0.0
 
           def read_battery_capacity():
               """Aku kasutatav mahutavus kWh energy-dashboard.html CONFIG.aku.mahtKwh-st (aku tulu laetuse muutuse jaoks); None, kui puudub."""
-              try:
-                  with open("energy-dashboard.html", encoding="utf-8") as f:
-                      m = re.search(r"\baku\s*:\s*\{[^}]*?\bmahtKwh\s*:\s*(\d+(?:\.\d+)?)", f.read())
-                  return float(m.group(1)) if m and float(m.group(1)) > 0 else None
-              except OSError:
-                  return None
+              capacity = config_number(read_page_config("energy-dashboard.html"), "aku", "mahtKwh")
+              return capacity if capacity is not None and capacity > 0 else None
 
           def battery_gain(rec, capacity):
               """Päeva aku tulu € – sama valem mis energialehe finishTotals-is: tühjendamise väärtus − laadimise kulu + laetuse
@@ -949,13 +1102,9 @@ jobs:
 
           def read_solar_start():
               """Päikesepargi kasutuselevõtu kuu esimene päev index.html CONFIG.paike.kasutuselAlates-ist ("AAAA-KK") või None."""
-              try:
-                  with open("index.html", encoding="utf-8") as f:
-                      m = re.search(r"\bkasutuselAlates\s*:\s*\"(\d{4})-(\d{2})\"", f.read())
-                  if m and 1 <= int(m.group(2)) <= 12:
-                      return datetime(int(m.group(1)), int(m.group(2)), 1).date()
-              except OSError:
-                  pass
+              m = re.fullmatch(r"(\d{4})-(\d{2})", str(config_value(read_page_config("index.html"), "paike", "kasutuselAlates") or ""))
+              if m and 1 <= int(m.group(2)) <= 12:
+                  return datetime(int(m.group(1)), int(m.group(2)), 1).date()
               return None
 
           def fnum(value):
@@ -1091,7 +1240,7 @@ jobs:
                   try:
                       req = urllib.request.Request(f"{SOLARMAN_URL}{path}?{query}", data=json.dumps(body).encode("utf-8"), headers=headers, method="POST")
                       with urllib.request.urlopen(req, timeout=30) as r:
-                          resp = json.loads(r.read(), parse_constant=reject_constant)
+                          resp = json.loads(read_limited(r), parse_constant=reject_constant)
                   except urllib.error.HTTPError as e:
                       if e.code == 429 or e.code >= 500:
                           time.sleep(5 * attempt)
@@ -1329,8 +1478,16 @@ jobs:
           echo "::add-mask::$auth"
           git config --local http.https://github.com/.extraheader "AUTHORIZATION: basic $auth"
           git commit -m "Uuenda elektrihinnad ja tarbimine"
+          # Firebase Hostingu koopia avaldatakse uuesti ainult pärast õnnestunud push'i (firebase-hosting-merge.yml).
+          # GITHUB_TOKEN-iga push ei käivita uut töövoogu, repository_dispatch käivitab (vajab ainult contents: write).
+          # Ebaõnnestumine on ainult hoiatus: andmed on juba repos ja järgmine andmete commit avaldab ka need.
+          avalda_firebase() {
+            if [ "$GITHUB_REF_NAME" != "main" ]; then return 0; fi
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/dispatches" -f event_type=andmed-uuendatud >/dev/null \
+              || echo "::warning::Firebase Hostingu avaldamist ei õnnestunud käivitada (järgmine andmete commit või käsitsi: Deploy to Firebase Hosting on merge → Run workflow)."
+          }
           for attempt in 1 2 3; do
-            if git push origin "HEAD:${GITHUB_REF_NAME}"; then exit 0; fi
+            if git push origin "HEAD:${GITHUB_REF_NAME}"; then avalda_firebase; exit 0; fi
             echo "Push lükati tagasi (repot muudeti samal ajal), proovin uuesti ($attempt/3)..."
             if ! git pull --rebase origin "${GITHUB_REF_NAME}"; then
               # Teine käivitus kirjutas samal ajal samu andmefaile (hinnad.json/paevad.json). Need on täielikult tuletatud,

@@ -7,15 +7,26 @@ permissions:
   checks: write
   contents: read
   pull-requests: write
+# Sama PR-i uuem commit tühistab vanema eelvaate juurutuse
+concurrency:
+  group: firebase-preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 jobs:
   build_and_preview:
     if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      # Mõlemad tegevused commit'i SHA-ga nagu firebase-hosting-merge.yml-is: sama teenusekonto võti (silt v0 = v0.11.0).
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5.1.0
+        with:
+          persist-credentials: false
       #- run: npm ci && npm run build
-      - uses: FirebaseExtended/action-hosting-deploy@v0
+      - uses: FirebaseExtended/action-hosting-deploy@500ac625ca2dd40cbd15f7659af953801858032a  # v0.11.0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_KAUGE32_ELEKTER }}
           projectId: kauge32-elekter
+          # Tegevus käivitab `npx firebase-tools@<versioon>` teenusekonto võtmega: täpne versioon (npm-is muutumatu), mitte
+          # vaikimisi `latest`. Uuendamisel vali vähemalt paar nädalat vana väljalase ja vaata selle muudatused üle.
+          firebaseToolsVersion: 15.34.0

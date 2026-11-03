@@ -1,2 +1,11 @@
 __pycache__/
 *.pyc
+# Kohalikud ja tundlikud failid, mis ei tohi repo'sse (ega Firebase'i) sattuda
+.DS_Store
+Thumbs.db
+.env
+.env.*
+.firebase/
+*-debug.log
+*.pem
+*.key

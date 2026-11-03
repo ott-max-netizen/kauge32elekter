@@ -118,6 +118,23 @@ jobs:
           def warn(msg):
               print(f"::warning::{msg}")
 
+          MAX_VASTUS_B = 10_000_000   # välise API vastuse ülempiir: suurem vastus on vigane (seda ei loeta mällu ega parsita)
+
+          def read_limited(r, limit=MAX_VASTUS_B):
+              """HTTP vastuse sisu kuni limit baiti; suurem vastus -> ValueError (käsitletakse nagu võrguviga)."""
+              data = r.read(limit + 1)
+              if len(data) > limit:
+                  raise ValueError(f"vastus on suurem kui {limit // 1_000_000} MB")
+              return data
+
+          def require_https(url, name):
+              """Välise API aadress peab olema HTTPS (võtmed ja token liiguvad krüpteeritult); erand: kohalik testserver."""
+              if not re.match(r"(https://|http://(127\.0\.0\.1|localhost)(:\d+)?(/|$))", url):
+                  fail(f"{name} peab algama https://-ga")
+              return url
+
+          require_https(BASE, "SOLARMAN_URL")
+
           HOIATUSED = []  # lehele nähtavad hoiatused (paike.json data.meta.warnings)
 
           def note(msg):
@@ -159,7 +176,7 @@ jobs:
                   try:
                       req = urllib.request.Request(url, data=data, headers=headers, method="POST")
                       with urllib.request.urlopen(req, timeout=30) as r:
-                          resp = json.loads(r.read(), parse_constant=reject_constant)
+                          resp = json.loads(read_limited(r), parse_constant=reject_constant)
                   except urllib.error.HTTPError as e:
                       if e.code == 429 or e.code >= 500:
                           print(f"{path}: HTTP {e.code}, proovin uuesti ({attempt}/3)...")
@@ -381,8 +398,16 @@ jobs:
           echo "::add-mask::$auth"
           git config --local http.https://github.com/.extraheader "AUTHORIZATION: basic $auth"
           git commit -m "Uuenda päikeseandmed"
+          # Firebase Hostingu koopia avaldatakse uuesti ainult pärast õnnestunud push'i (firebase-hosting-merge.yml).
+          # GITHUB_TOKEN-iga push ei käivita uut töövoogu, repository_dispatch käivitab (vajab ainult contents: write).
+          # Ebaõnnestumine on ainult hoiatus: andmed on juba repos ja järgmine andmete commit avaldab ka need.
+          avalda_firebase() {
+            if [ "$GITHUB_REF_NAME" != "main" ]; then return 0; fi
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/dispatches" -f event_type=andmed-uuendatud >/dev/null \
+              || echo "::warning::Firebase Hostingu avaldamist ei õnnestunud käivitada (järgmine andmete commit või käsitsi: Deploy to Firebase Hosting on merge → Run workflow)."
+          }
           for attempt in 1 2 3; do
-            if git push origin "HEAD:${GITHUB_REF_NAME}"; then exit 0; fi
+            if git push origin "HEAD:${GITHUB_REF_NAME}"; then avalda_firebase; exit 0; fi
             echo "Push lükati tagasi (repot muudeti samal ajal), proovin uuesti ($attempt/3)..."
             if ! git pull --rebase origin "${GITHUB_REF_NAME}"; then
               # Teine käivitus kirjutas samal ajal samu andmefaile (paike.json). Need on täielikult tuletatud,

@@ -9,7 +9,9 @@
  *   Lukk.valmis()            – lubadus, mis täitub, kui leht on avatud (parool sisestatud või lehel pole lukku);
  *                              seni on <div id="lukk"> avamisvaade nähtav ja .app peidetud (html.lukk-ootel)
  *   Lukk.fetch(url, valikud) – nagu fetch(); krüpteeritud ümbriku ({"lukk":1,...}) korral tagastab dekrüpteeritud
- *                              JSON-i Response'i, tavalise faili korral vastuse muutmata kujul
+ *                              JSON-i Response'i. Teise saidi aadress (nt Eleringi API) läheb tavalise fetch()-iga
+ *                              mööda dekrüpteerijast. Lukustatud lehel ei võeta samalt saidilt krüpteerimata JSON-i
+ *                              vastu (viga), lukuta lehel tagastatakse tavaline fail muutmata kujul
  *   Lukk.lukusta()           – unustab kõik selle brauseri salvestatud võtmed ja laeb lehe uuesti (jaluse nupp „Lukusta leht“)
  *
  * Failid: lukk.json {lukk, kdf, iter, salt, kontroll:{iv, ct}} – sool ja parooli kontrollväärtus
@@ -21,7 +23,8 @@
  * kirjet ei saa enam kasutada; aegunud sessioonikirjed (12 h viimasest kasutusest) kustutatakse järgmisel avamisel.
  * Mitte-eksporditavat võtit ei saa ka sama saidi (*.github.io) skript välja lugeda ega teise seadmesse viia, ainult
  * selles brauseris kasutada. Varasem eksporditud võti (localStorage/sessionStorage kauge32_lukk) kolitakse üle ja
- * kustutatakse. Parool ise jääb lehe sulgemiseni ainult mällu (teise soolaga faili jaoks).
+ * kustutatakse. Parooli ennast ei salvestata ega hoita mälus: sellest tuletatakse võti ja vormi väli tühjendatakse.
+ * Kui mõni andmefail on teise soolaga (lukk.json loodi vahepeal uuesti), küsitakse parooli selle faili jaoks veel kord.
  * Skript laaditakse <head>-is ilma defer'ita, et globaal Lukk oleks lehe skriptile olemas ja .app saaks
  * peita enne esimest joonistamist.
  */
@@ -37,7 +40,11 @@
   const SESSIOONI_AEG_MS = 12 * 3600 * 1000;
   const KONTROLL = 'kauge32-lukk';
   const KDF = 'PBKDF2-SHA256';
-  const MIN_ITER = 1000;
+  const MIN_ITER = 600000;          // PBKDF2 iteratsioonide lubatud vahemik (sama mis .github/scripts/lukk.py-s): vähem = nõrk
+  const MAX_ITER = 2000000;         // võti, rohkem = vigane või pahatahtlik fail koormaks protsessorit minuteid
+  const SOOL_B = 16;
+  const IV_B = 12;
+  const VANAD_VOTMED = 'kauge32.energia.';         // varasema Solarmani otseühenduse võtmed (local-/sessionStorage): kustutatakse
 
   const subtle = global.crypto && global.crypto.subtle;
   const utf8 = new TextEncoder();
@@ -45,7 +52,6 @@
 
   let lukuInfo = null;          // lukk.json sisu (null = lukku pole)
   let valmisLubadus = null;     // Lukk.valmis() tulemus (üks kord)
-  let parool = null;            // ainult mälus; teise soolaga faili võtme tuletamiseks
   const votmed = new Map();     // `${salt}|${iter}` -> CryptoKey
   let avamine = null;           // pooleli olev parooliküsimine { promise, resolve }
 
@@ -69,8 +75,14 @@
     return `${salt}|${iter}`;
   }
 
+  /** Base64 baitide arv; vigase base64 korral -1. */
+  function baite(s) {
+    try { return typeof s === 'string' ? b64d(s).length : -1; } catch (error) { return -1; }
+  }
+
   function kehtivParameetrid(obj) {
-    return typeof obj.salt === 'string' && Number.isInteger(obj.iter) && obj.iter >= MIN_ITER && (obj.kdf === undefined || obj.kdf === KDF);
+    return Number.isInteger(obj.iter) && obj.iter >= MIN_ITER && obj.iter <= MAX_ITER
+      && (obj.kdf === undefined || obj.kdf === KDF) && baite(obj.salt) >= SOOL_B;
   }
 
   async function tuletaVoti(pw, saltB64, iter) {
@@ -217,6 +229,16 @@
       { salt: info.salt, iter: info.iter, key: voti, aegub: Date.now() + SESSIOONI_AEG_MS }, `sessioon:${id}`));
   }
 
+  /** Kustutab varasema Solarmani otseühenduse võtmed (App Secret, e-post, parooli räsi, token): brauser neid enam ei kasuta. */
+  function unustaVanadVotmed() {
+    for (const s of ['localStorage', 'sessionStorage']) {
+      try {
+        const ala = global[s];
+        for (const voti of Object.keys(ala)) if (voti.startsWith(VANAD_VOTMED)) ala.removeItem(voti);
+      } catch (error) { /* salvestusruum keelatud: seal pole ka midagi kustutada */ }
+    }
+  }
+
   /** Unustab selle vahelehe ja püsiva võtme (kõik = true: ka teiste vahelehtede sessioonid). */
   async function unustaSalvestatud(koik) {
     for (const s of ['localStorage', 'sessionStorage']) {
@@ -246,7 +268,7 @@
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const json = await response.json();
     if (!json || json.lukk !== 1 || !kehtivParameetrid(json) || json.kdf !== KDF
-        || !json.kontroll || typeof json.kontroll.iv !== 'string' || typeof json.kontroll.ct !== 'string') {
+        || !json.kontroll || baite(json.kontroll.iv) !== IV_B || typeof json.kontroll.ct !== 'string') {
       throw new Error('lukk.json on vigane');
     }
     return json;
@@ -284,8 +306,8 @@
       if (nahtav) app.setAttribute('aria-hidden', 'true');
       else app.removeAttribute('aria-hidden');
     }
+    if (ui.input) ui.input.value = '';   // parool ei jää lehe vormi ka pärast avamist (peidetud vaates)
     if (nahtav && ui.input) {
-      ui.input.value = '';
       try { ui.input.focus({ preventScroll: true }); } catch (error) { /* fookus pole kriitiline */ }
     }
   }
@@ -300,7 +322,10 @@
     if (ui.input) ui.input.disabled = toos;
   }
 
-  /** Näitab avamisvaadet ja täitub, kui õige parool on sisestatud (võti tuletatud ja kontrollitud). */
+  /**
+   * Näitab avamisvaadet ja täitub, kui õige parool on sisestatud (võti tuletatud ja kontrollitud). Tulemus on sisestatud
+   * parool (ainult ootajale, kes vajab teise soolaga võtit; seda ei salvestata) või '', kui lukk vahepeal eemaldati.
+   */
   function kysiParool(teade) {
     if (avamine) {
       if (teade) naitaViga(teade);
@@ -333,11 +358,10 @@
         if (ui.input) { ui.input.select(); }
         return;
       }
-      parool = pw;
       votmed.set(votmeId(lukuInfo.salt, lukuInfo.iter), voti);
       await salvestaVoti(voti, lukuInfo, Boolean(ui.remember && ui.remember.checked));
       teata('avatud');
-      lopetaAvamine();
+      lopetaAvamine(pw);
     } catch (error) {
       console.error('Lukk: avamine ebaõnnestus', error);
       tooOlek(false);
@@ -345,13 +369,13 @@
     }
   }
 
-  function lopetaAvamine() {
+  function lopetaAvamine(pw = '') {
     naitaVaadet(false);
     document.documentElement.classList.remove('lukk-ootel');
     naitaLukustusnupp();
     const a = avamine;
     avamine = null;
-    if (a) a.resolve();
+    if (a) a.resolve(pw);
   }
 
   function naitaLukustusnupp() {
@@ -366,32 +390,27 @@
 
   async function lukusta() {
     votmed.clear();
-    parool = null;
+    unustaVanadVotmed();
     await unustaSalvestatud(true);
     location.reload();
   }
 
   /* ---------- võtme hankimine ja ümbriku avamine ---------- */
-  /** Võti antud soola ja iteratsioonidega: vahemälust, mälus olevast paroolist või küsides parooli uuesti. */
+  /** Võti antud soola ja iteratsioonidega: vahemälust või küsides parooli (parool on ainult selle funktsiooni muutujas). */
   async function hangiVoti(salt, iter, teade) {
     const id = votmeId(salt, iter);
     if (votmed.has(id)) return votmed.get(id);
-    if (parool) {
-      const voti = await tuletaVoti(parool, salt, iter);
-      votmed.set(id, voti);
-      return voti;
-    }
-    await kysiParool(teade);
+    const pw = await kysiParool(teade);
     if (votmed.has(id)) return votmed.get(id);
-    if (!parool) throw new Error('lukk eemaldati avamise ajal, laadi leht uuesti');
-    // parool sisestati lukk.json-i soolaga; see fail kasutab teist soola (nt parooli vahetus pooleli)
-    const voti = await tuletaVoti(parool, salt, iter);
+    if (!pw) throw new Error('lukk eemaldati avamise ajal, laadi leht uuesti');
+    // parool sisestati lukk.json-i soolaga; see fail kasutab teist soola (lukk.json loodi vahepeal uuesti)
+    const voti = await tuletaVoti(pw, salt, iter);
     votmed.set(id, voti);
     return voti;
   }
 
   async function avaUmbrik(umbrik) {
-    if (!kehtivParameetrid(umbrik)) throw new Error('krüpteeritud faili parameetrid on vigased');
+    if (!kehtivParameetrid(umbrik) || baite(umbrik.iv) !== IV_B) throw new Error('krüpteeritud faili parameetrid on vigased');
     if (!subtle) throw new Error('brauser ei toeta WebCrypto-t (vaja on HTTPS-i)');
     let voti = await hangiVoti(umbrik.salt, umbrik.iter);
     try {
@@ -408,7 +427,6 @@
       }
       // Võti ei sobi: parool on vahetatud (salvestatud võti on vana) – küsi uuesti ja proovi veel üks kord
       votmed.delete(votmeId(umbrik.salt, umbrik.iter));
-      parool = null;
       await unustaSalvestatud(false);
       lukuInfo = info || lukuInfo;
       voti = await hangiVoti(umbrik.salt, umbrik.iter, 'Parool on vahetatud. Sisesta uus parool.');
@@ -418,6 +436,7 @@
 
   /* ---------- avalik liides ---------- */
   async function kaivita() {
+    unustaVanadVotmed();
     if (!subtle || location.protocol === 'file:') {
       // file:// või ebaturvaline kontekst: andmefaile nagunii ei loeta, lukk jääb vahele
       document.documentElement.classList.remove('lukk-ootel');
@@ -476,16 +495,31 @@
     return valmisLubadus;
   }
 
-  /** fetch(), mis avab krüpteeritud ümbriku; tavaline (krüpteerimata) vastus tagastatakse muutmata. */
+  /**
+   * fetch(), mis avab samalt saidilt laaditud krüpteeritud ümbriku. Teise saidi vastust (Eleringi API, varuproksi) ei
+   * proovita kunagi avada: võõras „ümbrik“ ei saa parooli küsida ega võtit kasutada. Lukustatud lehel on samalt saidilt
+   * tulnud krüpteerimata JSON viga (keegi ei saa vahetada krüpteeritud andmefaili võltsitud tavafaili vastu), v.a kui
+   * lukk.json on vahepeal eemaldatud (kaitse võeti maha): siis jätkab leht lukuta.
+   */
   async function lukkFetch(url, valikud) {
+    const siht = new URL(url, global.location.href);
+    if (siht.origin !== global.location.origin) return fetch(url, valikud);
+    await valmis();
     const response = await fetch(url, valikud);
     if (!response.ok) return response;
     const tekst = await response.text();
-    const paised = { 'Content-Type': response.headers.get('Content-Type') || 'application/json' };
     let json = null;
     try { json = JSON.parse(tekst); } catch (error) { json = null; }
-    if (!onUmbrik(json)) return new Response(tekst, { status: response.status, statusText: response.statusText, headers: paised });
-    await valmis();
+    if (!onUmbrik(json)) {
+      if (lukuInfo && json !== null) {
+        const info = await laeLukuFail().catch(() => undefined);
+        if (info !== null) throw new Error('andmefail pole krüpteeritud, kuigi leht on parooliga kaitstud');
+        lukuInfo = null;   // lukk.json kustutati (kaitse maha võetud): edasi lukuta
+        naitaLukustusnupp();
+      }
+      const paised = { 'Content-Type': response.headers.get('Content-Type') || 'application/json' };
+      return new Response(tekst, { status: response.status, statusText: response.statusText, headers: paised });
+    }
     const tavatekst = await avaUmbrik(json);
     return new Response(tavatekst, { status: 200, headers: { 'Content-Type': 'application/json' } });
   }

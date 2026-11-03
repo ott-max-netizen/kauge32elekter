@@ -1,10 +1,11 @@
-/* Kauge 32 · mõlema lehe (index.html ja energy-dashboard.html) ühine skriptikood.
+/* Kauge 32 · lehtede ühine skriptikood (index.html, energy-dashboard.html; graafikud.html kasutab osa sellest).
  *
  * Siin on funktsioonid ja konstandid, mis olid varem mõlemas lehes baidi täpsusega samad: Tallinna aeg,
  * vormindamine, hinnaarvutuste abifunktsioonid, DOM-abi ja kogu graafikute ühisosa (Chart.js virn, tooltip,
- * pluginad). Lehepõhine kood (CONFIG, state, normalizePrices, renderdamine jms) jääb lehe enda <script>-i.
+ * pluginad), ning lehe seadete lugeja (readPageConfig). Lehepõhine kood (state, normalizePrices, renderdamine jms) on
+ * failis js/<leht>.js; lehe seaded (CONFIG) on HTML-is mittekäivitatavas plokis (vt jaotis 0).
  *
- * Laadimine: tavaline (mitte defer) <script> vahetult enne lehe põhiskripti, nii et siinsed deklaratsioonid on
+ * Laadimine: tavaline (mitte defer) <script> vahetult enne lehe põhiskripti (js/<leht>.js), nii et siinsed deklaratsioonid on
  * olemas, kui põhiskript käivitub (nt `3 * MINUTE_MS` ja lõpu start()). Kõik on klassikalise skripti globaalid:
  * lehe tipptaseme const/let/function deklaratsioonid ei tohi siinseid nimesid uuesti deklareerida.
  *
@@ -12,9 +13,102 @@
  * olema (lehtedel on neil erinev sisu): CONFIG, MAX_PERIOD_MINUTES, numberFormat, dstMark, formatCents,
  * tallinnLocalToUtc, getPriceCategory ja init.
  *
- * Muutmisel suurenda mõlema HTML-faili lingis `js/common.js?v=` väärtust (GitHub Pages hoiab faile vahemälus 10 min).
+ * Muutmisel suurenda kõigi HTML-failide lingis `js/common.js?v=` väärtust (GitHub Pages hoiab faile vahemälus 10 min).
  */
 'use strict';
+
+/* ==========================================================================
+   0. Lehe seaded (CONFIG) – loetakse ilma eval-ita
+   ========================================================================== */
+/**
+ * Lehe seaded on HTML-is plokis <script type="text/plain" id="lehe-config"> kujul `const CONFIG = { … };` (sama tekst, mida
+ * haldaja muudab). Energialeht loeb index.html-i tariifid sama funktsiooniga (loadTariffs) ja töövoog uuenda-hinnad.yml selle
+ * Pythoni koopiaga (parse_config) – hoia need kaks reeglit samad. Plokk ei käivitu: CSP lubab ainult
+ * failidest laaditud skripte (script-src 'self', README „Turvalisus“). Lubatud on ainult literaalid – objektid { }, massiivid [ ],
+ * "tekst" (jutumärkides), numbrid, true/false/null – ja kommentaarid; arvutused ja muutujad annavad selge vea (rida ja veerg).
+ */
+function readPageConfig(id = 'lehe-config') {
+  const node = document.getElementById(id);
+  if (!node) throw new Error(`Lehe seaded puuduvad (#${id})`);
+  return parseConfigLiteral(node.textContent);
+}
+
+function parseConfigLiteral(text) {
+  const src = String(text);
+  let i = 0;
+  const fail = message => {
+    const before = src.slice(0, i);
+    throw new SyntaxError(`CONFIG: ${message} (rida ${before.split('\n').length}, veerg ${i - before.lastIndexOf('\n')})`);
+  };
+  const skip = () => {
+    for (;;) {
+      const ws = /\s+/y; ws.lastIndex = i;
+      if (ws.exec(src)) { i = ws.lastIndex; continue; }
+      if (src.startsWith('//', i)) { const end = src.indexOf('\n', i); i = end < 0 ? src.length : end; continue; }
+      if (src.startsWith('/*', i)) { const end = src.indexOf('*/', i + 2); if (end < 0) fail('lõpetamata kommentaar'); i = end + 2; continue; }
+      return;
+    }
+  };
+  const take = re => { re.lastIndex = i; const m = re.exec(src); if (m) i = re.lastIndex; return m; };
+  const string = () => {
+    const m = take(/"(?:[^"\\\n]|\\.)*"/y);
+    if (!m) fail('lõpetamata tekst (jutumärk puudu)');
+    try { return JSON.parse(m[0]); } catch (error) { fail('vigane tekst'); }
+  };
+  const value = () => {
+    skip();
+    const ch = src[i];
+    if (ch === '{') return object();
+    if (ch === '[') return array();
+    if (ch === '"') return string();
+    const num = take(/[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?(?![\w$.])/y);
+    if (num) return Number(num[0]);
+    const word = take(/(?:true|false|null)(?![\w$])/y);
+    if (word) return word[0] === 'null' ? null : word[0] === 'true';
+    return fail(ch === undefined ? 'seaded lõppesid ootamatult' : `oodati väärtust (number, "tekst", true/false/null, { } või [ ]), leiti „${src.slice(i, i + 12).split('\n')[0]}“`);
+  };
+  const object = () => {
+    const obj = {};
+    i++;   // {
+    for (;;) {
+      skip();
+      if (src[i] === '}') { i++; return obj; }
+      const key = src[i] === '"' ? string() : (take(/[A-Za-z_$][\w$]*/y) || fail('oodati võtit'))[0];
+      skip();
+      if (src[i] !== ':') fail(`võtme „${key}“ järel peab olema koolon`);
+      i++;
+      // defineProperty: ka võti „__proto__“ jääb tavaliseks väljaks (ei muuda objekti prototüüpi)
+      Object.defineProperty(obj, key, { value: value(), enumerable: true, writable: true, configurable: true });
+      skip();
+      if (src[i] === ',') { i++; continue; }
+      if (src[i] === '}') { i++; return obj; }
+      fail('oodati koma või „}“');
+    }
+  };
+  const array = () => {
+    const list = [];
+    i++;   // [
+    for (;;) {
+      skip();
+      if (src[i] === ']') { i++; return list; }
+      list.push(value());
+      skip();
+      if (src[i] === ',') { i++; continue; }
+      if (src[i] === ']') { i++; return list; }
+      fail('oodati koma või „]“');
+    }
+  };
+  skip();
+  take(/const\s+CONFIG\s*=/y);
+  skip();
+  if (src[i] !== '{') fail('seaded peavad algama kujul „const CONFIG = {“');
+  const config = value();
+  skip();
+  if (src[i] === ';') i++;
+  skip();
+  if (i < src.length) fail('pärast seadeid on liigset teksti');
+  return config;
+}
 
 /* ==========================================================================
    1. Konstandid

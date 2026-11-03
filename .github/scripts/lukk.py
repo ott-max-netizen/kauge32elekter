@@ -46,6 +46,8 @@ import unicodedata
 VERSIOON = 1
 KDF = "PBKDF2-SHA256"
 ITER = 600_000          # OWASP (2023) soovitus PBKDF2-HMAC-SHA256 jaoks
+MIN_ITER = 600_000      # loetavate ümbrike vahemik (sama mis js/lukk.js-is): vähem = nõrk võti, rohkem = CPU koormus
+MAX_ITER = 2_000_000    # ITER-i tõstmisel üle selle suurenda ka MAX_ITER-it (ka js/lukk.js-is)
 SOOL_B = 16
 NONSS_B = 12
 LUKK_FAIL = "lukk.json"
@@ -144,7 +146,7 @@ def ava_umbrik(votmed, umbrik, paroolid):
         iteratsioone = int(umbrik.get("iter", ITER))
     except (KeyError, ValueError, TypeError):
         return None, None
-    if umbrik.get("kdf", KDF) != KDF or iteratsioone < 1000:
+    if umbrik.get("kdf", KDF) != KDF or not MIN_ITER <= iteratsioone <= MAX_ITER or len(sool) < SOOL_B or len(nonss) != NONSS_B:
         return None, None
     for pw in paroolid:
         if not pw:
