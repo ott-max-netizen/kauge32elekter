@@ -168,7 +168,8 @@ jobs:
           # Kuuandmed algavad 2024-11, varasemaid väärtusi pole vaja.
           VMA2_ALATES = datetime(2026, 5, 1, tzinfo=TZ)  # võrgupakett Amper VML2 -> Võimsus VMA2 (arved 04/2026 ja 05/2026)
           TASUDE_AJALUGU = {
-              # CONFIG.hinnad.taastuvenergiaTasu = taastuvenergia tasu 0,84 + varustuskindluse tasu 0,758 (alates 01.01.2026).
+              # CONFIG.hinnad.taastuvenergiaTasu = taastuvenergia tasu 0,84; varustuskindluse tasu 0,758 on eraldi
+              # (varustuskindlusTasu, alates 01.01.2026).
               "taastuvenergiaTasu": (
                   # 2024: taastuvenergia tasu 1,05 s/kWh (2025. aastast 0,84; Elering):
                   # https://elektrilevi.ee/et/uudised/taastuvenergia-tasu-alaneb-uuest-aastast-20-protsenti
@@ -177,7 +178,9 @@ jobs:
                   # jääb 0,84, võrguarvele lisandub varustuskindluse tasu 0,758 s/kWh (01.01.2026):
                   # https://www.elering.ee/artikkel/taastuvenergia-tasu-jargmisel-aastal-ei-muutu
                   # https://elektrilevi.ee/en/uudised/ulevaade-2026-aasta-vorguteenuse-arvest-lisandub-varustuskindluse-tasu-taastuvenergia-tasu-ei-muutu
-                  (datetime(2026, 1, 1, tzinfo=TZ), 0.84),
+              ),
+              "varustuskindlusTasu": (
+                  (datetime(2026, 1, 1, tzinfo=TZ), 0.0),
               ),
               "aktsiis": (
                   # Elektriaktsiis 1,45 €/MWh (01.05.2024–30.04.2025), alates 01.05.2025 2,10 €/MWh (ATKEAS § 66 lg 12):
@@ -255,7 +258,8 @@ jobs:
               "marginaal": 0.45,
               "vorgutasuPaev": 3.49,
               "vorgutasuOo": 1.99,
-              "taastuvenergiaTasu": 1.598,
+              "taastuvenergiaTasu": 0.84,
+              "varustuskindlusTasu": 0.758,
               "aktsiis": 0.21,
               "tasakaalustamisTasu": 0.373,
               "tasakaalustamisTasuTootmine": 0.373,
@@ -522,7 +526,7 @@ jobs:
                   note("Tasude seadeid ei saanud lugeda; lõpphinnad on arvutatud vaiketasudega", "index.html CONFIG-plokk puudub või on vigane")
                   return cfg, "default"
               missing = []
-              for group, key in (("hinnad", "marginaal"), ("hinnad", "vorgutasuPaev"), ("hinnad", "vorgutasuOo"), ("hinnad", "taastuvenergiaTasu"),
+              for group, key in (("hinnad", "marginaal"), ("hinnad", "vorgutasuPaev"), ("hinnad", "vorgutasuOo"), ("hinnad", "taastuvenergiaTasu"), ("hinnad", "varustuskindlusTasu"),
                                  ("hinnad", "aktsiis"), ("hinnad", "tasakaalustamisTasu"),
                                  ("hinnad", "tasakaalustamisTasuTootmine"), ("hinnad", "kuutasu"), ("hinnad", "peakaitseA"),
                                  ("hinnad", "vorguKuutasu"), ("hinnad", "labilaskevoimeTasu"), ("hinnad", "kasutusvoimsusTasu"),
@@ -628,7 +632,8 @@ jobs:
               is_night = is_night_tariff(dt_tl, cfg)
               network = tariff_at(cfg, "vorgutasuOo" if is_night else "vorgutasuPaev", dt_tl)
               subtotal = (spot_s + tariff_at(cfg, "marginaal", dt_tl) + network
-                          + tariff_at(cfg, "taastuvenergiaTasu", dt_tl) + tariff_at(cfg, "aktsiis", dt_tl)
+                          + tariff_at(cfg, "taastuvenergiaTasu", dt_tl) + tariff_at(cfg, "varustuskindlusTasu", dt_tl)
+                          + tariff_at(cfg, "aktsiis", dt_tl)
                           + tariff_at(cfg, "tasakaalustamisTasu", dt_tl))
               return subtotal * (1.0 + vat_at(cfg, dt_tl) / 100.0)
 

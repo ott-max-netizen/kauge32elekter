@@ -15,13 +15,13 @@
 <meta name="robots" content="noindex, nofollow, noarchive">
 <title>Kauge 32 · Elektri ja päikese dashboard</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="css/common.css?v=20261103b">
+<link rel="stylesheet" href="css/common.css?v=20261109f">
 <!-- Lukk (parooliga kaitse, README „Parooliga kaitse“): ilma defer'ita, et globaal Lukk oleks lehe skriptile olemas ja .app peituks enne esimest joonistamist -->
 <script src="js/lukk.js?v=20261103b"></script>
 <!-- Külastuste loendus (GoatCounter, küpsisteta; README „Külastuste statistika“). Skript on repo sees, sest CSP lubab ainult
      sama saidi skripte; loendus läheb sendBeacon-iga (connect-src). Saadetakse lehe nimi, ekraani laius ja tulek, mitte andmeid. -->
 <script data-goatcounter="https://kauge32.goatcounter.com/count" data-goatcounter-settings='{"no_events":true,"path":"/","title":"Elektriinfo"}' async src="js/vendor/goatcounter-count.js?v=c031008-k32b"></script>
-<link rel="stylesheet" href="css/index.css?v=20261102">
+<link rel="stylesheet" href="css/index.css?v=20261109f">
 <!-- Raamimise kaitse ja teema enne esimest joonistamist (ilma defer'ita) -->
 <script src="js/teema.js?v=20261103b"></script>
 <!-- Chart.js 4.5.1 (globaal Chart): defer, init() käivitub DOMContentLoaded-il, mil teek on juba täidetud (setupCharts) -->
@@ -319,7 +319,8 @@ const CONFIG = {
     marginaal: 0.45,         // müüja marginaal tarbimisel, s/kWh ilma KM-ta: Sunly börsihinna marginaal 4,5 €/MWh (alates 01.11.2026; enne 0.6)
     vorgutasuPaev: 3.49,      // võrgutasu päevatariif (elektri edastamine: päev), s/kWh ilma KM-ta
     vorgutasuOo: 1.99,        // võrgutasu öötariif (elektri edastamine: öö), s/kWh ilma KM-ta
-    taastuvenergiaTasu: 1.598, // taastuvenergia tasu 0,0084 €/kWh + varustuskindluse tasu 0,00758 €/kWh (alates 01.01.2026) = 0.84 + 0.758 s/kWh ilma KM-ta
+    taastuvenergiaTasu: 0.84, // taastuvenergia tasu 0,0084 €/kWh, s/kWh ilma KM-ta
+    varustuskindlusTasu: 0.758, // varustuskindluse tasu 0,00758 €/kWh (alates 01.01.2026), s/kWh ilma KM-ta
     aktsiis: 0.21,            // elektriaktsiis 0,0021 €/kWh, s/kWh ilma KM-ta
     // Eleringi tasakaalustamisvõimsuse kulu (bilansiteenuse lisatasu, alates 01.01.2026; müüja arvel eraldi real), s/kWh ilma KM-ta:
     // 3,73 €/MWh (2026), 2,97 €/MWh alates 01.01.2027, 3,89 €/MWh alates 01.05.2027 (vt hinnamuudatused). Kehtib nii võrgust
@@ -437,7 +438,7 @@ const CONFIG = {
 };
 </script>
 <!-- Mõlema lehe ühine skriptikood (aeg, vormindamine, DOM-abi, graafikute ühisosa); peab laadima enne põhiskripti -->
-<script src="js/common.js?v=20261109b"></script>
-<script src="js/index.js?v=20261109e"></script>
+<script src="js/common.js?v=20261109f"></script>
+<script src="js/index.js?v=20261109f"></script>
 </body>
 </html>

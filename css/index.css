@@ -165,10 +165,23 @@
 
 .final-shares { display: flex; flex-direction: column; gap: var(--s2); min-width: 0; }
 .final-shares__title { font-size: var(--fs-small); font-weight: 700; }
-.shares { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; font-size: var(--fs-small); }
-@container (min-width: 560px) { .shares { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: var(--s5); } }
-.shares li { display: flex; align-items: center; gap: var(--s2); min-width: 0; }
-.shares__pct { margin-left: auto; font-weight: 700; font-variant-numeric: tabular-nums; }
+.final-shares__title { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0 var(--s2); }
+.final-shares__unit { font-weight: 400; color: var(--muted); }
+.final-shares__note { margin: 0; font-size: var(--fs-small); color: var(--muted); }
+/* Rühmitatud loend: rühma rida (arve, summa, osakaal) ja selle all komponendid; veerud nimi | s/kWh | % */
+.shares-groups { display: grid; gap: var(--s2); margin: 0; padding: 0; list-style: none; font-size: var(--fs-small); }
+.shares-group { display: grid; gap: 2px; min-width: 0; }
+.shares-group__head, .shares li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto 4.2em; align-items: center; column-gap: var(--s2); margin: 0; }
+.shares-group__head { grid-template-columns: minmax(0, 1fr) auto 4.2em; font-weight: 700; padding-bottom: 2px; border-bottom: 1px solid var(--border); }
+.shares-group__head:has(.legend__swatch) { grid-template-columns: auto minmax(0, 1fr) auto 4.2em; }
+.shares { display: grid; gap: 2px; margin: 0; padding: 0 0 0 var(--s1); list-style: none; }
+.shares__name, .shares-group__name { min-width: 0; overflow-wrap: break-word; hyphens: auto; }
+.shares-group__name { display: flex; flex-direction: column; }
+.shares-group__sub { font-weight: 400; color: var(--muted); white-space: nowrap; }
+.shares__value { color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.shares-group__head .shares__value { color: var(--text); }
+.shares__pct { font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; }
+.shares li .shares__pct { font-weight: 400; }
 
 /* ---------- 6. Päike ja aku: kompaktne voog + kokkuvõte vasakul, plaadid paremal (≥ 560 px) ----------
    DOM-järjekord (ka telefonis): voog ja loend, plaadid, selgitus. Laias kaardis on plaadid ühes veerus paremal

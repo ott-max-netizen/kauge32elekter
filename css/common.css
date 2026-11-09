@@ -76,8 +76,10 @@ html[hidden] { display: none !important; }
   --avg-line: var(--muted);     /* päeva keskmine (katkend), eristub ostuhinnast (--text) */
   --mode-idle: var(--muted);    /* režiimiriba „aku ootel“: õhuke joon */
 
-  /* Ordinaalne ramp: lõpphinna osakaalud tabeli järjekorras (börs → KM) */
-  --share-1: #1f3a5c; --share-2: #2f527c; --share-3: #4d6d93; --share-4: #7590ae; --share-5: #9cafc5;
+  /* Lõpphinna osakaalud arvete kaupa: müüja arve (sinised: börsihind, marginaal, tasakaalustamine), võrguarve
+     (rohekassinised: võrgutasu, taastuvenergia, varustuskindlus, aktsiis), käibemaks (hall) */
+  --share-1: #1f3a5c; --share-2: #3d6896; --share-3: #7ea3cb;
+  --share-4: #0e5a54; --share-5: #2b8279; --share-6: #58a99c; --share-7: #93cdc1; --share-8: #a3a9b2;
 
   --skeleton: #e6ebf1;
   --skeleton-hi: #f5f7fa;
@@ -123,7 +125,8 @@ html[hidden] { display: none !important; }
     --cat-oranz:    #ef8010; --cat-oranz-bg:    #4f2a0e; --cat-oranz-fg:    #ffd2b0;
     --cat-punane:   #ffa6ac; --cat-punane-bg:   #4e1a1a; --cat-punane-fg:   #ffc7c7;
     --solar: #c38323; --home: #4c8edf; --grid: #b7569a; --export: #834fe9; --battery: #38a56a;
-    --share-1: #c6d6e8; --share-2: #9fb6d0; --share-3: #7a97b8; --share-4: #5b7a9c; --share-5: #3f5c7c;
+    --share-1: #c6d6e8; --share-2: #8fb0d4; --share-3: #5a81ad;
+    --share-4: #b4e3d9; --share-5: #7cc5b6; --share-6: #4a9d8f; --share-7: #2e7268; --share-8: #6f7884;
     --skeleton: #1b2736; --skeleton-hi: #263548;
   }
 }
@@ -147,7 +150,8 @@ html[hidden] { display: none !important; }
     --cat-oranz:    #ef8010; --cat-oranz-bg:    #4f2a0e; --cat-oranz-fg:    #ffd2b0;
     --cat-punane:   #ffa6ac; --cat-punane-bg:   #4e1a1a; --cat-punane-fg:   #ffc7c7;
     --solar: #c38323; --home: #4c8edf; --grid: #b7569a; --export: #834fe9; --battery: #38a56a;
-    --share-1: #c6d6e8; --share-2: #9fb6d0; --share-3: #7a97b8; --share-4: #5b7a9c; --share-5: #3f5c7c;
+    --share-1: #c6d6e8; --share-2: #8fb0d4; --share-3: #5a81ad;
+    --share-4: #b4e3d9; --share-5: #7cc5b6; --share-6: #4a9d8f; --share-7: #2e7268; --share-8: #6f7884;
     --skeleton: #1b2736; --skeleton-hi: #263548;
   }
 }

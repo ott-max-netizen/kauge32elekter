@@ -9,7 +9,7 @@ const CONFIG = readPageConfig();
 
 /* Tehnilised konstandid — neid ei ole tavakasutuses vaja muuta. Mõlema lehe ühised (TIME_ZONE, API_URL,
    MINUTE_MS, HOUR_MS, DAY_MS) on failis js/common.js. */
-const APP_VERSION = '2.9.2';
+const APP_VERSION = '2.9.3';
 const PRICE_TIMEOUT_MS = 20000;
 const SOLAR_TIMEOUT_MS = 30000;
 const TARIFF_TIMEOUT_MS = 5000;
@@ -527,8 +527,8 @@ function calculateFinalPrice(spotExVatCentsKwh, date) {
   const fees = feesAt(date);
   const tariff = getNetworkTariff(date);
   const network = Number(tariff === 'oo' ? fees.vorgutasuOo : fees.vorgutasuPaev);
-  const subtotal = spotExVatCentsKwh + Number(fees.marginaal) + network + Number(fees.taastuvenergiaTasu) + Number(fees.aktsiis)
-    + (Number(fees.tasakaalustamisTasu) || 0);
+  const subtotal = spotExVatCentsKwh + Number(fees.marginaal) + network + Number(fees.taastuvenergiaTasu)
+    + (Number(fees.varustuskindlusTasu) || 0) + Number(fees.aktsiis) + (Number(fees.tasakaalustamisTasu) || 0);
   return { tariff, total: subtotal * (1 + Number(fees.kaibemaks) / 100) };
 }
 /** Perioodi lõpphind (s/kWh koos tasude ja KM-ga), arvutatakse perioodi kohta üks kord: tariifid loetakse enne esimest

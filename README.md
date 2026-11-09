@@ -368,13 +368,16 @@ Solarmani välja nimed ja märgid on failis muutmata; lehed tõlgendavad neid ni
 
 - Lõpphind = (börsihind + marginaal + võrgutasu + taastuvenergia- ja varustuskindluse tasu + aktsiis
   + tarbimise tasakaalustamisvõimsuse kulu) × (1 + KM). Riiklikud ja müüja tasud ilma KM-ta: taastuvenergia tasu
-  0,84, varustuskindluse tasu 0,758 (`taastuvenergiaTasu` = 1,598), elektriaktsiis 0,21 ja Eleringi
+  0,84 (`taastuvenergiaTasu`), varustuskindluse tasu 0,758 (`varustuskindlusTasu`, alates 01.01.2026), elektriaktsiis 0,21 ja Eleringi
   tasakaalustamisvõimsuse kulu (`tasakaalustamisTasu`): 0 enne 2026, 0,373 (3,73 €/MWh) 2026, 0,297 alates
   01.01.2027 ja 0,389 alates 01.05.2027 (`hinnamuudatused`). Sama tasu kehtib tootmisele
   (`tasakaalustamisTasuTootmine`): müügihind = börsihind ilma KM-ta − müügitasu − tasakaalustamisTasuTootmine × (1 + KM).
   Aku laadimise ja tühjendamise topeltkoguse vabastus (Eleringi juhend, hübriidlahendus) eeldab salvesti eraldi
   mõõtepunkti, seetõttu arvestatakse tasu mõlemas suunas täismahus. Öötariif kehtib tööpäeviti 22–07 ning laupäeval, pühapäeval ja **riigipühadel** kogu
   ööpäeva (`CONFIG.ootariif.riigipuhadOnOo`, Elektrilevi hinnakiri).
+- **Hinnakomponentide osakaal** (elektriinfo leht): iga komponent oma lõiguna ja loendis s/kWh ilma KM-ta ning
+  osakaaluga 0,1% täpsusega, rühmitatud arvete kaupa – elektrimüüja arve (börsihind, marginaal, tasakaalustamisvõimsus),
+  võrguarve (võrgutasu, taastuvenergia-, varustuskindluse tasu, aktsiis; rühma summa ka koos KM-ga) ja käibemaks.
 - „Leia odavaim aeg“, elektriauto laadimine ja soovitused valivad akna **hinna koos tasudega**
   järgi (öine võrgutasu on odavam), näidatakse ka börsihinda.
 - Kuu € (`majaElekter`) on hinnang: 15-min ost × börsihind + **vastaval ajal kehtinud** tasud ja KM.
