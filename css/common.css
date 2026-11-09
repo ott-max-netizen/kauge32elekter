@@ -428,6 +428,12 @@ a { color: var(--focus); text-underline-offset: 2px; }
 .hero-final-pill__label { font-size: var(--fs-micro); line-height: 1.2; color: var(--muted); }
 .hero-final-pill__value { font-size: 18px; font-weight: 700; line-height: 1.25; }
 .hero-meta { margin: 0; font-size: var(--fs-small); color: var(--muted); }
+/* Hero: silt suure numbri kohal (mis hind see on) ja jaotus selle all; liige ei murdu, rida murdub liikmete vahelt */
+.hero-kicker { margin: 0 0 calc(-1 * var(--s1)); font-size: var(--fs-small); font-weight: 600; color: var(--muted); }
+.hero-split { display: flex; flex-wrap: wrap; gap: 0 0.4em; margin: 0; font-size: var(--fs-small); color: var(--muted); }
+.hero-split__term { white-space: nowrap; }
+.hero-split b { color: var(--text); font-variant-numeric: tabular-nums; }
+.verdict__basis { font-weight: 600; }
 .compare { margin: 0; font-size: var(--fs-body); font-weight: 600; }
 .facts { display: grid; gap: var(--s2); margin: 0; padding: 0; list-style: none; }
 .facts li {

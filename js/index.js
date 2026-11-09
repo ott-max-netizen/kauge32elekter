@@ -9,7 +9,7 @@ const CONFIG = readPageConfig();
 
 /* Tehnilised konstandid — neid ei ole tavakasutuses vaja muuta. Mõlema lehe ühised (TIME_ZONE, API_URL,
    MINUTE_MS, HOUR_MS, DAY_MS) on failis js/common.js. */
-const APP_VERSION = '3.9.0';
+const APP_VERSION = '3.10.0';
 const API_TIMEOUT_MS = 20000;
 const PLANNER_DURATIONS = [60, 120, 180, 240, 300, 360]; // minutit
 const MAX_PERIOD_MINUTES = 60;   // pikim lubatud hinnaperiood
@@ -1437,24 +1437,27 @@ function renderCurrentPrice(d, a, rec) {
   const current = d.current;
   const finalPrice = calculateFinalPrice(current.spotExVatCentsKwh, d.now);
   const facts = a.facts.filter(f => !rec || f.key !== rec.usedKey);
+  // Suur number = maja lõpphind (koos tasude ja KM-ga); hinnaklass, värv ja keskmise võrdlus jäävad börsihinna põhiseks
+  // ja on sõnaga „börsihind“ märgitud. Tasud = ümardatud lõpphind − ümardatud börsihind, et rida klapiks numbriga.
+  const split = heroPriceSplit(a.price, finalPrice.total);
 
   host.replaceChildren(
     el('div', { class: 'hero-top' }, [
-      el('p', { class: 'verdict' }, [el('span', { class: 'visually-hidden', text: 'Hinnang: ' }), el('span', { 'data-testid': 'price-verdict', text: a.label })]),
+      el('p', { class: 'verdict' }, [el('span', { class: 'visually-hidden', text: 'Börsihinna hinnang: ' }),
+        el('span', {}, [el('span', { 'data-testid': 'price-verdict', text: a.label }), el('span', { class: 'verdict__basis', text: ' börsihind' })])]),
       el('p', { class: 'hero-period', 'data-testid': 'price-period', text: `Kehtib ${formatTimeRange(current.start, current.end)}` })
     ]),
-    el('div', { class: 'hero-price-row' }, [
-      el('p', { class: 'hero-price' }, [
-        el('span', { class: 'hero-price__value', 'data-testid': 'price-now', text: numberFormat.d2.format(a.price) }),
-        el('span', { class: 'hero-price__unit', text: 's/kWh' })
-      ]),
-      el('p', { class: 'hero-final-pill', title: 'Maja hinnanguline lõpphind praegu koos võrgutasude, aktsiisi ja käibemaksuga' }, [
-        el('span', { class: 'hero-final-pill__label', text: 'Koos tasudega' }),
-        el('span', { class: 'hero-final-pill__value', 'data-testid': 'price-final', text: formatCents(finalPrice.total) })
-      ])
+    el('p', { class: 'hero-kicker', text: 'Maja hind praegu (koos tasude ja KM-ga)' }),
+    el('p', { class: 'hero-price' }, [
+      el('span', { class: 'hero-price__value', 'data-testid': 'price-final', text: numberFormat.d2.format(split.total) }),
+      el('span', { class: 'hero-price__unit', text: 's/kWh' })
     ]),
-    el('p', { class: 'hero-meta', text: `Börsihind koos ${numberFormat.pct.format(CONFIG.hinnad.kaibemaks)}% käibemaksuga` }),
-    a.comparison ? el('p', { class: 'compare', 'data-testid': 'price-compare', text: a.comparison }) : null,
+    el('p', { class: 'hero-split' }, [
+      el('span', { class: 'hero-split__term' }, ['Börsihind ', el('b', { 'data-testid': 'price-now', text: numberFormat.d2.format(split.spot) })]),
+      el('span', { class: 'hero-split__term' }, [`${split.fees < 0 ? '−' : '+'} tasud ja maksud `, el('b', { text: numberFormat.d2.format(Math.abs(split.fees)) })]),
+      el('span', { class: 'hero-split__term', text: `· koos KM ${numberFormat.pct.format(feesAt(d.now).kaibemaks)}%` })
+    ]),
+    a.comparison ? el('p', { class: 'compare', 'data-testid': 'price-compare', text: spotComparisonText(a.comparison) }) : null,
     rec ? el('div', { class: 'advice' }, [
       el('p', { class: 'advice__title', 'data-testid': 'advice-title', text: rec.title }),
       rec.text ? el('p', { class: 'advice__text', text: rec.text }) : null
@@ -1462,6 +1465,18 @@ function renderCurrentPrice(d, a, rec) {
     // Odavaim 2 h aken on alati esimene fakt (L-130), kui see algab tulevikus
     facts.length ? el('ul', { class: 'facts' }, facts.map(f => el('li', { 'data-testid': f.key === 'best2h' ? 'fact-best-window' : null, text: f.text }))) : null
   );
+}
+
+/** Hero numbrid: börsihind ja lõpphind (mõlemad koos KM-ga, ümardatud) ning tasud nende vahena (summa klapib alati). */
+function heroPriceSplit(spotIncVat, total) {
+  const round2 = v => Math.round(v * 100) / 100;
+  const spot = round2(spotIncVat);
+  const sum = round2(total);
+  return { spot, total: sum, fees: round2(sum - spot) };
+}
+/** Keskmise võrdlus on börsihinna põhine: „Börsihind 5% üle tänase keskmise (24,95 s/kWh)“. */
+function spotComparisonText(text) {
+  return text ? `Börsihind ${text.charAt(0).toLowerCase()}${text.slice(1)}` : text;
 }
 
 /* ---------- 3. Börsihind eile, täna ja homme (p 6.2, 6.3, 6.8) ---------- */

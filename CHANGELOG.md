@@ -4,6 +4,20 @@ See fail kirjeldab rakenduse `index.html` versioonimuudatusi, arhitektuurilisi k
 
 ---
 
+## [3.10.0] ja energy-dashboard.html [2.10.0] — 2026-11-09 · hero suureks numbriks maja lõpphind
+
+Disaineri ja kriitiku ülevaate punkt 2, mõlemal lehel korraga.
+
+- Suur number on **maja lõpphind** (koos tasude ja KM-ga, `data-testid="price-final"`), selle kohal silt „Maja hind
+  praegu (koos tasude ja KM-ga)“, all „Börsihind 33,85 + tasud ja maksud 7,59 · koos KM 24%“ (`price-now` = börsihind).
+  Tasud = ümardatud lõpphind − ümardatud börsihind, et rida klapiks numbriga. Pill „Koos tasudega“ kadus.
+- Hinnaklass jääb börsihinna põhiseks ja on nüüd nii ka kirjas: „Kallis börsihind“, „Väga odav börsihind“ (ekraanilugejale
+  „Börsihinna hinnang:“); keskmise võrdlus „Börsihind 29% üle tänase keskmise (…)“. Kaardi värviserv samuti börsihinna järgi.
+- README: hero-numbri põhimõte uuendatud.
+- Kontroll: mõlemad lehed 360/390/1200 px, hele ja tume, kallis, väga odav ja negatiivne börsihind; horisontaalset kerimist pole.
+
+---
+
 ## [3.9.0] — 2026-11-09 · „Hind koos tasudega praegu“: üks koostise loend, kuutasude tabel, hinnamuudatused avanevas plokis
 
 Disaineri ja kriitiku ülevaate punkt 1 (kaardi sees, väike risk; hero ja „Järgmised tunnid“ jäid muutmata).

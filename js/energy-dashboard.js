@@ -9,7 +9,7 @@ const CONFIG = readPageConfig();
 
 /* Tehnilised konstandid — neid ei ole tavakasutuses vaja muuta. Mõlema lehe ühised (TIME_ZONE, API_URL,
    MINUTE_MS, HOUR_MS, DAY_MS) on failis js/common.js. */
-const APP_VERSION = '2.9.3';
+const APP_VERSION = '2.10.0';
 const PRICE_TIMEOUT_MS = 20000;
 const SOLAR_TIMEOUT_MS = 30000;
 const TARIFF_TIMEOUT_MS = 5000;
@@ -3177,23 +3177,30 @@ function renderPrice(d) {
   facts.push([null, `Kehtib ${finalPrice.tariff === 'oo' ? 'öötariif' : 'päevatariif'} (võrgutasu ${formatCents(finalPrice.tariff === 'oo' ? feesAt(d.now).vorgutasuOo : feesAt(d.now).vorgutasuPaev)} ilma KM-ta).`]);
   facts.push([null, d.hasTomorrow ? 'Homsed börsihinnad on saadaval (vt graafikul „Homme“).' : tomorrowNotice(d.tomorrowStatus)]);
 
+  // Suur number = maja lõpphind (sama mis elektriinfo lehel); hinnaklass, värv ja keskmise võrdlus on börsihinna põhised
+  // ja märgitud sõnaga „börsihind“. Tasud = ümardatud lõpphind − ümardatud börsihind (rida klapib numbriga).
+  const round2 = v => Math.round(v * 100) / 100;
+  const spotShown = round2(price);
+  const totalShown = round2(finalPrice.total);
+  const feesShown = round2(totalShown - spotShown);
+  const compare = d.todayAvg != null ? compareToDayAverage(price, d.todayAvg) : null;
   setChildren(host,
     el('div', { class: 'hero-top' }, [
-      el('p', { class: 'verdict' }, [el('span', { class: 'visually-hidden', text: 'Hinnang: ' }), getCategoryLabel(category)]),
+      el('p', { class: 'verdict' }, [el('span', { class: 'visually-hidden', text: 'Börsihinna hinnang: ' }), el('span', {}, [getCategoryLabel(category),
+        el('span', { class: 'verdict__basis', text: ' börsihind' })])]),
       el('p', { class: 'hero-period', text: `Kehtib ${formatTimeRange(current.start, current.end)}` })
     ]),
-    el('div', { class: 'hero-price-row' }, [
-      el('p', { class: 'hero-price' }, [
-        el('span', { class: 'hero-price__value', 'data-testid': 'price-now', text: numberFormat.d2.format(price) }),
-        el('span', { class: 'hero-price__unit', text: 's/kWh' })
-      ]),
-      el('div', { class: 'hero-final-pill', title: 'Maja hinnanguline lõpphind koos võrgutasude, aktsiisi ja käibemaksuga' }, [
-        el('span', { class: 'hero-final-pill__label', text: 'Koos tasudega' }),
-        el('span', { class: 'hero-final-pill__value', 'data-testid': 'price-final', text: formatCents(finalPrice.total) })
-      ])
+    el('p', { class: 'hero-kicker', text: 'Maja hind praegu (koos tasude ja KM-ga)' }),
+    el('p', { class: 'hero-price' }, [
+      el('span', { class: 'hero-price__value', 'data-testid': 'price-final', text: numberFormat.d2.format(totalShown) }),
+      el('span', { class: 'hero-price__unit', text: 's/kWh' })
     ]),
-    el('p', { class: 'hero-meta', text: `Börsihind koos ${numberFormat.pct.format(TARIFFS.hinnad.kaibemaks)}% käibemaksuga` }),
-    d.todayAvg != null ? el('p', { class: 'compare', text: compareToDayAverage(price, d.todayAvg) }) : null,
+    el('p', { class: 'hero-split' }, [
+      el('span', { class: 'hero-split__term' }, ['Börsihind ', el('b', { 'data-testid': 'price-now', text: numberFormat.d2.format(spotShown) })]),
+      el('span', { class: 'hero-split__term' }, [`${feesShown < 0 ? '−' : '+'} tasud ja maksud `, el('b', { text: numberFormat.d2.format(Math.abs(feesShown)) })]),
+      el('span', { class: 'hero-split__term', text: `· koos KM ${numberFormat.pct.format(feesAt(d.now).kaibemaks)}%` })
+    ]),
+    compare ? el('p', { class: 'compare', text: `Börsihind ${compare.charAt(0).toLowerCase()}${compare.slice(1)}` }) : null,
     el('ul', { class: 'facts' }, facts.filter(([, text]) => text).map(([testid, text]) => el('li', { 'data-testid': testid, text })))
   );
 }
