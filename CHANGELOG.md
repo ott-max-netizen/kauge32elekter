@@ -4,6 +4,19 @@ See fail kirjeldab rakenduse `index.html` versioonimuudatusi, arhitektuurilisi k
 
 ---
 
+## [3.7.0] ja energy-dashboard.html [2.9.2] — 2026-11-09 · VMA2 algus 01.05.2026 ja kasutusvõimsuse tasu
+
+- Arvete 04/2026 (Amper VML2) ja 05/2026 (Võimsus VMA2) järgi algas VMA2 **01.05.2026** (`VMA2_ALATES`; enne oletus
+  01.06.2026). Mai 2026: kuutasu 29,19 €, läbilaskevõime 0,29 €/A; alates 01.06.2026 30,41 € ja 0,32 €/A (oletus,
+  Elektrilevi hinnakirjamuudatus).
+- **Kasutusvõimsuse tasu** (2,45 €/kW, ainult VMA2) on kuu € sees: kuu suurim võimsus Estfeedi 15-min mõõtmistest,
+  ümardatud täis-kW-ni (`billed_kw`; arve 05/2026: 20,5 → 21 kW = 51,45 €). Kuu kirjes uus väli `kwMax`.
+  Tarbimiskoha kasutusvõimsust arvel pole – ei arvestata.
+- Töövoo `CALC_VERSION` 6. Kontroll: kõik neli arvet (01/2025, 12/2025, 04/2026, 05/2026) klapivad töövoo tasudega sendi
+  täpsusega; sünteetiline kuu 20,5 kW tipuga annab kuutasud 157,53 € koos KM-ga.
+
+---
+
 ## [3.6.1] ja energy-dashboard.html [2.9.1] — 2026-11-09 · võrgupaketi Amper VML2 ajalugu arvete järgi
 
 - Kuni VMA2-ni oli võrgupakett **Amper VML2** (Elektrilevi, 160 A): elektri edastamine päev 3,95, öö 2,30 s/kWh,

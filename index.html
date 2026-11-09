@@ -333,8 +333,9 @@ const CONFIG = {
     kaibemaks: 24,            // käibemaksu määr, % (kasutatakse kõikjal, ka börsihinna KM-ga näitamisel)
     // Võrguteenuse fikseeritud tasud (Elektrilevi, madalpinge üle 63 A, pakett Võimsus VMA2), ILMA KM-ta. Need ei sõltu
     // kWh-st, seega s/kWh hinnas neid pole: elektriinfo lehe hinna koostise all on need kirjas eraldi. Kuu € arvestusse
-    // (Maja üldelekter) lisatakse võrgu kuutasu + läbilaskevõime × peakaitse koos KM-ga (töövoog uuenda-hinnad.yml).
-    // Kasutusvõimsuse tasud (€ / kW) sõltuvad kuu suurimast võimsusest ja neid kuu € arvestusse ei lisata.
+    // (Maja üldelekter) lisatakse võrgu kuutasu + läbilaskevõime × peakaitse + kasutusvõimsus × kuu suurim kW (täis-kW-ni
+    // ümardatud, Estfeedi mõõtmistest) koos KM-ga (töövoog uuenda-hinnad.yml). Tarbimiskoha kasutusvõimsust maja arvel
+    // pole (arve 05/2026), seda ei arvestata. VMA2 kehtib alates 01.05.2026 (enne Amper VML2, vt töövoo TASUDE_AJALUGU).
     peakaitseA: 160,          // peakaitse (võrguühenduse läbilaskevõime), A
     vorguKuutasu: 30.41,      // võrguühenduse kuutasu, €/kuu
     labilaskevoimeTasu: 0.32, // võrguühenduse läbilaskevõime, € / A kuus (160 A × 0,32 = 51,20 €/kuu)
@@ -437,6 +438,6 @@ const CONFIG = {
 </script>
 <!-- Mõlema lehe ühine skriptikood (aeg, vormindamine, DOM-abi, graafikute ühisosa); peab laadima enne põhiskripti -->
 <script src="js/common.js?v=20261109b"></script>
-<script src="js/index.js?v=20261109d"></script>
+<script src="js/index.js?v=20261109e"></script>
 </body>
 </html>

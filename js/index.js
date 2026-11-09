@@ -9,7 +9,7 @@ const CONFIG = readPageConfig();
 
 /* Tehnilised konstandid — neid ei ole tavakasutuses vaja muuta. Mõlema lehe ühised (TIME_ZONE, API_URL,
    MINUTE_MS, HOUR_MS, DAY_MS) on failis js/common.js. */
-const APP_VERSION = '3.6.1';
+const APP_VERSION = '3.7.0';
 const API_TIMEOUT_MS = 20000;
 const PLANNER_DURATIONS = [60, 120, 180, 240, 300, 360]; // minutit
 const MAX_PERIOD_MINUTES = 60;   // pikim lubatud hinnaperiood
@@ -580,10 +580,10 @@ function fixedFeesText(fees) {
     parts.push(`${terms.join(' + ')} = ${eur(m.network)}/kuu ilma KM-ta`);
   }
   if (posNum(fees.kuutasu)) parts.push(`muu kuutasu ${eur(fees.kuutasu)}/kuu koos KM-ga`);
-  const power = [['kasutusvõimsus', fees.kasutusvoimsusTasu], ['tarbimiskoha kasutusvõimsus', fees.tarbimiskohaKasutusvoimsusTasu]]
-    .filter(([, v]) => posNum(v)).map(([label, v]) => `${label} ${eur(v)} / kW kuus`);
-  return `Fikseeritud kuutasud (ei sisaldu s/kWh hinnas): ${parts.join('; ')} – kokku ${eur(m.totalIncVat)}/kuu koos KM-ga.`
-    + (power.length ? ` Lisaks kuu suurima võimsuse järgi: ${power.join(', ')} (ilma KM-ta).` : '');
+  const power = posNum(fees.kasutusvoimsusTasu)
+    ? ` Lisaks kasutusvõimsus ${eur(fees.kasutusvoimsusTasu)} / kW kuus ilma KM-ta kuu suurima võimsuse järgi (nt 21\u00a0kW = ${eur(21 * fees.kasutusvoimsusTasu)}); see on „Maja üldelektri“ kuu summas sees.`
+    : '';
+  return `Fikseeritud kuutasud (ei sisaldu s/kWh hinnas): ${parts.join('; ')} – kokku ${eur(m.totalIncVat)}/kuu koos KM-ga.${power}`;
 }
 
 /** Hinnamuudatuse nimetused ja ühikud tekstiks („Alates 01.02.2027: võrgu kuutasu 30,41 → 30,58 €/kuu, …“). */
@@ -2865,7 +2865,7 @@ function renderBuildingElectricity() {
     el('p', {
       class: 'building-note',
       text: data.source === 'estfeed'
-        ? 'Eurod on hinnang (≈), arvutatud ostetud kWh-st, börsihinnast ja vastaval ajal kehtinud tasudest koos KM-ga; koos võrgu kuutasu ja läbilaskevõimetasuga (peakaitse järgi, sel ajal kehtinud võrgupaketiga), kasutusvõimsuse tasud pole sees. Tegelik arve võib erineda.'
+        ? 'Eurod on hinnang (≈), arvutatud ostetud kWh-st, börsihinnast ja vastaval ajal kehtinud tasudest koos KM-ga; koos võrgu kuutasu, läbilaskevõime- ja kasutusvõimsuse tasuga (peakaitse ja kuu suurima võimsuse järgi, sel ajal kehtinud võrgupaketiga). Tegelik arve võib erineda.'
         : 'Eurod on haldaja sisestatud arvesummad. Võrguarvesti (Estfeed) andmeid ei õnnestunud laadida.'
     }),
     table

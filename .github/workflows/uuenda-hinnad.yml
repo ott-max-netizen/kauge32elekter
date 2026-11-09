@@ -155,7 +155,8 @@ jobs:
           # 4 = kuu kWh ja € jaotus öö- ja päevatariifi ajaks (kwhOo/kwhPaev, eurOo/eurPaev) ja kWh-ga kaalutud
           #     keskmine börsihind spotAvg (€/MWh ilma KM-ta); energialehe trendid.
           # 5 = tasakaalustamisvõimsuse kulu s/kWh hinnas; võrgu kuutasu + läbilaskevõime × peakaitse (fixed_monthly_eur).
-          CALC_VERSION = 5
+          # 6 = kasutusvõimsuse tasu kuu suurima võimsuse järgi, kuu kirjes kwMax.
+          CALC_VERSION = 6
           KM_AJALUGU = ((datetime(2025, 7, 1, tzinfo=TZ), 22.0),)  # (kuni, määr %): enne 01.07.2025 oli KM 22%
 
           # Tasude ajalugu: CONFIG.hinnad võti -> ((kuni, väärtus), ...) kasvavas järjekorras, nagu KM_AJALUGU.
@@ -165,7 +166,7 @@ jobs:
           # kuupäevani) ja muuda alles siis CONFIG-it – muidu arvutatakse ka varasemad kuud uue tasuga.
           # Kirje sõrmejälg (cfg) muutub ja vahemälus olevad kuud arvutatakse järgmisel käivitusel uuesti.
           # Kuuandmed algavad 2024-11, varasemaid väärtusi pole vaja.
-          VMA2_ALATES = datetime(2026, 6, 1, tzinfo=TZ)  # võrgupakett Amper VML2 -> Võimsus VMA2 (OLETUS, vt allpool)
+          VMA2_ALATES = datetime(2026, 5, 1, tzinfo=TZ)  # võrgupakett Amper VML2 -> Võimsus VMA2 (arved 04/2026 ja 05/2026)
           TASUDE_AJALUGU = {
               # CONFIG.hinnad.taastuvenergiaTasu = taastuvenergia tasu 0,84 + varustuskindluse tasu 0,758 (alates 01.01.2026).
               "taastuvenergiaTasu": (
@@ -199,9 +200,11 @@ jobs:
               # Võrguteenus (Elektrilevi, peakaitse 160 A), ilma KM-ta. Enne VMA2-te oli pakett Amper VML2 (arved 01/2025 ja
               # 12/2025, mõlemad klapivad selle arvestusega sendi täpsusega): elektri edastamine päev 3,95, öö 2,30 s/kWh,
               # kuutasu 25,80 €/kuu ja läbilaskevõime 0,55 €/A (01/2025; sama eeldatud 11–12/2024), alates 01.08.2025 26,21 € ja
-              # 0,57 €/A (12/2025 arve, Konkurentsiameti kooskõlastatud tariif). Võimsus VMA2 (3,49 / 1,99 s/kWh, 30,41 € ja
-              # 0,32 €/A) – OLETUS: alates 01.06.2026 (Elektrilevi hinnakirjamuudatus); VML2 kehtis vähemalt 31.12.2025-ni.
-              # Kui VMA2 algas muul kuupäeval, muuda VMA2_ALATES. 01.02.2027 hinnakiri on index.html CONFIG.hinnamuudatused-es:
+              # 0,57 €/A (arved 12/2025 ja 04/2026). Võimsus VMA2 alates 01.05.2026 (arve 05/2026): 3,49 / 1,99 s/kWh, kuutasu
+              # 29,19 €, läbilaskevõime 0,29 €/A ja kasutusvõimsus 2,45 €/kW (21 kW = 51,45 €; tarbimiskoha kasutusvõimsust
+              # arvel pole). Alates 01.06.2026 (Elektrilevi hinnakirjamuudatus) 30,41 € ja 0,32 €/A – OLETUS, juuni arvega
+              # kinnitamata. Arved 01/2025, 12/2025, 04/2026 ja 05/2026 klapivad selle arvestusega sendi täpsusega.
+              # 01.02.2027 hinnakiri on index.html CONFIG.hinnamuudatused-es:
               # https://elektrilevi.ee/en/uudised/vorgutasu-muutub-alates-1-augustist
               # https://elektrilevi.ee/en/uudised/vorgutasu-keskmine-hind-muutub-alates-juunikuust-kolm-koma-neli-protsenti
               "vorgutasuPaev": (
@@ -225,10 +228,17 @@ jobs:
               "vorguKuutasu": (
                   (datetime(2025, 8, 1, tzinfo=TZ), 25.80),
                   (VMA2_ALATES, 26.21),
+                  (datetime(2026, 6, 1, tzinfo=TZ), 29.19),
               ),
               "labilaskevoimeTasu": (
                   (datetime(2025, 8, 1, tzinfo=TZ), 0.55),
                   (VMA2_ALATES, 0.57),
+                  (datetime(2026, 6, 1, tzinfo=TZ), 0.29),
+              ),
+              # Kasutusvõimsuse tasu €/kW kuus (ainult VMA2): kuu suurim võimsus Estfeedi mõõtmistest, ümardatud täis-kW-ni
+              # (arve 05/2026: võimsus 20,5 kW -> 21 kW). VML2-l seda polnud.
+              "kasutusvoimsusTasu": (
+                  (VMA2_ALATES, 0.0),
               ),
               # Muu fikseeritud kuutasu (nt müüja kuutasu; võrgu kuu- ja läbilaskevõimetasu on ülal eraldi), €/kuu koos
               # KM-ga. Summad TÄIDA arvete järgi; 0 = selle perioodi kuudele muud kuutasu ei lisata.
@@ -252,6 +262,7 @@ jobs:
               "peakaitseA": 160.0,
               "vorguKuutasu": 30.41,
               "labilaskevoimeTasu": 0.32,
+              "kasutusvoimsusTasu": 2.45,
               "muugitasu": 1.054,
               "kaibemaks": 24.0,
               "algus": 22.0,
@@ -513,7 +524,8 @@ jobs:
               for group, key in (("hinnad", "marginaal"), ("hinnad", "vorgutasuPaev"), ("hinnad", "vorgutasuOo"), ("hinnad", "taastuvenergiaTasu"),
                                  ("hinnad", "aktsiis"), ("hinnad", "tasakaalustamisTasu"),
                                  ("hinnad", "tasakaalustamisTasuTootmine"), ("hinnad", "kuutasu"), ("hinnad", "peakaitseA"),
-                                 ("hinnad", "vorguKuutasu"), ("hinnad", "labilaskevoimeTasu"), ("hinnad", "muugitasu"), ("hinnad", "kaibemaks"),
+                                 ("hinnad", "vorguKuutasu"), ("hinnad", "labilaskevoimeTasu"), ("hinnad", "kasutusvoimsusTasu"),
+                                 ("hinnad", "muugitasu"), ("hinnad", "kaibemaks"),
                                  ("ootariif", "algus"), ("ootariif", "lopp")):
                   v = config_number(page, group, key)
                   if v is not None:
@@ -625,11 +637,16 @@ jobs:
               return (spot_eur_mwh / 10.0 - tariff_at(cfg, "muugitasu", dt_tl)
                       - tariff_at(cfg, "tasakaalustamisTasuTootmine", dt_tl) * (1.0 + vat_at(cfg, dt_tl) / 100.0))
 
-          def fixed_monthly_eur(cfg, dt_tl):
+          def billed_kw(peak_kw):
+              """Arvel olev kasutusvõimsus: kuu suurim võimsus ümardatud täis-kW-ni (20,5 -> 21, nagu arvel 05/2026)."""
+              return float(math.floor(max(0.0, peak_kw) + 0.5))
+
+          def fixed_monthly_eur(cfg, dt_tl, peak_kw=0.0):
               """Hetkel dt_tl kehtinud fikseeritud kuutasud kokku, €/kuu koos KM-ga: (võrgu kuutasu + läbilaskevõime ×
-              peakaitse) × KM + muu kuutasu (CONFIG.hinnad.kuutasu, juba koos KM-ga). Sama valem mis index.js fixedMonthlyFees."""
+              peakaitse + kasutusvõimsus × kuu suurim kW) × KM + muu kuutasu (CONFIG.hinnad.kuutasu, juba koos KM-ga).
+              Sama valem mis index.js fixedMonthlyFees (seal ilma kasutusvõimsuseta, mis sõltub kuu mõõtmistest)."""
               pos = lambda key: max(0.0, tariff_at(cfg, key, dt_tl))
-              network = pos("vorguKuutasu") + pos("labilaskevoimeTasu") * pos("peakaitseA")
+              network = pos("vorguKuutasu") + pos("labilaskevoimeTasu") * pos("peakaitseA") + pos("kasutusvoimsusTasu") * billed_kw(peak_kw)
               return network * (1.0 + vat_at(cfg, dt_tl) / 100.0) + pos("kuutasu")
 
           def fetch_nps_prices(start_dt, end_dt, strict=True):
@@ -905,9 +922,15 @@ jobs:
               if count == 0:
                   return None
 
-              # Fikseeritud kuutasu (kuu alguses kehtinud) lisatakse möödunud osa kaupa: terve kuu korral täies
-              # ulatuses, jooksval kuul ja „sama ajani“ summas sama osa kuust, et võrdlus oleks kooskõlaline.
-              kuutasu = fixed_monthly_eur(tariff_cfg, m_start)
+              # Kuu suurim võimsus (kW) mõõtmistest: perioodi kWh / perioodi kestus (15 min; tunniandmete korral 1 h)
+              ts_sorted = sorted(ts for ts, _ in periods)
+              diffs = [b - a for a, b in zip(ts_sorted, ts_sorted[1:]) if b > a]
+              step_s = min(3600, max(900, min(diffs))) if diffs else 900
+              peak_kw = max(kwh for _, kwh in periods) * 3600.0 / step_s
+
+              # Fikseeritud kuutasu (kuu alguses kehtinud, kasutusvõimsus kuu suurima võimsuse järgi) lisatakse möödunud
+              # osa kaupa: terve kuu korral täies ulatuses, jooksval kuul ja „sama ajani“ summas sama osa kuust.
+              kuutasu = fixed_monthly_eur(tariff_cfg, m_start, peak_kw)
               month_s = next_month_start(year, month).timestamp() - m_start.timestamp()
               if total_kwh > 0 and kuutasu > 0:
                   total_eur += kuutasu * min(1.0, (t1 - t0) / month_s)
@@ -924,6 +947,7 @@ jobs:
                   "eurOo": round(night_eur, 2),
                   "eurPaev": round(total_eur - night_eur - (kuutasu * min(1.0, (t1 - t0) / month_s) if total_kwh > 0 and kuutasu > 0 else 0.0), 2),
                   "spotAvg": round(spot_kwh / total_kwh, 2) if total_kwh > 0 else None,
+                  "kwMax": round(peak_kw, 1),   # kuu suurim võimsus kW (arvel „Võimsus“; kasutusvõimsuse tasu alus)
                   "complete": bool(complete_flag),
                   "v": CALC_VERSION,
                   "cfg": CFG_HASH,
