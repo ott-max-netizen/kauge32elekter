@@ -4,6 +4,23 @@ See fail kirjeldab rakenduse `index.html` versioonimuudatusi, arhitektuurilisi k
 
 ---
 
+## [3.6.0] ja energy-dashboard.html [2.9.0] — 2026-11-09 · tasakaalustamisvõimsuse kulu Eleringi juhendi järgi
+
+Allikas: Eleringi juhend „Tasakaalustamisvõimsuse kulu arvestus energiasalvestusüksustele“ (uuendatud 03.02.2026) ja
+bilansiteenuse lisatasude hinnakomponendid.
+
+- **Ajalugu:** tasakaalustamisvõimsuse kulu kehtib alates 01.01.2026 (mitte alates Sunlyst): töövoo `TASUDE_AJALUGU`-s
+  0 ainult enne 2026. Kuud ja päevad 01.01–31.10.2026 arvutatakse tasuga ümber.
+- **Tulevased muudatused** `CONFIG.hinnamuudatused`-es: 2,97 €/MWh alates 01.01.2027, 3,89 €/MWh alates 01.05.2027.
+- **Tootmise tasu** `tasakaalustamisTasuTootmine` (sama tariif): müügihinnast arvatakse maha koos KM-ga – energialehel
+  (`sellCents`, müügihinna rida näitab mõlemat mahaarvamist) ja päevakokkuvõtetes (`sell_cents_kwh`, `meta.sellFee` =
+  kogu mahaarvamine). Aku topeltkoguse vabastust ei arvestata (vajab salvesti eraldi mõõtepunkti).
+- Elektriinfo lehe teade loetleb nüüd kõik ette teada hinnamuudatused (enne ainult lähima).
+- Bilansipiirkonna ebabilansi koguse tasu (0,72 €/MWh) on bilansihalduri tasu ega ole tarbija arvel eraldi real – ei lisatud.
+- Kontrollitud: töövoog (31.12.2025, 02.01.2026, 02.11.2026, 04.01.2027, 03.05.2027), lehed brauseris nelja kuupäevaga.
+
+---
+
 ## [3.5.0], energy-dashboard.html [2.8.0] ja graafikud.html [1.5.0] — 2026-11-09 · tasakaalustamisvõimsus ja peakaitse 160 A
 
 - **Tarbimise tasakaalustamisvõimsuse kulu** 0,00373 €/kWh + KM = uus `CONFIG.hinnad.tasakaalustamisTasu` 0,373 s/kWh

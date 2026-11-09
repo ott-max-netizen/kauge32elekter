@@ -338,7 +338,8 @@ const CONFIG = {
     vorgutasuOo: 1.99,
     taastuvenergiaTasu: 1.598,
     aktsiis: 0.21,
-    tasakaalustamisTasu: 0.373,  // tarbimise tasakaalustamisvõimsuse kulu 0,00373 €/kWh (Sunly)
+    tasakaalustamisTasu: 0.373,          // Eleringi tasakaalustamisvõimsuse kulu tarbimisele (3,73 €/MWh, 2026)
+    tasakaalustamisTasuTootmine: 0.373,  // ... ja tootmisele (müügihinnast maha koos KM-ga)
     kuutasu: 0.00,
     muugitasu: 1.054, // võrku müüdud elektri müügitasu s/kWh KOOS KM-ga: Sunly 8,5 €/MWh + KM (müügihind = börsihind ilma KM-ta − müügitasu)
     kaibemaks: 24,
@@ -351,7 +352,9 @@ const CONFIG = {
 
   // Ette teada hinnamuudatused (sama mis index.html-is): "alates" kuupäevast kehtivad kirje väärtused.
   hinnamuudatused: [
-    { alates: "2027-02-01", vorgutasuPaev: 3.49, vorgutasuOo: 1.99, vorguKuutasu: 30.58, labilaskevoimeTasu: 0.33, kasutusvoimsusTasu: 2.45, tarbimiskohaKasutusvoimsusTasu: 2.56 }
+    { alates: "2027-01-01", tasakaalustamisTasu: 0.297, tasakaalustamisTasuTootmine: 0.297 },
+    { alates: "2027-02-01", vorgutasuPaev: 3.49, vorgutasuOo: 1.99, vorguKuutasu: 30.58, labilaskevoimeTasu: 0.33, kasutusvoimsusTasu: 2.45, tarbimiskohaKasutusvoimsusTasu: 2.56 },
+    { alates: "2027-05-01", tasakaalustamisTasu: 0.389, tasakaalustamisTasuTootmine: 0.389 }
   ],
 
   // Öötariifi kehtivus Tallinna aja järgi täistundides (0–23).
@@ -423,6 +426,6 @@ const CONFIG = {
 </script>
 <!-- Mõlema lehe ühine skriptikood (aeg, vormindamine, DOM-abi, graafikute ühisosa); peab laadima enne põhiskripti -->
 <script src="js/common.js?v=20261109b"></script>
-<script src="js/energy-dashboard.js?v=20261109b"></script>
+<script src="js/energy-dashboard.js?v=20261109c"></script>
 </body>
 </html>

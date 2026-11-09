@@ -9,7 +9,7 @@ const CONFIG = readPageConfig();
 
 /* Tehnilised konstandid — neid ei ole tavakasutuses vaja muuta. Mõlema lehe ühised (TIME_ZONE, API_URL,
    MINUTE_MS, HOUR_MS, DAY_MS) on failis js/common.js. */
-const APP_VERSION = '3.5.0';
+const APP_VERSION = '3.6.0';
 const API_TIMEOUT_MS = 20000;
 const PLANNER_DURATIONS = [60, 120, 180, 240, 300, 360]; // minutit
 const MAX_PERIOD_MINUTES = 60;   // pikim lubatud hinnaperiood
@@ -586,20 +586,23 @@ function fixedFeesText(fees) {
     + (power.length ? ` Lisaks kuu suurima võimsuse järgi: ${power.join(', ')} (ilma KM-ta).` : '');
 }
 
-/** Lähim tulevane hinnamuudatus tekstina: „Uus hinnakiri alates 01.02.2027: kuutasu 30,41 → 30,58 €/kuu, …“; '' kui muudatusi pole. */
+/** Hinnamuudatuse nimetused ja ühikud tekstiks („Alates 01.02.2027: võrgu kuutasu 30,41 → 30,58 €/kuu, …“). */
 const TARIFF_CHANGE_LABELS = {
   marginaal: ['müüja marginaal', 's/kWh'], vorgutasuPaev: ['võrgutasu päev', 's/kWh'], vorgutasuOo: ['võrgutasu öö', 's/kWh'],
   taastuvenergiaTasu: ['taastuvenergia- ja varustuskindluse tasu', 's/kWh'], aktsiis: ['elektriaktsiis', 's/kWh'],
-  tasakaalustamisTasu: ['tasakaalustamisvõimsuse kulu', 's/kWh'], peakaitseA: ['peakaitse', 'A'],
+  tasakaalustamisTasu: ['tasakaalustamisvõimsuse kulu tarbimisele', 's/kWh'],
+  tasakaalustamisTasuTootmine: ['tasakaalustamisvõimsuse kulu tootmisele', 's/kWh'], peakaitseA: ['peakaitse', 'A'],
   kuutasu: ['muu kuutasu (koos KM)', '€/kuu'], muugitasu: ['müügitasu (koos KM)', 's/kWh'], kaibemaks: ['käibemaks', '%'],
   vorguKuutasu: ['võrgu kuutasu', '€/kuu'], labilaskevoimeTasu: ['läbilaskevõime', '€ / A kuus'],
   kasutusvoimsusTasu: ['kasutusvõimsus', '€ / kW kuus'], tarbimiskohaKasutusvoimsusTasu: ['tarbimiskoha kasutusvõimsus', '€ / kW kuus']
 };
 const changeNumberFormatter = new Intl.NumberFormat('et-EE', { minimumFractionDigits: 2, maximumFractionDigits: 3 });
 const changeDateFormatter = new Intl.DateTimeFormat('et-EE', { timeZone: TIME_ZONE, day: '2-digit', month: '2-digit', year: 'numeric' });
+/** Kõik tulevased hinnamuudatused tekstina (iga kirje oma lausena); '' kui muudatusi pole. */
 function upcomingTariffText(now) {
-  const next = TARIFF_CHANGES.find(c => c.start > now.getTime());
-  if (!next) return '';
+  return TARIFF_CHANGES.filter(c => c.start > now.getTime()).map(tariffChangeText).join(' ');
+}
+function tariffChangeText(next) {
   const before = feesAt(new Date(next.start - 1));
   const diffs = Object.keys(next.values)
     .filter(k => Math.abs(Number(before[k]) - next.values[k]) > 1e-9)
@@ -615,8 +618,8 @@ function upcomingTariffText(now) {
   }
   const when = changeDateFormatter.format(new Date(next.start));
   return diffs.length
-    ? `Uus hinnakiri alates ${when}: ${diffs.join(', ')} (ilma KM-ta, kui pole märgitud). Hinnad arvestatakse sellest päevast automaatselt uutega.`
-    : `Uus hinnakiri alates ${when}: s/kWh hinnad ja tasud jäävad samaks.`;
+    ? `Alates ${when}: ${diffs.join(', ')} (ilma KM-ta, kui pole märgitud).`
+    : `Alates ${when}: hinnad ja tasud jäävad samaks.`;
 }
 
 /** Lõpphind s/kWh: börsihind ilma KM-ta + tasud (ilma KM-ta), KM lisatakse kogu summale üks kord. */
@@ -2227,7 +2230,7 @@ function renderFinalPrice(d) {
   const fixed = fixedFeesText(fees);
   if (fixed) nodes.push(noticeEl(fixed));
   const upcoming = upcomingTariffText(d.now);
-  if (upcoming) nodes.push(noticeEl(upcoming));
+  if (upcoming) nodes.push(noticeEl(`Ette teada hinnamuudatused (arvestatakse kuupäevast automaatselt): ${upcoming}`));
 
   // Hinnakomponentide osakaalud lõpphinnast; iga segment vastab tabeli reale (KM-ta komponendid + käibemaks eraldi)
   const shares = [

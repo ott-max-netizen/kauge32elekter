@@ -200,10 +200,15 @@ jobs:
               # 01.02.2027 hinnakiri (madalpinge üle 63 A, VMA2) on index.html CONFIG.hinnamuudatused-es (TASUDE_MUUDATUSED):
               # https://elektrilevi.ee/en/uudised/vorgutasu-muutub-alates-1-augustist
               # https://elektrilevi.ee/en/uudised/vorgutasu-keskmine-hind-muutub-alates-juunikuust-kolm-koma-neli-protsenti
-              # Tarbimise tasakaalustamisvõimsuse kulu 0,00373 €/kWh + KM (= CONFIG 0,373 s/kWh) on Sunly arvel alates
-              # 01.11.2026; varasema müüja arvel eraldi rida polnud teada -> 0 (TÄIDA, kui see oli).
+              # Eleringi tasakaalustamisvõimsuse kulu (bilansiteenuse lisatasu, ElTS § 53¹) alates 01.01.2026 tarbimisele ja
+              # tootmisele 3,73 €/MWh + KM (= CONFIG 0,373 s/kWh); enne 2026 seda polnud. 2,97 €/MWh alates 01.01.2027 ja
+              # 3,89 €/MWh alates 01.05.2027 on CONFIG.hinnamuudatused-es. Allikas: Eleringi juhend „Tasakaalustamisvõimsuse
+              # kulu arvestus energiasalvestusüksustele“ (uuendatud 03.02.2026) ja bilansiteenuse lisatasude hinnakomponendid.
               "tasakaalustamisTasu": (
-                  (datetime(2026, 11, 1, tzinfo=TZ), 0.0),
+                  (datetime(2026, 1, 1, tzinfo=TZ), 0.0),
+              ),
+              "tasakaalustamisTasuTootmine": (
+                  (datetime(2026, 1, 1, tzinfo=TZ), 0.0),
               ),
               # Võrgu fikseeritud tasud (ilma KM-ta), kuu € = (vorguKuutasu + labilaskevoimeTasu × peakaitseA) × KM
               # (fixed_monthly_eur). VMA2 hinnakiri 30,41 €/kuu ja 0,32 € / A kehtib 01.06.2026 hinnakirjamuudatusest
@@ -233,6 +238,7 @@ jobs:
               "taastuvenergiaTasu": 1.598,
               "aktsiis": 0.21,
               "tasakaalustamisTasu": 0.373,
+              "tasakaalustamisTasuTootmine": 0.373,
               "kuutasu": 0.0,
               "peakaitseA": 160.0,
               "vorguKuutasu": 30.41,
@@ -496,7 +502,8 @@ jobs:
                   return cfg, "default"
               missing = []
               for group, key in (("hinnad", "marginaal"), ("hinnad", "vorgutasuPaev"), ("hinnad", "vorgutasuOo"), ("hinnad", "taastuvenergiaTasu"),
-                                 ("hinnad", "aktsiis"), ("hinnad", "tasakaalustamisTasu"), ("hinnad", "kuutasu"), ("hinnad", "peakaitseA"),
+                                 ("hinnad", "aktsiis"), ("hinnad", "tasakaalustamisTasu"),
+                                 ("hinnad", "tasakaalustamisTasuTootmine"), ("hinnad", "kuutasu"), ("hinnad", "peakaitseA"),
                                  ("hinnad", "vorguKuutasu"), ("hinnad", "labilaskevoimeTasu"), ("hinnad", "muugitasu"), ("hinnad", "kaibemaks"),
                                  ("ootariif", "algus"), ("ootariif", "lopp")):
                   v = config_number(page, group, key)
@@ -602,6 +609,12 @@ jobs:
                           + tariff_at(cfg, "taastuvenergiaTasu", dt_tl) + tariff_at(cfg, "aktsiis", dt_tl)
                           + tariff_at(cfg, "tasakaalustamisTasu", dt_tl))
               return subtotal * (1.0 + vat_at(cfg, dt_tl) / 100.0)
+
+          def sell_cents_kwh(spot_eur_mwh, dt_tl, cfg):
+              """Võrku müüdud kWh hind s/kWh: börsihind ilma KM-ta − müügitasu (koos KM-ga) − tasakaalustamisvõimsuse kulu
+              tootmisele × (1 + KM), sel hetkel kehtinud tasudega (sama mis energialehe sellCents)."""
+              return (spot_eur_mwh / 10.0 - tariff_at(cfg, "muugitasu", dt_tl)
+                      - tariff_at(cfg, "tasakaalustamisTasuTootmine", dt_tl) * (1.0 + vat_at(cfg, dt_tl) / 100.0))
 
           def fixed_monthly_eur(cfg, dt_tl):
               """Hetkel dt_tl kehtinud fikseeritud kuutasud kokku, €/kuu koos KM-ga: (võrgu kuutasu + läbilaskevõime ×
@@ -1292,8 +1305,8 @@ jobs:
                   spot = price_by_ts.get(ts - ts % SOLAR_FRAME_S, price_by_ts.get(ts - ts % 3600))
                   dt_tl = datetime.fromtimestamp(ts, TZ)
                   buy = calc_final_cents_kwh(spot, dt_tl, tariff_cfg) / 100.0 if spot is not None else None
-                  # Müügihind = börsihind ilma KM-ta − sel ajal kehtinud müügitasu (CONFIG.hinnad.muugitasu, TASUDE_AJALUGU)
-                  sell = (spot / 10.0 - tariff_at(tariff_cfg, "muugitasu", dt_tl)) / 100.0 if spot is not None else None
+                  # Müügihind = börsihind ilma KM-ta − sel ajal kehtinud müügitasu ja tasakaalustamisvõimsuse kulu (sell_cents_kwh)
+                  sell = sell_cents_kwh(spot, dt_tl, tariff_cfg) / 100.0 if spot is not None else None
                   to_home, to_battery = solar_split(s)
                   def add(key, value, value_eur):
                       kwh[key] += value
@@ -1436,7 +1449,7 @@ jobs:
                           old_days[rec["paev"]] = rec
               except (OSError, ValueError, AttributeError):
                   old_file = None
-              sell_fee = tariff_at(tariff_cfg, "muugitasu", now)   # praegune (meta.sellFee); päevakirjetes perioodikohane
+              sell_fee = round(-sell_cents_kwh(0.0, now, tariff_cfg), 4)   # praegune müügist maha arvatav kokku (meta.sellFee)
               day_hash = hashlib.sha1(json.dumps({"v": PAEVAD_VERSION, "cfg": CFG_HASH}, sort_keys=True).encode("utf-8")).hexdigest()[:12]
               today = now.date()
               yesterday = today - timedelta(days=1)

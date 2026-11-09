@@ -9,7 +9,7 @@ const CONFIG = readPageConfig();
 
 /* Tehnilised konstandid — neid ei ole tavakasutuses vaja muuta. Mõlema lehe ühised (TIME_ZONE, API_URL,
    MINUTE_MS, HOUR_MS, DAY_MS) on failis js/common.js. */
-const APP_VERSION = '2.8.0';
+const APP_VERSION = '2.9.0';
 const PRICE_TIMEOUT_MS = 20000;
 const SOLAR_TIMEOUT_MS = 30000;
 const TARIFF_TIMEOUT_MS = 5000;
@@ -537,8 +537,13 @@ function finalCents(period) {
   if (period.$finalCents === undefined) period.$finalCents = calculateFinalPrice(period.spotExVatCentsKwh, period.start).total;
   return period.$finalCents;
 }
-/** Võrku müüdud kWh hind: börsihind ilma KM-ta miinus perioodil kehtiv müügitasu. */
-function sellCents(period) { return period.spotExVatCentsKwh - (Number(feesAt(period.start).muugitasu) || 0); }
+/** Müügist maha arvatavad tasud s/kWh antud hetkel: müügitasu (koos KM-ga) ja tasakaalustamisvõimsuse kulu tootmisele + KM. */
+function sellFeeParts(date) {
+  const f = feesAt(date);
+  return { fee: Number(f.muugitasu) || 0, balancing: (Number(f.tasakaalustamisTasuTootmine) || 0) * (1 + Number(f.kaibemaks) / 100) };
+}
+/** Võrku müüdud kWh hind: börsihind ilma KM-ta miinus perioodil kehtiv müügitasu ja tasakaalustamisvõimsuse kulu (koos KM-ga). */
+function sellCents(period) { const p = sellFeeParts(period.start); return period.spotExVatCentsKwh - p.fee - p.balancing; }
 
 /* ==========================================================================
    7. Solarman — andmefail paike.json (GitHub Actions)
@@ -3166,7 +3171,9 @@ function renderPrice(d) {
   const facts = [];
   // Aken valitakse lõpphinna järgi (öine võrgutasu on odavam), börsihind on kõrval – nagu elektriinfo lehel
   if (d.best2h) facts.push(['fact-best-window', `Odavaim 2 h aken: ${describeRange(d.best2h.start, d.best2h.end, d.now)}, koos tasudega ${formatCents(d.best2h.avgFinal)} (börsihind ${formatCents(d.best2h.avg)}).`]);
-  facts.push(['fact-sell-price', `Müügihind praegu ${formatCents(sellCents(current))} (börsihind ilma KM-ta${Number(feesAt(current.start).muugitasu) ? ` − müügitasu ${formatCents(Number(feesAt(current.start).muugitasu))}` : ''}).`]);
+  const sellParts = sellFeeParts(current.start);
+  const sellMinus = [sellParts.fee ? `müügitasu ${formatCents(sellParts.fee)}` : '', sellParts.balancing ? `tasakaalustamisvõimsus ${formatCents(sellParts.balancing)}` : ''].filter(Boolean);
+  facts.push(['fact-sell-price', `Müügihind praegu ${formatCents(sellCents(current))} (börsihind ilma KM-ta${sellMinus.length ? ` − ${sellMinus.join(' − ')}, koos KM-ga` : ''}).`]);
   facts.push([null, `Kehtib ${finalPrice.tariff === 'oo' ? 'öötariif' : 'päevatariif'} (võrgutasu ${formatCents(finalPrice.tariff === 'oo' ? feesAt(d.now).vorgutasuOo : feesAt(d.now).vorgutasuPaev)} ilma KM-ta).`]);
   facts.push([null, d.hasTomorrow ? 'Homsed börsihinnad on saadaval (vt graafikul „Homme“).' : tomorrowNotice(d.tomorrowStatus)]);
 
