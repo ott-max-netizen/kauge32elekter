@@ -9,7 +9,7 @@ const CONFIG = readPageConfig();
 
 /* Tehnilised konstandid — neid ei ole tavakasutuses vaja muuta. Mõlema lehe ühised (TIME_ZONE, API_URL,
    MINUTE_MS, HOUR_MS, DAY_MS) on failis js/common.js. */
-const APP_VERSION = '3.10.0';
+const APP_VERSION = '3.11.0';
 const API_TIMEOUT_MS = 20000;
 const PLANNER_DURATIONS = [60, 120, 180, 240, 300, 360]; // minutit
 const MAX_PERIOD_MINUTES = 60;   // pikim lubatud hinnaperiood
@@ -647,9 +647,13 @@ function upcomingTariffDetails(now) {
   const list = TARIFF_CHANGES.filter(c => c.start > now.getTime());
   if (!list.length) return null;
   const count = list.length === 1 ? '1 hinnamuudatus' : `${list.length} hinnamuudatust`;
+  const chevron = iconEl('chevron-down');
+  chevron.classList.add('table-view__chevron');   // pöörlemine ja vahe: common.css .table-view__chevron (järglase valija)
   return el('details', { class: 'table-view tariff-changes', 'data-testid': 'tariff-changes' }, [
-    el('summary', {}, [iconEl('calendar'), `Tulekul ${count}`,
-      el('span', { class: 'table-view__sub', text: `järgmine ${changeDateFormatter.format(new Date(list[0].start))}` }), iconEl('chevron-down')]),
+    // Kitsal ekraanil murdub rida eraldaja järel: „·“ jääb murdumatu tühikuga esimese rea lõppu, „järgmine kuupäev“ ja
+    // nool on ühes murdumatus span-is (nool ei jää üksi reale). Ekraanilugejale „Tulekul 3 hinnamuudatust · järgmine …“.
+    el('summary', {}, [iconEl('calendar'), `Tulekul ${count} `, el('span', { class: 'table-view__sub', text: '· ' }),
+      el('span', { class: 'table-view__sub table-view__sub--nowrap' }, [`järgmine ${changeDateFormatter.format(new Date(list[0].start))}`, chevron])]),
     ...list.map(change => {
       const rows = tariffChangeRows(change);
       return el('section', { class: 'tariff-change' }, [
@@ -1042,6 +1046,8 @@ function derive() {
     },
     best2h: findBestWindow(future, now, 120, horizonEnd),
     best3h: findBestWindow(future, now, 180, horizonEnd),
+    // Lähiaja aken „Võimalusel oota“ reeglile (WAIT_RULE): odavaim 2 h aken, mis algab kuni 60 min pärast
+    near2h: findBestWindow(future, now, 120, Math.min(horizonEnd, now.getTime() + (WAIT_RULE.nearMinutes + 120) * MINUTE_MS)),
     solar: CONFIG.paike && CONFIG.paike.aktiivne ? buildSolarView(state.solarRaw, all, now) : null
   };
 }
@@ -1074,7 +1080,9 @@ function analyzeNow(d) {
     const risePercent = Number(CONFIG.olulineHinnatousProtsent) / 100;
     const threshold = price > 0 ? price * (1 + risePercent) : todayAvg;
     nextExpensive = after.find(p => p.spotIncVatCentsKwh >= threshold && p.spotIncVatCentsKwh >= todayAvg) || null;
-  } else {
+  } else if (price > 0) {
+    // Börsihind ≤ 0: soovitus on „Väga soodne“ või lõpphinna järgi „Võimalusel oota“ (WAIT_RULE); börsihinna põhine
+    // „järgmine soodsam“ fakt ei vaidle sellele vastu (nt −1 -> −3 €/MWh on lõpphinnas ~2 % odavam)
     nextCheaper = after.find(p =>
       p.spotIncVatCentsKwh < price &&
       (todayAvg == null || p.spotIncVatCentsKwh < todayAvg || p.spotIncVatCentsKwh < CONFIG.hinnapiirid.roheline)) || null;
@@ -1095,8 +1103,8 @@ function analyzeNow(d) {
     facts.push({
       key: 'cheapUntil',
       text: cheapUntilOpen
-        ? `Hind püsib alla tänase keskmise vähemalt kuni ${describeTime(cheapUntil, now, true)}.`
-        : `Hind püsib alla tänase keskmise kuni ${describeTime(cheapUntil, now, true)}.`
+        ? `Börsihind püsib alla tänase keskmise vähemalt kuni ${describeTime(cheapUntil, now, true)}.`
+        : `Börsihind püsib alla tänase keskmise kuni ${describeTime(cheapUntil, now, true)}.`
     });
   }
   if (nextExpensive && (!cheapUntil || nextExpensive.start.getTime() !== cheapUntil.getTime())) {
@@ -1107,12 +1115,13 @@ function analyzeNow(d) {
   }
   if (todayMax) {
     if (price >= todayMax.spotIncVatCentsKwh) {
-      facts.push({ key: 'peak', text: 'Praegu on tänase päeva hinnatipp.' });
+      // Börsihind ≤ 0 (terve päev negatiivne): „tipp“ vaidleks vastu hinnangule „Väga odav börsihind“ -> fakti pole
+      if (price > 0) facts.push({ key: 'peak', text: 'Praegu on tänase päeva börsihinna tipp.' });
     } else if (todayMax.end.getTime() <= now.getTime()) {
-      facts.push({ key: 'peak', text: `Tänane hinnatipp oli ${formatTime(todayMax.start)} (${formatCents(todayMax.spotIncVatCentsKwh)}).` });
-      if (tomorrowMax) facts.push({ key: 'peakTomorrow', text: `Homne hinnatipp ${formatTime(tomorrowMax.start)}, ${formatCents(tomorrowMax.spotIncVatCentsKwh)}.` });
+      facts.push({ key: 'peak', text: `Tänane börsihinna tipp oli ${formatTime(todayMax.start)} (${formatCents(todayMax.spotIncVatCentsKwh)}).` });
+      if (tomorrowMax) facts.push({ key: 'peakTomorrow', text: `Homne börsihinna tipp ${formatTime(tomorrowMax.start)}, ${formatCents(tomorrowMax.spotIncVatCentsKwh)}.` });
     } else {
-      facts.push({ key: 'peak', text: `Päeva tipp ${formatTime(todayMax.start)}, ${formatCents(todayMax.spotIncVatCentsKwh)}.` });
+      facts.push({ key: 'peak', text: `Päeva börsihinna tipp ${formatTime(todayMax.start)}, ${formatCents(todayMax.spotIncVatCentsKwh)}.` });
     }
   }
 
@@ -1123,43 +1132,65 @@ function analyzeNow(d) {
   };
 }
 
-/** Üks lühike praktiline soovitus reeglite põhjal. usedKey = fakt, mida soovitus juba ütleb. */
+/**
+ * Üks lühike praktiline soovitus reeglite põhjal. usedKey = fakt, mida soovitus juba ütleb.
+ * Reeglite järjekord: börsihind ≤ 0 või alla tänase keskmise -> esmalt lõpphinnas odavam aeg ees („Võimalusel oota“,
+ * WAIT_RULE, js/common.js; energialehel sama reegel, börsihinna ≤ 0 korral v.a päikese ülejäägi ajal või kui aku tuleb
+ * laadida enne hinnatippu – siis „Tarbi võrgust“), siis
+ * börsihinna reeglid (≤ 0: väga soodne; alla keskmise: väga soodne / kasuta enne / hea aeg). Üle keskmise: vana reegel
+ * (homne odavaim 3 h õhtul, kui ka odavaim 2 h aken on homme; järgmise 24 h odavaim 2 h; järgmine soodsam periood) ilma
+ * WAIT_RULE-i lävedeta.
+ */
 function buildRecommendation(d, a) {
-  const { now, current, hasTomorrow, tomorrowStatus, best2h, best3h } = d;
+  const { now, current, hasTomorrow, tomorrowStatus, best2h, best3h, near2h } = d;
   const nowMs = now.getTime();
   const minutesUntil = date => (date.getTime() - nowMs) / MINUTE_MS;
+  const nowFinal = current.finalCentsKwh;
+  // Lõpphinnas odavam aeg ees (öötariif, hinnalangus): sama reegel mis energialehel (WAIT_RULE, js/common.js).
+  // Lõpphind on tasude tõttu tavaliselt > 0 ka siis, kui börsihind on ≤ 0; lõpphind ≤ 0 -> null (ootamist ei soovitata).
+  const wait = waitForCheaper(nowFinal, near2h, best2h, now);
+  const waitRec = reason => ({
+    title: 'Võimalusel oota',
+    text: `${reason}, kuid koos tasudega tuleb odavam aeg: ${waitWindowText(wait, now)}.`,
+    usedKey: best2h && wait.window.start.getTime() === best2h.start.getTime() ? 'best2h' : null
+  });
 
+  // Börsihind ≤ 0: väga soodne (ka siis, kui tänane keskmine on veel madalam), v.a kui koos tasudega tuleb odavam aeg
+  if (a.price <= 0) {
+    if (wait) return waitRec('Börsihind on null või negatiivne');
+    return { title: 'Väga soodne aeg tarbimiseks', text: 'Börsihind on praegu null või negatiivne.', usedKey: null };
+  }
   if (a.isBelowAverage) {
-    if (a.price <= 0) {
-      return { title: 'Väga soodne aeg tarbimiseks', text: 'Börsihind on praegu null või negatiivne.', usedKey: null };
-    }
+    if (wait) return waitRec('Börsihind on alla tänase keskmise');
     if (a.lowRank <= 0.2) {
       return { title: 'Väga soodne aeg tarbimiseks', text: 'Praegune börsihind on üks tänase päeva madalamaid.', usedKey: null };
     }
     if (a.cheapUntil && !a.cheapUntilOpen) {
       return {
         title: `Kasuta elektrit enne ${describeTime(a.cheapUntil, now, true)}`,
-        text: `Hind püsib alla tänase keskmise veel ${formatDuration(minutesUntil(a.cheapUntil))}.`,
+        text: `Börsihind püsib alla tänase keskmise veel ${formatDuration(minutesUntil(a.cheapUntil))}.`,
         usedKey: 'cheapUntil'
       };
     }
     return {
       title: 'Hea aeg elektrit kasutada',
       text: a.cheapUntil
-        ? `Hind püsib alla tänase keskmise vähemalt kuni ${describeTime(a.cheapUntil, now, true)}.`
-        : 'Hind on alla tänase päeva keskmise.',
+        ? `Börsihind püsib alla tänase keskmise vähemalt kuni ${describeTime(a.cheapUntil, now, true)}.`
+        : 'Börsihind on alla tänase päeva keskmise.',
       usedKey: 'cheapUntil'
     };
   }
 
   const startsLater = w => w && w.start.getTime() > nowMs + MINUTE_MS;
   const eveningNow = getTallinnDateParts(now).hour >= 17;
-  const nowFinal = current.finalCentsKwh;
-  if (hasTomorrow && eveningNow && startsLater(best3h) && dayWord(best3h.start, now) === 'homme' && nowFinal > 0 && best3h.avgFinal < nowFinal) {
+  // „Homseni“ ainult siis, kui ka järgmise 24 h odavaim 2 h aken (planeerija ja fakt „Odavaim 2 h aken“) on homme; kui see
+  // on täna õhtul, ütleb soovitus allpool sama akna („Võimalusel oota“, best2h)
+  const tomorrowBest = best2h && dayWord(best2h.start, now) === 'homme';
+  if (hasTomorrow && eveningNow && tomorrowBest && startsLater(best3h) && dayWord(best3h.start, now) === 'homme' && nowFinal > 0 && best3h.avgFinal < nowFinal) {
     const cheaper = `${formatPercentAbs((nowFinal - best3h.avgFinal) / nowFinal * 100)} odavam kui praegu`;
     return {
       title: 'Võimalusel oota homseni',
-      text: `Hind on praegu üle tänase keskmise. ${describeRange(best3h.start, best3h.end, now)} on hind koos tasudega keskmiselt ${formatCents(best3h.avgFinal)}, ${cheaper}.`,
+      text: `Börsihind on praegu üle tänase keskmise. ${describeRange(best3h.start, best3h.end, now)} on hind koos tasudega keskmiselt ${formatCents(best3h.avgFinal)}, ${cheaper}.`,
       usedKey: null
     };
   }
@@ -1181,7 +1212,7 @@ function buildRecommendation(d, a) {
     };
   }
   return {
-    title: 'Praegu on hind üle tänase keskmise',
+    title: 'Praegu on börsihind üle tänase keskmise',
     text: hasTomorrow
       ? 'Saadaolevate hindade põhjal odavamat perioodi lähiajal ei paista.'
       : `${tomorrowNotice(tomorrowStatus)} Soovitus põhineb praegu saadaolevatel hindadel.`,
@@ -1441,7 +1472,9 @@ function renderCurrentPrice(d, a, rec) {
   // ja on sõnaga „börsihind“ märgitud. Tasud = ümardatud lõpphind − ümardatud börsihind, et rida klapiks numbriga.
   const split = heroPriceSplit(a.price, finalPrice.total);
 
-  host.replaceChildren(
+  // filter(Boolean): replaceChildren kirjutaks null-i tekstina „null“ (nt faktide loend on tühi, kui börsihind ≤ 0 on päeva
+  // tipp ja soovitus ütleb odavaima akna ise)
+  host.replaceChildren(...[
     el('div', { class: 'hero-top' }, [
       el('p', { class: 'verdict' }, [el('span', { class: 'visually-hidden', text: 'Börsihinna hinnang: ' }),
         el('span', {}, [el('span', { 'data-testid': 'price-verdict', text: a.label }), el('span', { class: 'verdict__basis', text: ' börsihind' })])]),
@@ -1464,7 +1497,7 @@ function renderCurrentPrice(d, a, rec) {
     ]) : null,
     // Odavaim 2 h aken on alati esimene fakt (L-130), kui see algab tulevikus
     facts.length ? el('ul', { class: 'facts' }, facts.map(f => el('li', { 'data-testid': f.key === 'best2h' ? 'fact-best-window' : null, text: f.text }))) : null
-  );
+  ].filter(Boolean));
 }
 
 /** Hero numbrid: börsihind ja lõpphind (mõlemad koos KM-ga, ümardatud) ning tasud nende vahena (summa klapib alati). */
@@ -2296,7 +2329,7 @@ function renderFinalPrice(d) {
 function buildShareGroups(calc, tariffLabel, vatPercent) {
   const groups = [
     { name: 'Elektrimüüja arve', items: [
-      { label: 'Börsihind', value: calc.spot, color: 1 },
+      { label: 'Börsihind ilma KM-ta', value: calc.spot, color: 1 },
       { label: 'Müüja marginaal', value: calc.marginaal, color: 2 },
       { label: 'Tasakaalustamisvõimsuse kulu', value: calc.tasakaalustamine, color: 3 }
     ] },

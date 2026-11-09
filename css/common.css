@@ -981,7 +981,8 @@ a { color: var(--focus); text-underline-offset: 2px; }
 .table-view[open] > summary > .icon ~ .icon { transform: rotate(180deg); }
 .table-view[open] > summary { margin-bottom: var(--s2); }
 .table-view > :not(summary) + :not(summary) { margin-top: var(--s2); }
-.table-view__sub { margin-left: 0.3em; font-size: var(--fs-small); font-weight: 500; color: var(--muted); }
+.table-view__sub { font-size: var(--fs-small); font-weight: 500; color: var(--muted); }   /* tühik tuleb tekstist („… · järgmine …“) */
+.table-view__sub--nowrap { white-space: nowrap; }   /* „järgmine kuupäev“ ja nool koos: nool ei jää üksi reale */
 .table-view__hint { display: none; margin-left: 0.5em; font-size: var(--fs-micro); font-weight: 600; color: var(--muted); }   /* „keri →“ */
 @container (max-width: 599px) { .table-view[open] .table-view__hint { display: inline; } }
 

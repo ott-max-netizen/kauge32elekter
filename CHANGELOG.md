@@ -4,6 +4,110 @@ See fail kirjeldab rakenduse `index.html` versioonimuudatusi, arhitektuurilisi k
 
 ---
 
+## [3.11.0] ja energy-dashboard.html [2.11.0] — 2026-11-09 · ülevaate parandused F1–F7
+
+Kontrollijate leiud F1–F5 (kriitikuga kokku lepitud kava), teise ülevaate leiud (F6) ja kolmanda ülevaate leiud (F7).
+Andmeskeem, töövoog ja `CALC_VERSION` (6) ei muutunud; graafikute lehel `?v=` (uus js/common.js ja css/common.css) ja
+jaluse valemis „börsihind ilma KM-ta“.
+
+- **F1 – „Maja maksis“ ja ostuhind ühel alusel (energialeht).** Töövoog lisab fikseeritud kuutasud (võrgu kuutasu,
+  läbilaskevõime, kasutusvõimsus) kuu `eur`-ile, öö/päeva jaotusesse mitte – leht tuletab kuu kuutasud = eur − eurOo −
+  eurPaev (`normalizeMaja`: `fixedEur`, `energyEur`; jaotuseta kirjes 0, alla 0,02 € ümardusviga). Ostuhind ja „maja
+  maksis“ (trendid, 12 kuu plaat, aasta vaate pargieelsed kuud, „Maja energiahind“, kuude graafik ja tabel, kogusummad) on
+  nüüd **ilma kuutasudeta**, nagu inverteri päevakokkuvõtetes; varem olid võrguarvesti kuudel kuutasud sees ja inverteri
+  kuudel mitte (sünteetikas moonutus 4–9 s/kWh kuus = kuutasu / kuu ostetud kWh). **Koos kuutasudega** (arve alus) jäävad
+  plokk „Ost võrgust AAAA“, trendide „Kulu“ ja „Kulu 12 k“, plaat „Ost võrgust 12 kuud kokku“ ja tähelepanekute kulu –
+  ning on nii märgistatud: plokis „hinnang, koos kuutasudega“, „s/kWh koos tasude ja kuutasudega“, kuude tabeli kohal
+  „Kulu ja keskmine hind koos kuutasudega.“ (F7) ja märkuses kuutasude summa tolleaegse võrgupaketi järgi (kasutusvõimsuse tasu ainult VMA2
+  kuudel, alates 05/2026); trendide tabelis „≈ € koos kuutasudega“ ja „≈ €/kuu koos kuutasudega“, 12 kuu plaadil „≈ … €
+  koos kuutasudega“, inspektoris ja tähelepanekus „kulu koos kuutasudega“, legendis „kulu kuus koos tasude ja
+  kuutasudega“. Plokimärkus ei väida enam „samad võrguarvesti kuusummad“ (kolm varianti:
+  mõlemad allikad, ainult arvesti, ainult inverter). Energiahinna märkus: „Keskmises ostuhinnas ja „maja maksis“ pole
+  fikseeritud kuutasusid …“; trendide tabelis „s/kWh ilma kuutasudeta“, legend, inspektor ja selgitus samuti.
+  Täpsustused: kuutasud on ~139–146 €/kuu VML2 paketiga (kuni 04/2026), 05/2026 (VMA2, 21 kW) ~157 €, alates 06/2026
+  ~165–210 € sõltuvalt kW-st; märkus „~2 %“ oli kWh kohta õige, kuid ei maininud eurode kuutasuvahet (ka energialehe
+  jaluses: „… eurodes on vahe suurem, sest inverteri eurodes pole fikseeritud kuutasusid“).
+- **F2 – hero soovitus vaatab lõpphinda ja lähitulevikku (ootereegel `WAIT_RULE`, js/common.js, mõlemal lehel).**
+  „Võimalusel oota“, kui koos tasudega on ees odavam 2 h aken: lähim (algab ≤ 60 min pärast) ≥ 10 % odavam (tööpäeva
+  öötariif kell 22 annab ~7–15 %) või järgmise 24 h odavaim ≥ 30 % odavam – ka siis, kui börsihind on alla tänase keskmise
+  („Börsihind on alla tänase keskmise, kuid koos tasudega tuleb odavam aeg: Täna 22:00–00:00 (algab öötariif) keskmiselt
+  8,55 s/kWh, 33% odavam kui praegu.“). Varem näitas elektriinfo kell 21:30–21:45 „Väga soodne aeg tarbimiseks“, kuigi fakt
+  otse all ütles, et 15–30 min pärast on odavam. Energialeht: sama reegel enne „odav hind“ haru („Oota“) ja „Lae akut
+  võrgust“ lükkub edasi, kui odavam aken algab enne hinnatippu („… Lae akut siis.“). **Teadlik erand:** kui odavam aken
+  algab pärast tippu, jääb energialehel „Lae akut“ (laeb tipu jaoks), elektriinfo võib samal ajal öelda „Võimalusel oota“
+  (tarbimise nihutamine). Faktid ja tekstid: „Börsihind püsib alla tänase keskmise …“. Börsihind ≤ 0 ja ootereegli
+  ulatus: vt F6.
+- **F3 – CONFIG hinnapiiride kommentaar** (index.html, energy-dashboard.html): piirid kehtivad börsihinnale koos KM-ga,
+  suur number (lõpphind) pole see, millega võrreldakse. Väärtused ja CFG_HASH ei muutunud.
+- **F4 – „Tulekul 3 hinnamuudatust · järgmine 01.01.2027“:** tühik ja eraldaja olid puudu („hinnamuudatustjärgmine“
+  ekraanilugejale ja kopeerimisel), nool jäi 330–350, 428–448 ja 764–802 px laiusel üksi reale. „järgmine kuupäev“ ja
+  nool on ühes murdumatus span-is, eraldaja „·“ on murdumatu tühikuga esimese rea lõpus (teine rida ei alga „·“-ga);
+  energialehe „Kogusummad tabelina · …“ saab tühiku ise.
+- **F5 – „börsihind“ koos KM-ga ja ilma.** Kokkulepe (README): ilma täpsustuseta „börsihind“ on kõigil lehtedel koos
+  KM-ga, KM-ita alati „ilma KM-ta“. Elektriinfo koostise rida „Börsihind ilma KM-ta“; energialehe müügihinna fakt
+  „Müügihind praegu 7,54 s/kWh = börsihind ilma KM-ta 9,06 s/kWh − tasud 1,52 s/kWh (müügitasu ja
+  tasakaalustamisvõimsuse kulu, koos KM-ga).“ (sõnastus F7) (börsihind sama arv mis elektriinfo koostises, tasud = kuvatud arvude vahe); trendide veerg „Börs s/kWh ilma
+  KM-ta“, päevaplaadid „Madalaim/Keskmine/Kõrgeim börsihind“ ühikuga, tundide vihje „… koos käibemaksuga“.
+  Ümardus: uus `roundCents` (js/common.js) ümardab nagu `numberFormat.d2` (Intl); `Math.round(v × 100) / 100` andis
+  ~7 % negatiivsete ja ~0,8 % positiivsete hindade korral teise kuvatud arvu (nt −199,85 €/MWh: −19,98 vs −19,99).
+- **F6 – teise ülevaate parandused.**
+  - **Börsihind ≤ 0 (elektriinfo hero):** reegel „börsihind ≤ 0 → alati „Väga soodne aeg tarbimiseks““ oli enne
+    ootereeglit. Tööpäeval 12:00 (kogu päev −10 €/MWh, praegu −1, kell 13–15 −60) ütles hero „Väga soodne“, kuigi kell
+    13–15 oli koos tasudega 98 % odavam (HEAD ütles „Võimalusel oota“ – regressioon), ja kell 21:30 (−1 €/MWh) jäi F2
+    viga alles (22:00 öötariif −25 %). Nüüd vaadatakse ka ≤ 0 korral esmalt ootereeglit: „Võimalusel oota – Börsihind on
+    null või negatiivne, kuid koos tasudega tuleb odavam aeg: …“; „Väga soodne“ jääb, kui odavamat akent pole (või
+    lõpphind on ≤ 0). Börsihinna ≤ 0 korral pole fakti „Praegu on tänase päeva börsihinna tipp“ (vaidles vastu
+    hinnangule „Väga odav börsihind“); siis võib faktide loend olla tühi – hero jätab tühjad osad välja (varem kirjutas
+    `replaceChildren` puuduva osa asemele teksti „null“). Energialehel jäi börsihind ≤ 0 esimeseks reegliks „Tarbi
+    võrgust“ ootereeglit vaatamata – parandatud F7-s.
+  - **Ootereegli ulatus (README):** `WAIT_RULE` ei juhi kõiki „Võimalusel oota“ soovitusi. Elektriinfo: ainult börsihinna
+    ≤ 0 või alla tänase keskmise korral; üle keskmise jääb vana reegel (õhtul homne `best3h`, `best2h` algab hiljem,
+    börsihinna järgmine soodsam periood). Energialeht: kui hind pole kallis ja aku laadimise harus (F7: ka börsihinna
+    ≤ 0 korral); kallis hind börsihinna järgmise soodsama perioodiga.
+  - **„Börsihind“, kus number on börsihind:** elektriinfo „Tänane/Homne/Päeva börsihinna tipp …“, „Praegu on tänase
+    päeva börsihinna tipp“, „Praegu on börsihind üle tänase keskmise“, „Börsihind on praegu üle tänase keskmise. …“;
+    energialehel „Börsihind on kõrge …“, „Börsihind on päeva keskmise lähedal (…)“, päeva graafiku legendis „tulbad:
+    börsihind koos KM-ga“ ja „börsihinna päeva keskmine“; graafikute lehe jaluse valem „börsihind ilma KM-ta + …“.
+  - **Kuutasud:** kõikjal „ilma kuutasudeta“ (ainsus „kuutasuta“ oli mitmeti mõistetav – `kuutasu` on ka üks kirje);
+    trendide „Kulu“, „Kulu 12 k“, 12 kuu plaadi € ja inspektori kulu on märgistatud „koos kuutasudega“ (vt F1).
+- **F7 – kolmanda ülevaate parandused.**
+  - **Energialeht, börsihind ≤ 0 + ootereegel:** ≤ 0 haru ütles alati „Tarbi võrgust – Lae akut võrgust ja kasuta
+    praegu võrguelektrit“, ka siis, kui koos tasudega tuli 30 min pärast ≥ 10 % odavam aken (E 21:30, −0,1 €/MWh, kell
+    22 öötariif 16 % odavam); +0,1 €/MWh juures ütles leht „Oota“ ja elektriinfo hero mõlemal juhul „Võimalusel oota“.
+    Nüüd vaadatakse ≤ 0 harus ootereeglit (`WAIT_RULE`) enne: „Oota – Võimalusel oota – Börsihind on null või
+    negatiivne ja võrku müümine on praegu kahjumlik. Koos tasudega tuleb odavam aeg: … Lae akut siis.“ (viimane lause
+    ainult siis, kui aku pole täis). „Tarbi võrgust“ jääb, kui odavamat akent pole, päikese ülejäägi ajal (edasilükatud
+    tarbimise asemel läheks ülejääk kahjumiga võrku) ja kui aku tuleb laadida enne hinnatippu (odavam aken algab pärast
+    tippu – sama tingimus mis positiivse hinna korral; `ahead`/`peak`/`worthIt` arvutatakse nüüd mõlemale harule
+    ühiselt, `chargeLater`).
+  - **Elektriinfo „Võimalusel oota homseni“** (börsihind üle tänase keskmise, õhtul) vaatas ainult homset `best3h`-i ja
+    ütles „homseni“ ka siis, kui järgmise 24 h odavaim 2 h aken oli täna õhtul (E 18:30: hero „Homme 01:00–04:00“, fakt
+    otse all ja planeerija „Täna 22:00–00:00“; ka HEAD-is). Nüüd ainult siis, kui ka `best2h` on homme; muidu
+    „Võimalusel oota – Järgmise 24 h odavaim 2-tunnine aeg: Täna 22:00–00:00 …“ (fakt „Odavaim 2 h aken“ ei kordu).
+    Ülevaataja teine variant (ka `best3h.avgFinal ≤ best2h.avgFinal`) jäi välja: siis ütleks hero ikka „homme“, fakt ja
+    planeerija „täna“.
+  - **Sildid:** trendide tähelepanek „… keskmine ostuhind ilma kuutasudeta X oli … 12 kuu keskmine (Y)“ ja „ostuhind
+    (ilma kuutasudeta) muutus …“ (oli „lõpphind muutus“); energialehe päeva graafiku tooltip ja inspektor „börsihind X
+    s/kWh · …“ (esimene hind oli sildita); „Ost võrgust AAAA“ tabelis taas lühikesed päised „≈ €“ ja „s/kWh“ (390 px
+    juures oli tabel 549 px, „Kulu“ peaaegu peidus; nüüd 400 px nagu HEAD-is), kohal märge „Kulu ja keskmine hind koos
+    kuutasudega.“; pealkiri „Maja energiahind … (ilma kuutasudeta)“; päevade/kuude tabelivaate kohal „Võrgu netokulu ja
+    „Maja maksis“ on ilma kuutasudeta.“; müügihinna fakt „Müügihind praegu 7,54 s/kWh = börsihind ilma KM-ta 9,06 s/kWh
+    − tasud 1,52 s/kWh (müügitasu ja tasakaalustamisvõimsuse kulu, koos KM-ga).“ (üks tasu: „− müügitasu …“ või
+    „− tasakaalustamisvõimsuse kulu …“).
+  - README: ≤ 0 reegel ja erandid, „homseni“ tingimus, versioonirida (v3.11.0, v2.11.0, v1.5.1 – oli v3.3.3 jne).
+- **Järgmiseks (ei muudetud):** hero `round2` (`heroPriceSplit`, elektriinfo võrrand, energialehe hero) võib .xx5 korral
+  ±0,01 võrra erineda Intl-iga kuvatud arvust; `roundCents` ühtlustaks.
+- Kontroll: iga leid reprodutseeritud HEAD-is ja parandatud; töövoo Python (ast) ja neli võrguarvet klapivad; kõik
+  review-stsenaariumid HEAD vs parandus (erinevused ainult F1–F5); mõlemad lehed 390/1280 px, hele ja tume, negatiivne
+  hind, homseta, nädalavahetus – JS-vigu ja horisontaalset kerimist pole. F6: teise ülevaate stsenaariumid (börsihind
+  ≤ 0 kell 21:30 ja 12:00, HEAD vs parandus) korratud enne parandust ja pärast; 6 päeva × 96 hetke (sh 4 negatiivse
+  hinnaga) aknad node'is sõltumatult; mõlemad lehed 390/1280 px, hele ja tume. F7: mõlemad keskmise tõsidusega leiud
+  reprodutseeritud enne parandust; 16 andmestikku × 96 hetke F7-eelne vs uus (erinevusi 94, kõik oodatud: ainult
+  börsihind ≤ 0 energialehel ja „homseni“ täna õhtuse `best2h` korral); servajuhud (aku täis, päikeseandmeid pole,
+  ülejääk, tipp enne akent, odavamat akent pole); sildid 390/1280 px; kõik kolm lehte 390/1280 px, hele ja tume.
+
+---
+
 ## [3.10.0] ja energy-dashboard.html [2.10.0] — 2026-11-09 · hero suureks numbriks maja lõpphind
 
 Disaineri ja kriitiku ülevaate punkt 2, mõlemal lehel korraga.

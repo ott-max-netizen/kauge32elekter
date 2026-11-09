@@ -11,7 +11,8 @@
  *
  * Siinsed funktsioonid kasutavad kutsumise hetkel lehe põhiskripti globaale, mis peavad mõlemal lehel olemas
  * olema (lehtedel on neil erinev sisu): CONFIG, MAX_PERIOD_MINUTES, numberFormat, dstMark, formatCents,
- * tallinnLocalToUtc, getPriceCategory ja init.
+ * tallinnLocalToUtc, getPriceCategory ja init. Lisaks describeRange(start, end, now) ja calculateFinalPrice(spotExVat, date)
+ * → { tariff: 'oo' | 'paev', total, … } (kasutab ainult waitWindowText, mida graafikute leht ei kutsu).
  *
  * Muutmisel suurenda kõigi HTML-failide lingis `js/common.js?v=` väärtust (GitHub Pages hoiab faile vahemälus 10 min).
  */
@@ -209,6 +210,20 @@ function formatTime(date) { return timeFormatter.format(date) + dstMark(date); }
 
 function formatPercentAbs(value) { return `${numberFormat.pct.format(Math.abs(value))}%`; }
 
+/** Ümardab sajandikeni samamoodi nagu numberFormat.d2 (Intl): lühim kümnendkuju String(v) ja pool nullist eemale
+ *  (−19,985 -> −19,99; 1,025 -> 1,03). Math.round(v × 100) / 100 annab ~7 % negatiivsete ja ~0,8 % positiivsete 2-kohaliste
+ *  €/MWh hindade korral teise kuvatud arvu. Kasuta, kui kuvatud arvudega arvutatakse edasi ja tulemus peab klappima mujal
+ *  Intl-iga kuvatud arvuga (energialehe müügihinna fakt vs elektriinfo hinna koostis). Null ilma märgita; |v| < 1e21. */
+function roundCents(v) {
+  if (!Number.isFinite(v)) return v;
+  const a = Math.abs(v);
+  if (a < 1e-6) return 0;                                   // String annaks väga väikese arvu eksponendiga
+  const [int, frac = ''] = String(a).split('.');
+  const digits = `${frac}000`.slice(0, 3);
+  const cents = Number(int) * 100 + Number(digits.slice(0, 2)) + (digits[2] >= '5' ? 1 : 0);
+  return cents === 0 ? 0 : (v < 0 ? -cents : cents) / 100;
+}
+
 function formatDuration(minutes) {
   const total = Math.max(0, Math.round(minutes));
   const h = Math.floor(total / 60);
@@ -248,6 +263,35 @@ function describeUntil(date, now) {
 /* ==========================================================================
    4. Hinnaandmed ja arvutused
    ========================================================================== */
+/* „Võimalusel oota“ lõpphinna järgi: mõlema lehe soovituses sama reegel (elektriinfo hero, energialehe soovitus; README). */
+const WAIT_RULE = Object.freeze({
+  nearMinutes: 60,  // lähiaja aken: odavaim 2 h aken, mis algab kuni 60 min pärast (nt tööpäeva öötariif kell 22) ...
+  nearDropPct: 10,  // ... peab olema lõpphinnas vähemalt 10 % odavam kui praegu (öötariif üksi annab ~7–15 %)
+  farDropPct: 30    // järgmise 24 h odavaim 2 h aken (algab hiljem): vähemalt 30 % odavam
+});
+
+/** Kas soovitada ootamist: { window, dropPct } või null. nowFinal = praegune lõpphind; near2h = odavaim 2 h aken, mis algab
+ *  kuni WAIT_RULE.nearMinutes pärast; best2h = järgmise 24 h odavaim 2 h aken. Aken peab algama hiljem kui praegu. */
+function waitForCheaper(nowFinal, near2h, best2h, now) {
+  if (!(nowFinal > 0)) return null;
+  const later = w => Boolean(w) && w.start.getTime() > now.getTime() + MINUTE_MS;
+  const drop = w => (nowFinal - w.avgFinal) / nowFinal * 100;
+  if (later(best2h) && drop(best2h) >= WAIT_RULE.farDropPct) return { window: best2h, dropPct: drop(best2h) };
+  if (later(near2h) && drop(near2h) >= WAIT_RULE.nearDropPct) return { window: near2h, dropPct: drop(near2h) };
+  return null;
+}
+
+/** „Täna 22:00–00:00 (algab öötariif) keskmiselt 8,55 s/kWh, 33% odavam kui praegu“. Tariif loetakse lehe
+ *  calculateFinalPrice(spotExVat, date).tariff-ist ('oo' | 'paev' mõlemal lehel); getNetworkTariff mitte – elektriinfo lehel
+ *  tagastab see { tariff, reason }, energialehel stringi. */
+function waitWindowText(wait, now) {
+  const w = wait.window;
+  const tariffAt = date => calculateFinalPrice(0, date).tariff;
+  const tariffStarts = tariffAt(w.start) === 'oo' && tariffAt(new Date(w.start.getTime() - MINUTE_MS)) === 'paev';
+  const cheaper = w.avgFinal > 0 ? `, ${formatPercentAbs(wait.dropPct)} odavam kui praegu` : '';
+  return `${describeRange(w.start, w.end, now)}${tariffStarts ? ' (algab öötariif)' : ''} keskmiselt ${formatCents(w.avgFinal)}${cheaper}`;
+}
+
 /** Tuvastab perioodi pikkuse (minutites) järjestikuste timestampide vahest (kõige sagedasem vahe). */
 function detectInterval(sorted) {
   const counts = new Map();
