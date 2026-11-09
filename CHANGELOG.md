@@ -4,6 +4,25 @@ See fail kirjeldab rakenduse `index.html` versioonimuudatusi, arhitektuurilisi k
 
 ---
 
+## [3.9.0] — 2026-11-09 · „Hind koos tasudega praegu“: üks koostise loend, kuutasude tabel, hinnamuudatused avanevas plokis
+
+Disaineri ja kriitiku ülevaate punkt 1 (kaardi sees, väike risk; hero ja „Järgmised tunnid“ jäid muutmata).
+
+- **Dubleerimine kadus:** koostise tabel ja osakaalude loend on üks rühmitatud loend (müüja arve / võrguarve / KM,
+  s/kWh ilma KM-ta ühikuga pealkirjas, osakaal 0,1% täpsusega, rühma „koos KM“ summa jäi arvega võrdlemiseks) ja lõpus
+  „Kokku koos KM“ (`data-testid="final-total"`). Börsihind ≤ 0: loend jääb väärtustega, lint ja protsendid kaovad.
+- **Võrrand** kahe plaadi asemel: „29,76 börsihind + 7,59 tasud ja maksud“ ja rida „s/kWh, mõlemad koos KM 24% · kokku …“.
+  Tasud = ümardatud lõpphind − ümardatud börsihind (summa klapib alati). Telefonis murdub liikmete vahelt, märk jääb
+  teise liikme ette (`final-spot`, `final-fees` testid alles).
+- **Kuutasud tabelina** (teksti asemel): võrgu kuutasu, läbilaskevõime 160 A × hind, kokku ilma ja koos KM-ga; kasutusvõimsus
+  viimase lõppenud kuu suurima võimsusega (hinnad.json `kwMax`, nt „oktoober 2026 34,8 kW → 35 kW × 2,45 € = 85,75 €“).
+- **Hinnamuudatused** avanevas plokis (`.table-view`, puutealal ≥ 44 px): „Tulekul 3 hinnamuudatust · järgmine 01.01.2027“,
+  iga kuupäev alapealkirjana, read „vana → uus“ eelmise kehtiva hinna suhtes ja kuutasude summa muutus; möödunud kuupäevad
+  kaovad ise. Lühemad nimed („Tasakaalustamisvõimsus (tarbimine)“, „Võrgutasu (päev)“).
+- Kontroll: 360, 390, 768 ja 1200 px, hele ja tume teema, negatiivne börsihind; horisontaalset kerimist pole.
+
+---
+
 ## [3.8.0], energy-dashboard.html [2.9.3] ja graafikud.html [1.5.1] — 2026-11-09 · detailsem hinnakomponentide osakaal
 
 - **Osakaalude plokk** (elektriinfo leht): 5 koondlõigu asemel iga komponent eraldi (börsihind, müüja marginaal,
