@@ -9,7 +9,7 @@ const CONFIG = readPageConfig();
 
 /* Tehnilised konstandid — neid ei ole tavakasutuses vaja muuta. Mõlema lehe ühised (TIME_ZONE, API_URL,
    MINUTE_MS, HOUR_MS, DAY_MS) on failis js/common.js. */
-const APP_VERSION = '3.7.0';
+const APP_VERSION = '3.8.0';
 const API_TIMEOUT_MS = 20000;
 const PLANNER_DURATIONS = [60, 120, 180, 240, 300, 360]; // minutit
 const MAX_PERIOD_MINUTES = 60;   // pikim lubatud hinnaperiood
@@ -589,7 +589,7 @@ function fixedFeesText(fees) {
 /** Hinnamuudatuse nimetused ja ühikud tekstiks („Alates 01.02.2027: võrgu kuutasu 30,41 → 30,58 €/kuu, …“). */
 const TARIFF_CHANGE_LABELS = {
   marginaal: ['müüja marginaal', 's/kWh'], vorgutasuPaev: ['võrgutasu päev', 's/kWh'], vorgutasuOo: ['võrgutasu öö', 's/kWh'],
-  taastuvenergiaTasu: ['taastuvenergia- ja varustuskindluse tasu', 's/kWh'], aktsiis: ['elektriaktsiis', 's/kWh'],
+  taastuvenergiaTasu: ['taastuvenergia tasu', 's/kWh'], varustuskindlusTasu: ['varustuskindluse tasu', 's/kWh'], aktsiis: ['elektriaktsiis', 's/kWh'],
   tasakaalustamisTasu: ['tasakaalustamisvõimsuse kulu tarbimisele', 's/kWh'],
   tasakaalustamisTasuTootmine: ['tasakaalustamisvõimsuse kulu tootmisele', 's/kWh'], peakaitseA: ['peakaitse', 'A'],
   kuutasu: ['muu kuutasu (koos KM)', '€/kuu'], muugitasu: ['müügitasu (koos KM)', 's/kWh'], kaibemaks: ['käibemaks', '%'],
@@ -632,11 +632,12 @@ function calculateFinalPrice(spotExVatCentsKwh, now) {
     marginaal: Number(fees.marginaal),
     vorgutasu: network,
     taastuvenergia: Number(fees.taastuvenergiaTasu),
+    varustuskindlus: Number(fees.varustuskindlusTasu) || 0,
     aktsiis: Number(fees.aktsiis),
     tasakaalustamine: Number(fees.tasakaalustamisTasu) || 0
   };
-  const subtotal = components.spot + components.marginaal + components.vorgutasu + components.taastuvenergia + components.aktsiis
-    + components.tasakaalustamine;
+  const subtotal = components.spot + components.marginaal + components.vorgutasu + components.taastuvenergia + components.varustuskindlus
+    + components.aktsiis + components.tasakaalustamine;
   const vat = subtotal * Number(fees.kaibemaks) / 100;
   return { ...components, tariff: tariff.tariff, tariffReason: tariff.reason, subtotal, vat, total: subtotal + vat };
 }
@@ -2190,7 +2191,7 @@ function renderFinalPrice(d) {
       : `Öötariif kehtib ${String(CONFIG.ootariif.algus).padStart(2, '0')}:00–${String(CONFIG.ootariif.lopp).padStart(2, '0')}:00${allDay.length ? ` ning ${allDay.join(' ja ')} kogu päeva` : ''}.`;
 
   const spotIncVat = calc.spot * vat;
-  const fixedAddonsIncVat = (calc.marginaal + calc.vorgutasu + calc.taastuvenergia + calc.aktsiis + calc.tasakaalustamine) * vat;
+  const fixedAddonsIncVat = (calc.marginaal + calc.vorgutasu + calc.taastuvenergia + calc.varustuskindlus + calc.aktsiis + calc.tasakaalustamine) * vat;
 
   const row = (label, value, extra = {}) => el('tr', extra, [
     el('td', { text: label }),
@@ -2202,7 +2203,8 @@ function renderFinalPrice(d) {
       row('Börsihind ilma KM-ta', calc.spot),
       row('Müüja marginaal', calc.marginaal),
       row(`Võrgutasu (${tariffLabel})`, calc.vorgutasu),
-      row('Taastuvenergia- ja varustuskindluse tasu', calc.taastuvenergia),
+      row('Taastuvenergia tasu', calc.taastuvenergia),
+      ...(calc.varustuskindlus ? [row('Varustuskindluse tasu', calc.varustuskindlus)] : []),
       row('Elektriaktsiis', calc.aktsiis),
       ...(calc.tasakaalustamine ? [row('Tasakaalustamisvõimsuse kulu', calc.tasakaalustamine)] : []),
       row(`Käibemaks ${vatPercent}%`, calc.vat),
@@ -2232,43 +2234,96 @@ function renderFinalPrice(d) {
   const upcoming = upcomingTariffText(d.now);
   if (upcoming) nodes.push(noticeEl(`Ette teada hinnamuudatused (arvestatakse kuupäevast automaatselt): ${upcoming}`));
 
-  // Hinnakomponentide osakaalud lõpphinnast; iga segment vastab tabeli reale (KM-ta komponendid + käibemaks eraldi)
-  const shares = [
-    ['Börsihind (ilma KM-ta)', calc.spot, 'var(--share-1)'],
-    ['Võrgutasu', calc.vorgutasu, 'var(--share-2)'],
-    ['Müüja marginaal ja tasakaalustamisvõimsus', calc.marginaal + calc.tasakaalustamine, 'var(--share-3)'],
-    ['Taastuvenergia-, varustuskindluse tasu ja aktsiis', calc.taastuvenergia + calc.aktsiis, 'var(--share-4)'],
-    [`Käibemaks ${vatPercent}%`, calc.vat, 'var(--share-5)']
-  ];
-  const sharesValid = calc.total > 0 && shares.every(s => s[1] >= 0);
+  // Hinnakomponentide osakaalud lõpphinnast arvete kaupa: iga komponent oma lõik (värv komponendi järgi, mitte järjekorra),
+  // loendis s/kWh ilma KM-ta ja osakaal 0,1% täpsusega; rühma real summa ilma ja koos KM-ga
+  const shareGroups = buildShareGroups(calc, tariffLabel, vatPercent);
+  const shareItems = shareGroups.flatMap(g => g.items);
+  const sharesValid = calc.total > 0 && shareItems.every(s => s.value >= 0);
   if (sharesValid) {
-    // Protsendid suurima jäägi meetodiga, et nende summa oleks täpselt 100%
-    const raw = shares.map(([, value]) => value / calc.total * 100);
-    const pct = raw.map(Math.floor);
-    raw.map((v, i) => [v - pct[i], i]).sort((x, y) => y[0] - x[0])
-      .slice(0, 100 - pct.reduce((sum, v) => sum + v, 0)).forEach(([, i]) => { pct[i] += 1; });
-    shares.forEach((share, i) => { share.push(pct[i]); });
-    nodes.push(el('div', { class: 'final-shares' }, [
-      el('p', { class: 'final-shares__title', text: 'Hinnakomponentide osakaal praegu' }),
-      el('div', { class: 'chart-host chart-host--shares', id: 'shares-host', hidden: !T }, el('canvas', { id: 'c-shares', 'aria-hidden': 'true' })),
-      // Loend on legend ja tabel ühes (canvas on aria-hidden)
-      el('ul', { class: 'shares', 'data-testid': 'shares-list' }, shares.map(([label, , color, percent]) => el('li', {}, [
-        el('span', { class: 'legend__swatch', style: `--swatch:${color}`, 'aria-hidden': 'true' }),
-        el('span', { class: 'shares__name', text: label }),
-        ' ',
-        el('span', { class: 'shares__pct', text: `${percent}%` })
-      ])))
-    ]));
+    nodes.push(sharesBlock(shareGroups, calc.total, vat));
   } else {
     nodes.push(el('p', { class: 'hero-meta', text: 'Osakaale ei kuvata, sest börsihind on praegu null või negatiivne.' }));
   }
   destroyChart('c-shares');   // vana canvas eemaldatakse koos sisuga
   host.replaceChildren(...nodes);
-  if (sharesValid) buildSharesChart(shares.map(([label, value]) => ({ label, value })));
+  if (sharesValid) buildSharesChart(shareItems);
+}
+
+/** Lõpphinna komponendid arvete kaupa: [{ name, note, vat: bool, items: [{ label, value (s/kWh ilma KM-ta), color (1–8) }] }].
+ *  Nullväärtusega komponendid (nt varustuskindluse tasu enne 2026) jäetakse välja. */
+function buildShareGroups(calc, tariffLabel, vatPercent) {
+  const groups = [
+    { name: 'Elektrimüüja arve', items: [
+      { label: 'Börsihind', value: calc.spot, color: 1 },
+      { label: 'Müüja marginaal', value: calc.marginaal, color: 2 },
+      { label: 'Tasakaalustamisvõimsuse kulu', value: calc.tasakaalustamine, color: 3 }
+    ] },
+    { name: 'Võrguarve', items: [
+      { label: `Võrgutasu (${tariffLabel})`, value: calc.vorgutasu, color: 4 },
+      { label: 'Taastuvenergia tasu', value: calc.taastuvenergia, color: 5 },
+      { label: 'Varustuskindluse tasu', value: calc.varustuskindlus, color: 6 },
+      { label: 'Elektriaktsiis', value: calc.aktsiis, color: 7 }
+    ] },
+    { name: 'Riik', vatOnly: true, items: [
+      { label: `Käibemaks ${vatPercent}%`, value: calc.vat, color: 8 }
+    ] }
+  ];
+  for (const g of groups) g.items = g.items.filter(i => Number.isFinite(i.value) && i.value !== 0);
+  return groups.filter(g => g.items.length);
+}
+
+/** Osakaalud 0,1% täpsusega suurima jäägi meetodiga (summa täpselt 100,0%). */
+function sharePercents(values, total) {
+  const raw = values.map(v => v / total * 1000);
+  const tenths = raw.map(Math.floor);
+  raw.map((v, i) => [v - tenths[i], i]).sort((x, y) => y[0] - x[0])
+    .slice(0, Math.max(0, 1000 - tenths.reduce((sum, v) => sum + v, 0))).forEach(([, i]) => { tenths[i] += 1; });
+  return tenths.map(t => t / 10);
+}
+
+/** Osakaalude plokk: lintdiagramm (canvas) ja rühmitatud loend (legend ja tabel ühes, canvas on aria-hidden). */
+function sharesBlock(groups, total, vat) {
+  const items = groups.flatMap(g => g.items);
+  const pct = sharePercents(items.map(i => i.value), total);
+  items.forEach((item, i) => { item.pct = pct[i]; });
+  const pctText = v => `${numberFormat.d1.format(v)}%`;
+  const groupEls = groups.map(g => {
+    const sum = g.items.reduce((acc, i) => acc + i.value, 0);
+    const sumPct = Math.round(g.items.reduce((acc, i) => acc + i.pct, 0) * 10) / 10;
+    return el('li', { class: 'shares-group' }, [
+      el('p', { class: 'shares-group__head' }, [
+        el('span', { class: 'shares-group__name' }, [
+          el('span', { class: 'shares-group__label', text: g.name }),
+          g.vatOnly ? null : el('span', { class: 'shares-group__sub', text: `koos KM ${formatCents(sum * vat)}` })
+        ].filter(Boolean)),
+        el('span', { class: 'shares__value', text: formatCents(sum) }),
+        el('span', { class: 'shares__pct', text: pctText(sumPct) })
+      ]),
+      g.vatOnly && g.items.length === 1 ? null : el('ul', { class: 'shares' }, g.items.map(item => el('li', {}, [
+        el('span', { class: 'legend__swatch', style: `--swatch:var(--share-${item.color})`, 'aria-hidden': 'true' }),
+        el('span', { class: 'shares__name', text: item.label }),
+        el('span', { class: 'shares__value', text: formatCents(item.value) }),
+        el('span', { class: 'shares__pct', text: pctText(item.pct) })
+      ])))
+    ].filter(Boolean));
+  });
+  // Käibemaksu rühmal pole alamloendit: märk rühma real
+  groups.forEach((g, i) => {
+    if (g.vatOnly && g.items.length === 1) {
+      groupEls[i].firstChild.prepend(el('span', { class: 'legend__swatch', style: `--swatch:var(--share-${g.items[0].color})`, 'aria-hidden': 'true' }));
+      groupEls[i].firstChild.querySelector('.shares-group__label').textContent = g.items[0].label;
+    }
+  });
+  return el('div', { class: 'final-shares' }, [
+    el('p', { class: 'final-shares__title' }, ['Hinnakomponentide osakaal praegu', el('span', { class: 'final-shares__unit', text: 's/kWh ilma KM-ta · osakaal lõpphinnast' })]),
+    el('div', { class: 'chart-host chart-host--shares', id: 'shares-host', hidden: !T }, el('canvas', { id: 'c-shares', 'aria-hidden': 'true' })),
+    el('ul', { class: 'shares-groups', 'data-testid': 'shares-list' }, groupEls),
+    el('p', { class: 'final-shares__note', text: `Lõpphind ${formatCents(total)} koos KM-ga. Kuutasud (võrgu kuutasu, läbilaskevõime, kasutusvõimsus) ei sõltu kWh-st ja pole siin sees.` })
+  ]);
 }
 
 /* ---------- index.html · Hinnakomponentide osakaal (p 6.12) ---------- */
-function buildSharesChart(parts) {   // [{ label, value }] tabeli järjekorras; value = s/kWh (osakaal arvutub summast)
+function buildSharesChart(parts) {   // [{ label, value, color (1–8) }] loendi järjekorras; value = s/kWh (osakaal arvutub summast)
   if (!T) return null;
   const total = parts.reduce((sum, p) => sum + p.value, 0);
   return upsertChart(byId('c-shares'), {
@@ -2276,7 +2331,7 @@ function buildSharesChart(parts) {   // [{ label, value }] tabeli järjekorras; 
     data: {
       labels: [''],
       datasets: parts.map((p, i) => ({
-        label: p.label, data: [p.value], backgroundColor: T.share[i], borderColor: 'rgba(0, 0, 0, 0)', borderSkipped: false, barThickness: 20,
+        label: p.label, data: [p.value], backgroundColor: T.share[(p.color || i + 1) - 1], borderColor: 'rgba(0, 0, 0, 0)', borderSkipped: false, barThickness: 20,
         borderWidth: i < parts.length - 1 ? { right: 2 } : 0,   // läbipaistev 2 px serv = pinnavahe
         borderRadius: i === 0 ? { topLeft: 4, bottomLeft: 4 } : i === parts.length - 1 ? { topRight: 4, bottomRight: 4 } : 0
       }))

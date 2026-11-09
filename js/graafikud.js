@@ -7,7 +7,7 @@
 
 const CONFIG = readPageConfig();
 
-const APP_VERSION = '1.5.0';
+const APP_VERSION = '1.5.1';
 const BATTERY_IDLE_KW = 0.2;     // väiksem aku võimsus = „ootel“ (hoidevool), nagu energialehel
 const TARIFF_KEYS = ['marginaal', 'vorgutasuPaev', 'vorgutasuOo', 'taastuvenergiaTasu', 'aktsiis', 'kaibemaks', 'algus', 'lopp'];
 const MAX_PERIOD_MINUTES = 60;   // common.js nõue (pikim hinnaperiood)
@@ -85,7 +85,8 @@ function readPrices(json) {
   state.tariffs = t && TARIFF_KEYS.every(k => num(t[k]) != null) ? {
     marginaal: t.marginaal, vorgutasuPaev: t.vorgutasuPaev, vorgutasuOo: t.vorgutasuOo, taastuvenergiaTasu: t.taastuvenergiaTasu,
     aktsiis: t.aktsiis, kaibemaks: t.kaibemaks, algus: t.algus, lopp: t.lopp,
-    tasakaalustamisTasu: num(t.tasakaalustamisTasu) ?? 0,   // puudub vanemas hinnad.json-is (enne töövoo CALC_VERSION 5) -> 0
+    tasakaalustamisTasu: num(t.tasakaalustamisTasu) ?? 0,
+    varustuskindlusTasu: num(t.varustuskindlusTasu) ?? 0,  // vanemas failis on see taastuvenergiaTasu sees   // puudub vanemas hinnad.json-is (enne töövoo CALC_VERSION 5) -> 0
     nadalavahetusOnOo: t.nadalavahetusOnOo !== false, riigipuhadOnOo: t.riigipuhadOnOo !== false
   } : null;
   state.tariffChanges = state.tariffs ? normalizeTariffChanges(json.meta.tariffChanges, state.tariffs) : [];
@@ -206,7 +207,7 @@ function priceParts(spot, date) {
   if (!state.tariffs) return { spot: spot * state.vat, fees: 0, total: spot * state.vat, tariff: null };
   const f = tariffsAt(state.tariffs, state.tariffChanges, date);
   const tariff = networkTariff(date);
-  const fees = f.marginaal + (tariff === 'oo' ? f.vorgutasuOo : f.vorgutasuPaev) + f.taastuvenergiaTasu + f.aktsiis + f.tasakaalustamisTasu;
+  const fees = f.marginaal + (tariff === 'oo' ? f.vorgutasuOo : f.vorgutasuPaev) + f.taastuvenergiaTasu + f.varustuskindlusTasu + f.aktsiis + f.tasakaalustamisTasu;
   return { spot: spot * state.vat, fees: fees * state.vat, total: (spot + fees) * state.vat, tariff };
 }
 

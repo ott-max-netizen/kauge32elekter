@@ -4,6 +4,21 @@ See fail kirjeldab rakenduse `index.html` versioonimuudatusi, arhitektuurilisi k
 
 ---
 
+## [3.8.0], energy-dashboard.html [2.9.3] ja graafikud.html [1.5.1] — 2026-11-09 · detailsem hinnakomponentide osakaal
+
+- **Osakaalude plokk** (elektriinfo leht): 5 koondlõigu asemel iga komponent eraldi (börsihind, müüja marginaal,
+  tasakaalustamisvõimsuse kulu, võrgutasu, taastuvenergia tasu, varustuskindluse tasu, elektriaktsiis, käibemaks),
+  rühmitatud arvete kaupa: elektrimüüja arve ja võrguarve (rühma summa s/kWh ilma ja koos KM-ga ning osakaal) ja
+  käibemaks. Loendis iga komponendi s/kWh ilma KM-ta ja osakaal 0,1% täpsusega (suurima jäägi meetod, summa 100,0%).
+  Värvid arve järgi: müüja sinised, võrk rohekassinised, KM hall (`--share-1…8`, hele ja tume teema).
+- **Varustuskindluse tasu eraldi võtmena** `varustuskindlusTasu` 0,758 (alates 01.01.2026, töövoo ajalugu 0 enne);
+  `taastuvenergiaTasu` on nüüd ainult taastuvenergia tasu 0,84 (enne 1,598 = summa). Lõpphind ei muutu; hinna koostise
+  tabelis on mõlemad eraldi read nagu arvel. Graafikute leht arvestab vanemat hinnad.json-i (summa ühes võtmes) õigesti.
+- Kontroll: neli võrguarvet klapivad endiselt sendi täpsusega; lehed brauseris hele/tume, 1200 px ja 390 px (horisontaalset
+  kerimist pole, konsoolivigu pole).
+
+---
+
 ## 2026-11-09 · arvetega kontroll (töövoo kommentaarid, README)
 
 - Võrguarve 10/2026 (VMA2) klapib sendi täpsusega (482,73 € / 598,59 €): kinnitab kuutasu 30,41 € ja 0,32 €/A alates

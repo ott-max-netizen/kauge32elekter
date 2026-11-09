@@ -476,7 +476,7 @@ function chartTokens() {
     focus: v('--focus'), focusBg: v('--focus-bg'),
     solar: v('--solar'), home: v('--home'), grid: v('--grid'), export: v('--export'), battery: v('--battery'),
     cat: Object.fromEntries(['roheline', 'kollane', 'oranz', 'punane'].map(k => [k, v(`--cat-${k}`)])),
-    share: [1, 2, 3, 4, 5].map(i => v(`--share-${i}`)),
+    share: [1, 2, 3, 4, 5, 6, 7, 8].map(i => v(`--share-${i}`)),
     textures: window.matchMedia('(forced-colors: active), (prefers-contrast: more)').matches,
     patterns: new Map()
   };

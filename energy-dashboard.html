@@ -16,7 +16,7 @@
 <meta name="robots" content="noindex, nofollow, noarchive">
 <title>Kauge 32 energia</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="css/common.css?v=20261103b">
+<link rel="stylesheet" href="css/common.css?v=20261109f">
 <!-- Lukk (parooliga kaitse, README „Parooliga kaitse“): ilma defer'ita, et globaal Lukk oleks lehe skriptile olemas ja .app peituks enne esimest joonistamist -->
 <script src="js/lukk.js?v=20261103b"></script>
 <!-- Külastuste loendus (GoatCounter, küpsisteta; README „Külastuste statistika“). Skript on repo sees, sest CSP lubab ainult
@@ -336,7 +336,8 @@ const CONFIG = {
     marginaal: 0.45,  // Sunly börsihinna marginaal tarbimisel 4,5 €/MWh (alates 01.11.2026)
     vorgutasuPaev: 3.49,
     vorgutasuOo: 1.99,
-    taastuvenergiaTasu: 1.598,
+    taastuvenergiaTasu: 0.84,
+    varustuskindlusTasu: 0.758,
     aktsiis: 0.21,
     tasakaalustamisTasu: 0.373,          // Eleringi tasakaalustamisvõimsuse kulu tarbimisele (3,73 €/MWh, 2026)
     tasakaalustamisTasuTootmine: 0.373,  // ... ja tootmisele (müügihinnast maha koos KM-ga)
@@ -425,7 +426,7 @@ const CONFIG = {
 };
 </script>
 <!-- Mõlema lehe ühine skriptikood (aeg, vormindamine, DOM-abi, graafikute ühisosa); peab laadima enne põhiskripti -->
-<script src="js/common.js?v=20261109b"></script>
-<script src="js/energy-dashboard.js?v=20261109e"></script>
+<script src="js/common.js?v=20261109f"></script>
+<script src="js/energy-dashboard.js?v=20261109f"></script>
 </body>
 </html>
