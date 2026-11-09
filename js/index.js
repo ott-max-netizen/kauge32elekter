@@ -9,7 +9,7 @@ const CONFIG = readPageConfig();
 
 /* Tehnilised konstandid — neid ei ole tavakasutuses vaja muuta. Mõlema lehe ühised (TIME_ZONE, API_URL,
    MINUTE_MS, HOUR_MS, DAY_MS) on failis js/common.js. */
-const APP_VERSION = '3.6.0';
+const APP_VERSION = '3.6.1';
 const API_TIMEOUT_MS = 20000;
 const PLANNER_DURATIONS = [60, 120, 180, 240, 300, 360]; // minutit
 const MAX_PERIOD_MINUTES = 60;   // pikim lubatud hinnaperiood
@@ -2865,7 +2865,7 @@ function renderBuildingElectricity() {
     el('p', {
       class: 'building-note',
       text: data.source === 'estfeed'
-        ? 'Eurod on hinnang (≈), arvutatud ostetud kWh-st, börsihinnast ja vastaval ajal kehtinud tasudest koos KM-ga; alates juunist 2026 ka võrgu kuutasu ja läbilaskevõimetasu (peakaitse järgi), kasutusvõimsuse tasud pole sees. Tegelik arve võib erineda.'
+        ? 'Eurod on hinnang (≈), arvutatud ostetud kWh-st, börsihinnast ja vastaval ajal kehtinud tasudest koos KM-ga; koos võrgu kuutasu ja läbilaskevõimetasuga (peakaitse järgi, sel ajal kehtinud võrgupaketiga), kasutusvõimsuse tasud pole sees. Tegelik arve võib erineda.'
         : 'Eurod on haldaja sisestatud arvesummad. Võrguarvesti (Estfeed) andmeid ei õnnestunud laadida.'
     }),
     table

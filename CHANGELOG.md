@@ -4,6 +4,19 @@ See fail kirjeldab rakenduse `index.html` versioonimuudatusi, arhitektuurilisi k
 
 ---
 
+## [3.6.1] ja energy-dashboard.html [2.9.1] — 2026-11-09 · võrgupaketi Amper VML2 ajalugu arvete järgi
+
+- Kuni VMA2-ni oli võrgupakett **Amper VML2** (Elektrilevi, 160 A): elektri edastamine päev 3,95, öö 2,30 s/kWh,
+  kuutasu 25,80 € ja läbilaskevõime 0,55 €/A (arve 01/2025), alates 01.08.2025 26,21 € ja 0,57 €/A (arve 12/2025).
+  Töövoo `TASUDE_AJALUGU`-s on need `vorgutasuPaev`/`vorgutasuOo`/`vorguKuutasu`/`labilaskevoimeTasu` ajalooks
+  kuni `VMA2_ALATES` (OLETUS 01.06.2026; VML2 kehtis vähemalt 31.12.2025-ni). Enne kehtisid kõigil kuudel VMA2 kWh-hinnad
+  ja enne 06/2026 võrgu kuutasu puudus – 2025. aasta kuude € oli seetõttu liiga väike.
+- Kontroll: töövoo tasudest arvutatud võrguarve klapib mõlema arvega sendi täpsusega (01/2025: 438,66 € ilma KM-ta,
+  535,17 € KM 22%-ga; 12/2025: 520,26 € / 645,12 € KM 24%-ga), sh taastuvenergia tasu, aktsiis ja KM ajalugu.
+- Elektriinfo ja energialehe märkused: kuu € sisaldab võrgu kuutasu ja läbilaskevõimetasu kogu perioodil.
+
+---
+
 ## [3.6.0] ja energy-dashboard.html [2.9.0] — 2026-11-09 · tasakaalustamisvõimsuse kulu Eleringi juhendi järgi
 
 Allikas: Eleringi juhend „Tasakaalustamisvõimsuse kulu arvestus energiasalvestusüksustele“ (uuendatud 03.02.2026) ja

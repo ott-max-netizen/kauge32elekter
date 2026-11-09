@@ -165,6 +165,7 @@ jobs:
           # kuupäevani) ja muuda alles siis CONFIG-it – muidu arvutatakse ka varasemad kuud uue tasuga.
           # Kirje sõrmejälg (cfg) muutub ja vahemälus olevad kuud arvutatakse järgmisel käivitusel uuesti.
           # Kuuandmed algavad 2024-11, varasemaid väärtusi pole vaja.
+          VMA2_ALATES = datetime(2026, 6, 1, tzinfo=TZ)  # võrgupakett Amper VML2 -> Võimsus VMA2 (OLETUS, vt allpool)
           TASUDE_AJALUGU = {
               # CONFIG.hinnad.taastuvenergiaTasu = taastuvenergia tasu 0,84 + varustuskindluse tasu 0,758 (alates 01.01.2026).
               "taastuvenergiaTasu": (
@@ -195,11 +196,20 @@ jobs:
               "muugitasu": (
                   (datetime(2026, 11, 1, tzinfo=TZ), 1.05),
               ),
-              # Võrgutasu kWh-hinnad (vorgutasuPaev/vorgutasuOo): Elektrilevi 01.08.2025, 01.06.2026 ja 01.02.2027 hinnakirja
-              # muudatustes kWh-põhised hinnad ei muutunud (3,49 / 1,99; muutusid kuu- ja läbilaskevõimetasud), seega ajalugu pole.
-              # 01.02.2027 hinnakiri (madalpinge üle 63 A, VMA2) on index.html CONFIG.hinnamuudatused-es (TASUDE_MUUDATUSED):
+              # Võrguteenus (Elektrilevi, peakaitse 160 A), ilma KM-ta. Enne VMA2-te oli pakett Amper VML2 (arved 01/2025 ja
+              # 12/2025, mõlemad klapivad selle arvestusega sendi täpsusega): elektri edastamine päev 3,95, öö 2,30 s/kWh,
+              # kuutasu 25,80 €/kuu ja läbilaskevõime 0,55 €/A (01/2025; sama eeldatud 11–12/2024), alates 01.08.2025 26,21 € ja
+              # 0,57 €/A (12/2025 arve, Konkurentsiameti kooskõlastatud tariif). Võimsus VMA2 (3,49 / 1,99 s/kWh, 30,41 € ja
+              # 0,32 €/A) – OLETUS: alates 01.06.2026 (Elektrilevi hinnakirjamuudatus); VML2 kehtis vähemalt 31.12.2025-ni.
+              # Kui VMA2 algas muul kuupäeval, muuda VMA2_ALATES. 01.02.2027 hinnakiri on index.html CONFIG.hinnamuudatused-es:
               # https://elektrilevi.ee/en/uudised/vorgutasu-muutub-alates-1-augustist
               # https://elektrilevi.ee/en/uudised/vorgutasu-keskmine-hind-muutub-alates-juunikuust-kolm-koma-neli-protsenti
+              "vorgutasuPaev": (
+                  (VMA2_ALATES, 3.95),
+              ),
+              "vorgutasuOo": (
+                  (VMA2_ALATES, 2.30),
+              ),
               # Eleringi tasakaalustamisvõimsuse kulu (bilansiteenuse lisatasu, ElTS § 53¹) alates 01.01.2026 tarbimisele ja
               # tootmisele 3,73 €/MWh + KM (= CONFIG 0,373 s/kWh); enne 2026 seda polnud. 2,97 €/MWh alates 01.01.2027 ja
               # 3,89 €/MWh alates 01.05.2027 on CONFIG.hinnamuudatused-es. Allikas: Eleringi juhend „Tasakaalustamisvõimsuse
@@ -211,18 +221,17 @@ jobs:
                   (datetime(2026, 1, 1, tzinfo=TZ), 0.0),
               ),
               # Võrgu fikseeritud tasud (ilma KM-ta), kuu € = (vorguKuutasu + labilaskevoimeTasu × peakaitseA) × KM
-              # (fixed_monthly_eur). VMA2 hinnakiri 30,41 €/kuu ja 0,32 € / A kehtib 01.06.2026 hinnakirjamuudatusest
-              # (allikad ülal); varasemad Elektrilevi summad pole teada -> 0 (nende kuude € on ilma võrgu kuutasuta, TÄIDA).
-              # 01.02.2027 (30,58 / 0,33) tuleb CONFIG.hinnamuudatused-est.
+              # (fixed_monthly_eur): VML2 ja VMA2 väärtused ülal; 01.02.2027 (30,58 / 0,33) tuleb CONFIG.hinnamuudatused-est.
               "vorguKuutasu": (
-                  (datetime(2026, 6, 1, tzinfo=TZ), 0.0),
+                  (datetime(2025, 8, 1, tzinfo=TZ), 25.80),
+                  (VMA2_ALATES, 26.21),
               ),
               "labilaskevoimeTasu": (
-                  (datetime(2026, 6, 1, tzinfo=TZ), 0.0),
+                  (datetime(2025, 8, 1, tzinfo=TZ), 0.55),
+                  (VMA2_ALATES, 0.57),
               ),
-              # Muu fikseeritud kuutasu (nt müüja kuutasu; enne 01.06.2026 ka võrgu kuu- ja läbilaskevõimetasu, mida
-              # ülal pole), €/kuu koos KM-ga. Elektrilevi kuu- ja läbilaskevõimetasu muutus 01.08.2025 ja 01.06.2026.
-              # Summad TÄIDA arvete järgi; 0 = selle perioodi kuudele kuutasu ei lisata.
+              # Muu fikseeritud kuutasu (nt müüja kuutasu; võrgu kuu- ja läbilaskevõimetasu on ülal eraldi), €/kuu koos
+              # KM-ga. Summad TÄIDA arvete järgi; 0 = selle perioodi kuudele muud kuutasu ei lisata.
               "kuutasu": (
                   (datetime(2025, 8, 1, tzinfo=TZ), 0.0),  # kuni 31.07.2025 – TÄIDA arvelt
                   (datetime(2026, 6, 1, tzinfo=TZ), 0.0),  # 01.08.2025–31.05.2026 – TÄIDA arvelt

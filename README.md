@@ -382,8 +382,10 @@ Solarmani välja nimed ja märgid on failis muutmata; lehed tõlgendavad neid ni
   `uuenda-hinnad.yml` (`KM_AJALUGU`: KM 22 % enne 01.07.2025; `TASUDE_AJALUGU`: taastuvenergia tasu
   1,05 s/kWh 2024, 0,84 alates 2025; varustuskindluse tasu 0,758 s/kWh alates 01.01.2026; elektriaktsiis
   0,145 s/kWh enne 01.05.2025; müüja marginaal 0,6 s/kWh ja müügitasu 1,05 s/kWh koos KM-ga enne 01.11.2026;
-  allikad on kommentaarides). Võrgutasu kWh-hinnad on kõigil kuudel CONFIG-i omad (Elektrilevi kWh-hinnad
-  2025–2027 hinnakirjamuudatustega ei muutunud: päev 3,49, öö 1,99 s/kWh).
+  allikad on kommentaarides). Võrgupakett (Elektrilevi, peakaitse 160 A, ilma KM-ta): **Amper VML2** – päev 3,95,
+  öö 2,30 s/kWh, kuutasu 25,80 € ja läbilaskevõime 0,55 €/A kuni 31.07.2025, alates 01.08.2025 26,21 € ja 0,57 €/A
+  (arved 01/2025 ja 12/2025 klapivad arvestusega sendi täpsusega); **Võimsus VMA2** (CONFIG-i praegused väärtused)
+  töövoo `VMA2_ALATES` kuupäevast – praegu OLETUS 01.06.2026 (VML2 kehtis vähemalt 31.12.2025-ni).
 - **Elektrimüüja alates 01.11.2026: Sunly.** Börsihinna marginaal tarbimisel 4,5 €/MWh + KM
   (`CONFIG.hinnad.marginaal` = 0,45 s/kWh ilma KM-ta), võrku andmisel 8,5 €/MWh + KM
   (`CONFIG.hinnad.muugitasu` = 0,85 × 1,24 = 1,054 s/kWh koos KM-ga; müügihind = börsihind ilma KM-ta − müügitasu).
@@ -399,9 +401,9 @@ Solarmani välja nimed ja märgid on failis muutmata; lehed tõlgendavad neid ni
   `tarbimiskohaKasutusvoimsusTasu`, ilma KM-ta; peakaitse `peakaitseA` = 160 A) on elektriinfo lehe hinna koostise
   all eraldi kirjas koos eelseisva hinnakirjamuudatusega; s/kWh hinnas neid pole. Kuu € arvestusse lisatakse
   (võrgu kuutasu + läbilaskevõime × peakaitse) × KM + `kuutasu` (muu kuutasu koos KM-ga): 30,41 + 160 × 0,32 =
-  81,61 € → 101,20 €/kuu koos KM-ga alates 01.06.2026, 01.02.2027 alates 30,58 + 160 × 0,33 = 83,38 € → 103,39 €.
-  Enne 01.06.2026 on võrgu kuutasud töövoo `TASUDE_AJALUGU`-s 0 (summad pole teada). Kasutusvõimsuse tasud
-  (€ / kW kuu suurima võimsuse järgi) kuu € arvestuses pole.
+  81,61 € → 101,20 €/kuu koos KM-ga (VMA2), 01.02.2027 alates 30,58 + 160 × 0,33 = 83,38 € → 103,39 €. VML2 ajal
+  25,80 + 160 × 0,55 = 113,80 € ja alates 01.08.2025 26,21 + 160 × 0,57 = 117,41 € ilma KM-ta (töövoo
+  `TASUDE_AJALUGU`). Kasutusvõimsuse tasud (€ / kW kuu suurima võimsuse järgi, ainult VMA2) kuu € arvestuses pole.
 - **Tasu muutumisel** lisa vana väärtus esmalt `TASUDE_AJALUGU`-sse (kuni muutuse kuupäevani) ja muuda
   siis `CONFIG.hinnad`-i. Iga kuu kirjes on sõrmejälg `cfg`; kui see erineb, arvutab töövoog vahemälus
   olevad kuud järgmisel käivitusel ise uuesti (`index.html`-i muutmine töövoogu kohe ei käivita).
