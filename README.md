@@ -375,9 +375,14 @@ Solarmani välja nimed ja märgid on failis muutmata; lehed tõlgendavad neid ni
   Aku laadimise ja tühjendamise topeltkoguse vabastus (Eleringi juhend, hübriidlahendus) eeldab salvesti eraldi
   mõõtepunkti, seetõttu arvestatakse tasu mõlemas suunas täismahus. Öötariif kehtib tööpäeviti 22–07 ning laupäeval, pühapäeval ja **riigipühadel** kogu
   ööpäeva (`CONFIG.ootariif.riigipuhadOnOo`, Elektrilevi hinnakiri).
-- **Hinnakomponentide osakaal** (elektriinfo leht): iga komponent oma lõiguna ja loendis s/kWh ilma KM-ta ning
-  osakaaluga 0,1% täpsusega, rühmitatud arvete kaupa – elektrimüüja arve (börsihind, marginaal, tasakaalustamisvõimsus),
-  võrguarve (võrgutasu, taastuvenergia-, varustuskindluse tasu, aktsiis; rühma summa ka koos KM-ga) ja käibemaks.
+- **Kaart „Hind koos tasudega praegu“** (elektriinfo leht): suur lõpphind, võrrand „börsihind + tasud ja maksud“ (mõlemad
+  koos KM-ga; tasud = ümardatud lõpphind − ümardatud börsihind, et summa klapiks) ja **hinna koostis** – üks rühmitatud
+  loend (eraldi koostise tabelit pole): elektrimüüja arve (börsihind, marginaal, tasakaalustamisvõimsus), võrguarve
+  (võrgutasu, taastuvenergia-, varustuskindluse tasu, aktsiis; rühma summa ka koos KM-ga arvega võrdlemiseks) ja
+  käibemaks, iga rida s/kWh ilma KM-ta ja osakaaluga 0,1% täpsusega, lõpus „Kokku koos KM“. Lint näitab samu osakaale.
+  Börsihind ≤ 0: lint ja protsendid jäävad ära, väärtused jäävad. All **kuutasude tabel** (võrgu kuutasu, läbilaskevõime ×
+  peakaitse, kokku ilma ja koos KM-ga; kasutusvõimsus viimase lõppenud kuu `kwMax` näitega) ja avanev plokk **„Tulekul N
+  hinnamuudatust · järgmine …“** (iga kuupäev eraldi, read „vana → uus“, kuutasude summa muutus). Telefonis üks veerg.
 - „Leia odavaim aeg“, elektriauto laadimine ja soovitused valivad akna **hinna koos tasudega**
   järgi (öine võrgutasu on odavam), näidatakse ka börsihinda.
 - Kuu € (`majaElekter`) on hinnang: 15-min ost × börsihind + **vastaval ajal kehtinud** tasud ja KM.

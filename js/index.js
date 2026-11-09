@@ -9,7 +9,7 @@ const CONFIG = readPageConfig();
 
 /* Tehnilised konstandid — neid ei ole tavakasutuses vaja muuta. Mõlema lehe ühised (TIME_ZONE, API_URL,
    MINUTE_MS, HOUR_MS, DAY_MS) on failis js/common.js. */
-const APP_VERSION = '3.8.0';
+const APP_VERSION = '3.9.0';
 const API_TIMEOUT_MS = 20000;
 const PLANNER_DURATIONS = [60, 120, 180, 240, 300, 360]; // minutit
 const MAX_PERIOD_MINUTES = 60;   // pikim lubatud hinnaperiood
@@ -567,59 +567,102 @@ function fixedMonthlyFees(fees) {
   return { network, totalIncVat: network * (1 + Number(fees.kaibemaks) / 100) + posNum(fees.kuutasu) };
 }
 
-/** Fikseeritud kuutasude teade: „võrgu kuutasu 30,41 € + läbilaskevõime 160 A × 0,32 € = 81,61 €/kuu ilma KM-ta …“; '' kui puuduvad. */
-function fixedFeesText(fees) {
+/** Viimane lõppenud kuu, mille kirjes on kuu suurim võimsus (hinnad.json majaElekter kwMax): { label, kw } või null. */
+const monthYearFormatter = new Intl.DateTimeFormat('et-EE', { timeZone: 'UTC', month: 'long', year: 'numeric' });
+function lastMonthPeak() {
+  const rows = (Array.isArray(state.majaElekter) ? state.majaElekter : [])
+    .filter(r => r && r.complete !== false && !r.noData && typeof r.kwMax === 'number' && Number.isFinite(r.kwMax) && /^\d{4}-\d{2}$/.test(String(r.kuu)))
+    .sort((x, y) => String(x.kuu).localeCompare(String(y.kuu)));
+  const r = rows[rows.length - 1];
+  if (!r) return null;
+  const [y, m] = r.kuu.split('-').map(Number);
+  return { label: monthYearFormatter.format(new Date(Date.UTC(y, m - 1, 1))), kw: r.kwMax };
+}
+
+/** Kuutasude tabel (ei sõltu tarbimisest): võrgu kuutasu, läbilaskevõime × peakaitse, muu kuutasu, kokku ilma ja koos KM-ga;
+ *  kasutusvõimsus eraldi reana (kuu suurima võimsuse järgi, eelmise kuu näitega). null, kui kuutasusid pole. */
+function fixedFeesTable(fees) {
   const m = fixedMonthlyFees(fees);
-  if (!(m.totalIncVat > 0)) return '';
+  if (!(m.totalIncVat > 0)) return null;
   const eur = v => `${numberFormat.d2.format(v)}\u00a0€`;
-  const parts = [];
-  if (m.network > 0) {
-    const terms = [];
-    if (posNum(fees.vorguKuutasu)) terms.push(`võrgu kuutasu ${eur(fees.vorguKuutasu)}`);
-    if (posNum(fees.labilaskevoimeTasu) && posNum(fees.peakaitseA)) terms.push(`läbilaskevõime ${numberFormat.d0.format(fees.peakaitseA)}\u00a0A × ${eur(fees.labilaskevoimeTasu)}`);
-    parts.push(`${terms.join(' + ')} = ${eur(m.network)}/kuu ilma KM-ta`);
+  const vatPercent = numberFormat.pct.format(fees.kaibemaks);
+  const row = (label, value, cls = '') => el('tr', cls ? { class: cls } : {}, [el('th', { scope: 'row', text: label }), el('td', { text: value })]);
+  const rows = [];
+  if (posNum(fees.vorguKuutasu)) rows.push(row('Võrgu kuutasu', eur(fees.vorguKuutasu)));
+  if (posNum(fees.labilaskevoimeTasu) && posNum(fees.peakaitseA)) {
+    rows.push(row(`Läbilaskevõime ${numberFormat.d0.format(fees.peakaitseA)}\u00a0A × ${eur(fees.labilaskevoimeTasu)}`, eur(fees.labilaskevoimeTasu * fees.peakaitseA)));
   }
-  if (posNum(fees.kuutasu)) parts.push(`muu kuutasu ${eur(fees.kuutasu)}/kuu koos KM-ga`);
-  const power = posNum(fees.kasutusvoimsusTasu)
-    ? ` Lisaks kasutusvõimsus ${eur(fees.kasutusvoimsusTasu)} / kW kuus ilma KM-ta kuu suurima võimsuse järgi (nt 21\u00a0kW = ${eur(21 * fees.kasutusvoimsusTasu)}); see on „Maja üldelektri“ kuu summas sees.`
-    : '';
-  return `Fikseeritud kuutasud (ei sisaldu s/kWh hinnas): ${parts.join('; ')} – kokku ${eur(m.totalIncVat)}/kuu koos KM-ga.${power}`;
+  if (m.network > 0) rows.push(row('Kokku ilma KM-ta', eur(m.network), 'fixed-fees__sub'));
+  if (posNum(fees.kuutasu)) rows.push(row('Muu kuutasu (koos KM)', eur(fees.kuutasu)));
+  rows.push(row(`Kokku koos KM ${vatPercent}%`, `${eur(m.totalIncVat)}/kuu`, 'fixed-fees__total'));
+  let powerNote = null;
+  if (posNum(fees.kasutusvoimsusTasu)) {
+    const peak = lastMonthPeak();
+    const kw = peak ? Math.floor(peak.kw + 0.5) : null;
+    powerNote = el('p', { class: 'fixed-fees__note', text: peak
+      ? `Lisaks kasutusvõimsus ${eur(fees.kasutusvoimsusTasu)} / kW kuu suurima võimsuse järgi: ${peak.label} ${numberFormat.d1.format(peak.kw)}\u00a0kW → ${kw}\u00a0kW × ${eur(fees.kasutusvoimsusTasu)} = ${eur(kw * fees.kasutusvoimsusTasu)} ilma KM-ta. Sisaldub „Maja üldelektri“ kuusummas.`
+      : `Lisaks kasutusvõimsus ${eur(fees.kasutusvoimsusTasu)} / kW kuu suurima võimsuse järgi (nt 21\u00a0kW = ${eur(21 * fees.kasutusvoimsusTasu)}) ilma KM-ta. Sisaldub „Maja üldelektri“ kuusummas.` });
+  }
+  return el('div', { class: 'fixed-fees' }, [
+    el('table', { class: 'fixed-fees__table' }, [
+      el('caption', { text: 'Kuutasud (ei sõltu tarbimisest, ilma KM-ta kui pole märgitud)' }),
+      el('tbody', {}, rows)
+    ]),
+    powerNote
+  ].filter(Boolean));
 }
 
 /** Hinnamuudatuse nimetused ja ühikud tekstiks („Alates 01.02.2027: võrgu kuutasu 30,41 → 30,58 €/kuu, …“). */
 const TARIFF_CHANGE_LABELS = {
   marginaal: ['müüja marginaal', 's/kWh'], vorgutasuPaev: ['võrgutasu päev', 's/kWh'], vorgutasuOo: ['võrgutasu öö', 's/kWh'],
   taastuvenergiaTasu: ['taastuvenergia tasu', 's/kWh'], varustuskindlusTasu: ['varustuskindluse tasu', 's/kWh'], aktsiis: ['elektriaktsiis', 's/kWh'],
-  tasakaalustamisTasu: ['tasakaalustamisvõimsuse kulu tarbimisele', 's/kWh'],
-  tasakaalustamisTasuTootmine: ['tasakaalustamisvõimsuse kulu tootmisele', 's/kWh'], peakaitseA: ['peakaitse', 'A'],
+  tasakaalustamisTasu: ['tasakaalustamisvõimsus (tarbimine)', 's/kWh'],
+  tasakaalustamisTasuTootmine: ['tasakaalustamisvõimsus (tootmine)', 's/kWh'], peakaitseA: ['peakaitse', 'A'],
   kuutasu: ['muu kuutasu (koos KM)', '€/kuu'], muugitasu: ['müügitasu (koos KM)', 's/kWh'], kaibemaks: ['käibemaks', '%'],
   vorguKuutasu: ['võrgu kuutasu', '€/kuu'], labilaskevoimeTasu: ['läbilaskevõime', '€ / A kuus'],
   kasutusvoimsusTasu: ['kasutusvõimsus', '€ / kW kuus'], tarbimiskohaKasutusvoimsusTasu: ['tarbimiskoha kasutusvõimsus', '€ / kW kuus']
 };
 const changeNumberFormatter = new Intl.NumberFormat('et-EE', { minimumFractionDigits: 2, maximumFractionDigits: 3 });
 const changeDateFormatter = new Intl.DateTimeFormat('et-EE', { timeZone: TIME_ZONE, day: '2-digit', month: '2-digit', year: 'numeric' });
-/** Kõik tulevased hinnamuudatused tekstina (iga kirje oma lausena); '' kui muudatusi pole. */
-function upcomingTariffText(now) {
-  return TARIFF_CHANGES.filter(c => c.start > now.getTime()).map(tariffChangeText).join(' ');
-}
-function tariffChangeText(next) {
-  const before = feesAt(new Date(next.start - 1));
-  const diffs = Object.keys(next.values)
-    .filter(k => Math.abs(Number(before[k]) - next.values[k]) > 1e-9)
+/** Ühe hinnamuudatuse read võrreldes eelmise kehtiva hinnaga: [{ label, text: „0,373 → 0,297 s/kWh“ }]; lisaks kuutasude summa muutus. */
+function tariffChangeRows(change) {
+  const before = feesAt(new Date(change.start - 1));
+  const f = v => changeNumberFormatter.format(v);
+  const rows = Object.keys(change.values)
+    .filter(k => Math.abs(Number(before[k]) - change.values[k]) > 1e-9)
     .map(k => {
       const [label, unit] = TARIFF_CHANGE_LABELS[k] || [k, ''];
-      const f = v => changeNumberFormatter.format(v);
-      return `${label} ${f(Number(before[k]))} → ${f(next.values[k])}${unit ? `\u00a0${unit}` : ''}`;
+      return { label: capitalize(label), text: `${f(Number(before[k]))} → ${f(change.values[k])}${unit ? `\u00a0${unit}` : ''}` };
     });
   const fixedBefore = fixedMonthlyFees(before).totalIncVat;
-  const fixedAfter = fixedMonthlyFees(feesAt(new Date(next.start))).totalIncVat;
+  const fixedAfter = fixedMonthlyFees(feesAt(new Date(change.start))).totalIncVat;
   if (Math.abs(fixedAfter - fixedBefore) >= 0.005) {
-    diffs.push(`fikseeritud kuutasud kokku ${numberFormat.d2.format(fixedBefore)} → ${numberFormat.d2.format(fixedAfter)}\u00a0€/kuu koos KM-ga`);
+    rows.push({ label: 'Kuutasud kokku (koos KM)', text: `${numberFormat.d2.format(fixedBefore)} → ${numberFormat.d2.format(fixedAfter)}\u00a0€/kuu`, total: true });
   }
-  const when = changeDateFormatter.format(new Date(next.start));
-  return diffs.length
-    ? `Alates ${when}: ${diffs.join(', ')} (ilma KM-ta, kui pole märgitud).`
-    : `Alates ${when}: hinnad ja tasud jäävad samaks.`;
+  return rows;
+}
+
+/** Tulevased hinnamuudatused suletud plokina: „Tulekul 3 hinnamuudatust · järgmine 01.01.2027“; null, kui muudatusi pole. */
+function upcomingTariffDetails(now) {
+  const list = TARIFF_CHANGES.filter(c => c.start > now.getTime());
+  if (!list.length) return null;
+  const count = list.length === 1 ? '1 hinnamuudatus' : `${list.length} hinnamuudatust`;
+  return el('details', { class: 'table-view tariff-changes', 'data-testid': 'tariff-changes' }, [
+    el('summary', {}, [iconEl('calendar'), `Tulekul ${count}`,
+      el('span', { class: 'table-view__sub', text: `järgmine ${changeDateFormatter.format(new Date(list[0].start))}` }), iconEl('chevron-down')]),
+    ...list.map(change => {
+      const rows = tariffChangeRows(change);
+      return el('section', { class: 'tariff-change' }, [
+        el('h3', { class: 'tariff-change__date', text: `Alates ${changeDateFormatter.format(new Date(change.start))}` }),
+        rows.length
+          ? el('ul', { class: 'tariff-change__list' }, rows.map(r => el('li', r.total ? { class: 'tariff-change__total' } : {}, [
+            el('span', { text: r.label }), el('span', { class: 'tariff-change__value', text: r.text })
+          ])))
+          : el('p', { class: 'table-note', text: 'Hinnad ja tasud jäävad samaks.' })
+      ]);
+    }),
+    el('p', { class: 'table-note', text: 'Ilma KM-ta, kui pole märgitud. Uued hinnad arvestatakse sellest päevast automaatselt.' })
+  ]);
 }
 
 /** Lõpphind s/kWh: börsihind ilma KM-ta + tasud (ilma KM-ta), KM lisatakse kogu summale üks kord. */
@@ -2190,27 +2233,27 @@ function renderFinalPrice(d) {
       ? 'Riigipühal kehtib öötariif kogu päeva.'
       : `Öötariif kehtib ${String(CONFIG.ootariif.algus).padStart(2, '0')}:00–${String(CONFIG.ootariif.lopp).padStart(2, '0')}:00${allDay.length ? ` ning ${allDay.join(' ja ')} kogu päeva` : ''}.`;
 
-  const spotIncVat = calc.spot * vat;
-  const fixedAddonsIncVat = (calc.marginaal + calc.vorgutasu + calc.taastuvenergia + calc.varustuskindlus + calc.aktsiis + calc.tasakaalustamine) * vat;
-
-  const row = (label, value, extra = {}) => el('tr', extra, [
-    el('td', { text: label }),
-    el('td', { text: formatCents(value) })
+  // Võrrand: börsihind + tasud = lõpphind, kõik koos KM-ga; tasud = ümardatud lõpphind − ümardatud börsihind, et summa klapiks
+  const round2 = v => Math.round(v * 100) / 100;
+  const spotIncVat = round2(calc.spot * vat);
+  const feesIncVat = round2(round2(calc.total) - spotIncVat);
+  // Märk („+“) on teise liikme sees: kitsal ekraanil murdub rida liikmete vahelt ja märk ei jää rea lõppu rippuma
+  const eqTerm = (value, label, testid, op = null) => el('span', { class: 'final-eq__term' }, [
+    op ? el('span', { class: 'final-eq__op', text: `${op} ` }) : null,
+    el('b', { class: 'final-eq__num', 'data-testid': testid, text: numberFormat.d2.format(value) }), ` ${label}`
+  ].filter(Boolean));
+  const equation = el('div', { class: 'final-eq', 'data-testid': 'final-eq' }, [
+    el('p', { class: 'final-eq__row' }, [
+      eqTerm(spotIncVat, 'börsihind', 'final-spot'),
+      eqTerm(Math.abs(feesIncVat), 'tasud ja maksud', 'final-fees', feesIncVat < 0 ? '−' : '+')
+    ]),
+    el('p', { class: 'final-eq__note', text: `s/kWh, mõlemad koos KM ${vatPercent}% · kokku ${numberFormat.d2.format(calc.total)}` })
   ]);
-  const table = el('div', { class: 'breakdown-wrap' }, el('table', { class: 'breakdown' }, [
-    el('caption', { text: 'Hinna koostis, s/kWh' }),
-    el('tbody', {}, [
-      row('Börsihind ilma KM-ta', calc.spot),
-      row('Müüja marginaal', calc.marginaal),
-      row(`Võrgutasu (${tariffLabel})`, calc.vorgutasu),
-      row('Taastuvenergia tasu', calc.taastuvenergia),
-      ...(calc.varustuskindlus ? [row('Varustuskindluse tasu', calc.varustuskindlus)] : []),
-      row('Elektriaktsiis', calc.aktsiis),
-      ...(calc.tasakaalustamine ? [row('Tasakaalustamisvõimsuse kulu', calc.tasakaalustamine)] : []),
-      row(`Käibemaks ${vatPercent}%`, calc.vat),
-      row('Hind koos tasudega ja KM-ga', calc.total, { class: 'breakdown__total', 'data-testid': 'final-total' })
-    ])
-  ]));
+
+  // Hinna koostis arvete kaupa (üks loend: komponendid s/kWh ilma KM-ta, osakaal lõpphinnast, kokkuvõte koos KM-ga)
+  const shareGroups = buildShareGroups(calc, tariffLabel, vatPercent);
+  const shareItems = shareGroups.flatMap(g => g.items);
+  const sharesValid = calc.total > 0 && shareItems.every(s => s.value >= 0);
 
   const nodes = [
     el('div', { class: 'final-grid' }, [
@@ -2219,31 +2262,15 @@ function renderFinalPrice(d) {
           el('p', { class: 'big-number' }, [el('span', { 'data-testid': 'final-price', text: numberFormat.d2.format(calc.total) }), ' ', el('small', { text: 's/kWh' })]),
           el('span', { class: 'badge', 'data-testid': 'final-tariff', text: `Kehtib ${tariffLabel}` })
         ]),
-        el('div', { class: 'stats stats--2' }, [
-          // Ühik väiksemana (common.css .stat__value small): kitsas veerg ei murra „12,40 / s/kWh“ kaheks
-          statTile('Börsihind (koos KM)', [numberFormat.d2.format(spotIncVat), ' ', el('small', { text: 's/kWh' })], null, { value: 'final-spot' }),
-          statTile('Tasud ja maksud (koos KM)', [`+${numberFormat.d2.format(fixedAddonsIncVat)}`, ' ', el('small', { text: 's/kWh' })], null, { value: 'final-fees' })
-        ]),
+        equation,
         el('p', { class: 'hero-meta', text: `Arvutatud hetke börsihinnast (${formatTimeRange(d.current.start, d.current.end)}). ${tariffNote}` })
       ]),
-      table
+      sharesBlock(shareGroups, calc.total, vat, sharesValid)
     ])
   ];
-  const fixed = fixedFeesText(fees);
-  if (fixed) nodes.push(noticeEl(fixed));
-  const upcoming = upcomingTariffText(d.now);
-  if (upcoming) nodes.push(noticeEl(`Ette teada hinnamuudatused (arvestatakse kuupäevast automaatselt): ${upcoming}`));
-
-  // Hinnakomponentide osakaalud lõpphinnast arvete kaupa: iga komponent oma lõik (värv komponendi järgi, mitte järjekorra),
-  // loendis s/kWh ilma KM-ta ja osakaal 0,1% täpsusega; rühma real summa ilma ja koos KM-ga
-  const shareGroups = buildShareGroups(calc, tariffLabel, vatPercent);
-  const shareItems = shareGroups.flatMap(g => g.items);
-  const sharesValid = calc.total > 0 && shareItems.every(s => s.value >= 0);
-  if (sharesValid) {
-    nodes.push(sharesBlock(shareGroups, calc.total, vat));
-  } else {
-    nodes.push(el('p', { class: 'hero-meta', text: 'Osakaale ei kuvata, sest börsihind on praegu null või negatiivne.' }));
-  }
+  const fixedTable = fixedFeesTable(fees);
+  const upcoming = upcomingTariffDetails(d.now);
+  if (fixedTable || upcoming) nodes.push(el('div', { class: 'final-extra' }, [fixedTable, upcoming].filter(Boolean)));
   destroyChart('c-shares');   // vana canvas eemaldatakse koos sisuga
   host.replaceChildren(...nodes);
   if (sharesValid) buildSharesChart(shareItems);
@@ -2259,7 +2286,7 @@ function buildShareGroups(calc, tariffLabel, vatPercent) {
       { label: 'Tasakaalustamisvõimsuse kulu', value: calc.tasakaalustamine, color: 3 }
     ] },
     { name: 'Võrguarve', items: [
-      { label: `Võrgutasu (${tariffLabel})`, value: calc.vorgutasu, color: 4 },
+      { label: `Võrgutasu (${calc.tariff === 'oo' ? 'öö' : 'päev'})`, value: calc.vorgutasu, color: 4 },
       { label: 'Taastuvenergia tasu', value: calc.taastuvenergia, color: 5 },
       { label: 'Varustuskindluse tasu', value: calc.varustuskindlus, color: 6 },
       { label: 'Elektriaktsiis', value: calc.aktsiis, color: 7 }
@@ -2281,45 +2308,51 @@ function sharePercents(values, total) {
   return tenths.map(t => t / 10);
 }
 
-/** Osakaalude plokk: lintdiagramm (canvas) ja rühmitatud loend (legend ja tabel ühes, canvas on aria-hidden). */
-function sharesBlock(groups, total, vat) {
+/** Hinna koostis: lintdiagramm (canvas, aria-hidden) ja rühmitatud loend, mis on legend ja tabel ühes. Veerud: nimi |
+ *  s/kWh ilma KM-ta | osakaal lõpphinnast. Rühma real summa ka koos KM-ga (arvega võrdlemiseks), lõpus kokkuvõte koos KM-ga.
+ *  valid = false (börsihind ≤ 0): lint ja protsendid jäävad ära, väärtused näidatakse. */
+function sharesBlock(groups, total, vat, valid = true) {
   const items = groups.flatMap(g => g.items);
-  const pct = sharePercents(items.map(i => i.value), total);
+  const pct = valid ? sharePercents(items.map(i => i.value), total) : items.map(() => null);
   items.forEach((item, i) => { item.pct = pct[i]; });
-  const pctText = v => `${numberFormat.d1.format(v)}%`;
+  const num = v => numberFormat.d2.format(v);
+  const pctText = v => (v == null ? '—' : `${numberFormat.d1.format(v)}%`);
+  const swatch = color => el('span', { class: 'legend__swatch', style: `--swatch:var(--share-${color})`, 'aria-hidden': 'true' });
   const groupEls = groups.map(g => {
     const sum = g.items.reduce((acc, i) => acc + i.value, 0);
-    const sumPct = Math.round(g.items.reduce((acc, i) => acc + i.pct, 0) * 10) / 10;
+    const single = g.vatOnly && g.items.length === 1;   // käibemaks: üks rida, märk rühma real
+    const sumPct = valid ? Math.round(g.items.reduce((acc, i) => acc + i.pct, 0) * 10) / 10 : null;
     return el('li', { class: 'shares-group' }, [
       el('p', { class: 'shares-group__head' }, [
+        single ? swatch(g.items[0].color) : null,
         el('span', { class: 'shares-group__name' }, [
-          el('span', { class: 'shares-group__label', text: g.name }),
-          g.vatOnly ? null : el('span', { class: 'shares-group__sub', text: `koos KM ${formatCents(sum * vat)}` })
+          el('span', { class: 'shares-group__label', text: single ? g.items[0].label : g.name }),
+          single ? null : el('span', { class: 'shares-group__sub', text: `koos KM ${num(sum * vat)}` })
         ].filter(Boolean)),
-        el('span', { class: 'shares__value', text: formatCents(sum) }),
+        el('span', { class: 'shares__value', text: num(sum) }),
         el('span', { class: 'shares__pct', text: pctText(sumPct) })
-      ]),
-      g.vatOnly && g.items.length === 1 ? null : el('ul', { class: 'shares' }, g.items.map(item => el('li', {}, [
-        el('span', { class: 'legend__swatch', style: `--swatch:var(--share-${item.color})`, 'aria-hidden': 'true' }),
+      ].filter(Boolean)),
+      single ? null : el('ul', { class: 'shares' }, g.items.map(item => el('li', {}, [
+        swatch(item.color),
         el('span', { class: 'shares__name', text: item.label }),
-        el('span', { class: 'shares__value', text: formatCents(item.value) }),
+        el('span', { class: 'shares__value', text: num(item.value) }),
         el('span', { class: 'shares__pct', text: pctText(item.pct) })
       ])))
     ].filter(Boolean));
   });
-  // Käibemaksu rühmal pole alamloendit: märk rühma real
-  groups.forEach((g, i) => {
-    if (g.vatOnly && g.items.length === 1) {
-      groupEls[i].firstChild.prepend(el('span', { class: 'legend__swatch', style: `--swatch:var(--share-${g.items[0].color})`, 'aria-hidden': 'true' }));
-      groupEls[i].firstChild.querySelector('.shares-group__label').textContent = g.items[0].label;
-    }
-  });
   return el('div', { class: 'final-shares' }, [
-    el('p', { class: 'final-shares__title' }, ['Hinnakomponentide osakaal praegu', el('span', { class: 'final-shares__unit', text: 's/kWh ilma KM-ta · osakaal lõpphinnast' })]),
-    el('div', { class: 'chart-host chart-host--shares', id: 'shares-host', hidden: !T }, el('canvas', { id: 'c-shares', 'aria-hidden': 'true' })),
-    el('ul', { class: 'shares-groups', 'data-testid': 'shares-list' }, groupEls),
-    el('p', { class: 'final-shares__note', text: `Lõpphind ${formatCents(total)} koos KM-ga. Kuutasud (võrgu kuutasu, läbilaskevõime, kasutusvõimsus) ei sõltu kWh-st ja pole siin sees.` })
-  ]);
+    el('p', { class: 'final-shares__title' }, ['Hinna koostis praegu', el('span', { class: 'final-shares__unit', text: 's/kWh ilma KM-ta · osakaal lõpphinnast' })]),
+    valid ? el('div', { class: 'chart-host chart-host--shares', id: 'shares-host', hidden: !T }, el('canvas', { id: 'c-shares', 'aria-hidden': 'true' })) : null,
+    el('div', { class: 'shares-table' }, [
+      el('ul', { class: 'shares-groups', 'data-testid': 'shares-list' }, groupEls),
+      el('p', { class: 'shares-total', 'data-testid': 'final-total' }, [
+        el('span', { text: 'Kokku koos KM' }),
+        el('span', { class: 'shares__value', text: num(total) }),
+        el('span', { class: 'shares__pct', text: valid ? '100%' : '' })
+      ])
+    ]),
+    valid ? null : el('p', { class: 'final-shares__note', text: 'Osakaale ei arvutata, sest börsihind on praegu null või negatiivne.' })
+  ].filter(Boolean));
 }
 
 /* ---------- index.html · Hinnakomponentide osakaal (p 6.12) ---------- */
