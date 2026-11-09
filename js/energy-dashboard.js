@@ -9,7 +9,7 @@ const CONFIG = readPageConfig();
 
 /* Tehnilised konstandid — neid ei ole tavakasutuses vaja muuta. Mõlema lehe ühised (TIME_ZONE, API_URL,
    MINUTE_MS, HOUR_MS, DAY_MS) on failis js/common.js. */
-const APP_VERSION = '2.7.0';
+const APP_VERSION = '2.8.0';
 const PRICE_TIMEOUT_MS = 20000;
 const SOLAR_TIMEOUT_MS = 30000;
 const TARIFF_TIMEOUT_MS = 5000;
@@ -527,7 +527,8 @@ function calculateFinalPrice(spotExVatCentsKwh, date) {
   const fees = feesAt(date);
   const tariff = getNetworkTariff(date);
   const network = Number(tariff === 'oo' ? fees.vorgutasuOo : fees.vorgutasuPaev);
-  const subtotal = spotExVatCentsKwh + Number(fees.marginaal) + network + Number(fees.taastuvenergiaTasu) + Number(fees.aktsiis);
+  const subtotal = spotExVatCentsKwh + Number(fees.marginaal) + network + Number(fees.taastuvenergiaTasu) + Number(fees.aktsiis)
+    + (Number(fees.tasakaalustamisTasu) || 0);
   return { tariff, total: subtotal * (1 + Number(fees.kaibemaks) / 100) };
 }
 /** Perioodi lõpphind (s/kWh koos tasude ja KM-ga), arvutatakse perioodi kohta üks kord: tariifid loetakse enne esimest
@@ -3049,7 +3050,7 @@ function renderTrends(d) {
   } else {
     host.querySelector('.stats').replaceChildren(...tiles);
   }
-  byId('trend-note').textContent = `12 kuu libisev keskmine = kuu ja sellele eelneva 11 kuu keskmine kuus; ainult lõppenud kuud, kõik 12 peavad olemas olema (jooksev kuu on graafikul tuhmim). Ost võrgust, öö/päeva jaotus ja kulu: võrguarvesti (Estfeed), kulu on hinnang sel ajal kehtinud börsihinna, tasude ja KM-ga (arve alus). Öö = öötariifi aeg (${TARIFFS.ootariif.algus}–${TARIFFS.ootariif.lopp}, nädalavahetus, riigipühad). Päike, maja tarbimine, „maja maksis“ (võrgu netokulu / tarbitud kWh), aku tulu ja päikese väärtus: inverteri päevakokkuvõtted${fromKey ? `, enne päikeseparki (${formatDayKey(fromKey)}) päike ja aku 0 ning tarbimine = ost` : ''}; * = kuus pole kõiki päevi. Börsihind: kuu kWh-ga kaalutud keskmine ilma KM-ta. Öötariifi sääst = öösel ostetud kWh × päeva ja öö võrgutasu vahe (${numberFormat.d2.format(Math.max(0, Number(feesAt(new Date()).vorgutasuPaev) - Number(feesAt(new Date()).vorgutasuOo)))} s/kWh + KM, praeguste tasudega). Kulu ei sisalda kuutasu, kui see on seadetes 0.`;
+  byId('trend-note').textContent = `12 kuu libisev keskmine = kuu ja sellele eelneva 11 kuu keskmine kuus; ainult lõppenud kuud, kõik 12 peavad olemas olema (jooksev kuu on graafikul tuhmim). Ost võrgust, öö/päeva jaotus ja kulu: võrguarvesti (Estfeed), kulu on hinnang sel ajal kehtinud börsihinna, tasude ja KM-ga (arve alus). Öö = öötariifi aeg (${TARIFFS.ootariif.algus}–${TARIFFS.ootariif.lopp}, nädalavahetus, riigipühad). Päike, maja tarbimine, „maja maksis“ (võrgu netokulu / tarbitud kWh), aku tulu ja päikese väärtus: inverteri päevakokkuvõtted${fromKey ? `, enne päikeseparki (${formatDayKey(fromKey)}) päike ja aku 0 ning tarbimine = ost` : ''}; * = kuus pole kõiki päevi. Börsihind: kuu kWh-ga kaalutud keskmine ilma KM-ta. Öötariifi sääst = öösel ostetud kWh × päeva ja öö võrgutasu vahe (${numberFormat.d2.format(Math.max(0, Number(feesAt(new Date()).vorgutasuPaev) - Number(feesAt(new Date()).vorgutasuOo)))} s/kWh + KM, praeguste tasudega). Kulu sisaldab alates juunist 2026 võrgu kuutasu ja läbilaskevõimetasu (peakaitse järgi), kasutusvõimsuse tasusid mitte.`;
   byId('trend-insights').replaceChildren(...insights.map(text => el('li', {}, [iconEl('info'), text])));
   byId('trend-insights').hidden = !insights.length;
   if (state.trendIndex == null || state.trendIndex >= rows.length) state.trendIndex = rows.length - 1;

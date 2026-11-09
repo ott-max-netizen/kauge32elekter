@@ -366,8 +366,10 @@ Solarmani välja nimed ja märgid on failis muutmata; lehed tõlgendavad neid ni
 
 ## Hinnad ja tariifid
 
-- Lõpphind = (börsihind + marginaal + võrgutasu + taastuvenergia- ja varustuskindluse tasu + aktsiis)
-  × (1 + KM). Öötariif kehtib tööpäeviti 22–07 ning laupäeval, pühapäeval ja **riigipühadel** kogu
+- Lõpphind = (börsihind + marginaal + võrgutasu + taastuvenergia- ja varustuskindluse tasu + aktsiis
+  + tarbimise tasakaalustamisvõimsuse kulu) × (1 + KM). Riiklikud ja müüja tasud ilma KM-ta: taastuvenergia tasu
+  0,84, varustuskindluse tasu 0,758 (`taastuvenergiaTasu` = 1,598), elektriaktsiis 0,21 ja tasakaalustamisvõimsuse
+  kulu 0,373 s/kWh (`tasakaalustamisTasu`, Sunly arvel alates 01.11.2026; varem 0). Öötariif kehtib tööpäeviti 22–07 ning laupäeval, pühapäeval ja **riigipühadel** kogu
   ööpäeva (`CONFIG.ootariif.riigipuhadOnOo`, Elektrilevi hinnakiri).
 - „Leia odavaim aeg“, elektriauto laadimine ja soovitused valivad akna **hinna koos tasudega**
   järgi (öine võrgutasu on odavam), näidatakse ka börsihinda.
@@ -390,9 +392,12 @@ Solarmani välja nimed ja märgid on failis muutmata; lehed tõlgendavad neid ni
   läbilaskevõime 0,32 → 0,33 € / A kuus; kasutusvõimsus 2,45 ja tarbimiskoha kasutusvõimsus 2,56 € / kW kuus ning
   kWh-hinnad jäävad samaks (ilma KM-ta).
 - **Võrgu fikseeritud tasud** (`vorguKuutasu`, `labilaskevoimeTasu`, `kasutusvoimsusTasu`,
-  `tarbimiskohaKasutusvoimsusTasu`, ilma KM-ta) on elektriinfo lehe hinna koostise all eraldi kirjas koos
-  eelseisva hinnakirjamuudatusega. s/kWh hinnas ja kuu € arvestuses neid pole (sõltuvad läbilaskevõimest A ja
-  kasutusvõimsusest kW); arve järgi kuutasu kokku käib `CONFIG.hinnad.kuutasu` väljale.
+  `tarbimiskohaKasutusvoimsusTasu`, ilma KM-ta; peakaitse `peakaitseA` = 160 A) on elektriinfo lehe hinna koostise
+  all eraldi kirjas koos eelseisva hinnakirjamuudatusega; s/kWh hinnas neid pole. Kuu € arvestusse lisatakse
+  (võrgu kuutasu + läbilaskevõime × peakaitse) × KM + `kuutasu` (muu kuutasu koos KM-ga): 30,41 + 160 × 0,32 =
+  81,61 € → 101,20 €/kuu koos KM-ga alates 01.06.2026, 01.02.2027 alates 30,58 + 160 × 0,33 = 83,38 € → 103,39 €.
+  Enne 01.06.2026 on võrgu kuutasud töövoo `TASUDE_AJALUGU`-s 0 (summad pole teada). Kasutusvõimsuse tasud
+  (€ / kW kuu suurima võimsuse järgi) kuu € arvestuses pole.
 - **Tasu muutumisel** lisa vana väärtus esmalt `TASUDE_AJALUGU`-sse (kuni muutuse kuupäevani) ja muuda
   siis `CONFIG.hinnad`-i. Iga kuu kirjes on sõrmejälg `cfg`; kui see erineb, arvutab töövoog vahemälus
   olevad kuud järgmisel käivitusel ise uuesti (`index.html`-i muutmine töövoogu kohe ei käivita).

@@ -319,17 +319,20 @@ const CONFIG = {
     marginaal: 0.45,         // müüja marginaal tarbimisel, s/kWh ilma KM-ta: Sunly börsihinna marginaal 4,5 €/MWh (alates 01.11.2026; enne 0.6)
     vorgutasuPaev: 3.49,      // võrgutasu päevatariif (elektri edastamine: päev), s/kWh ilma KM-ta
     vorgutasuOo: 1.99,        // võrgutasu öötariif (elektri edastamine: öö), s/kWh ilma KM-ta
-    taastuvenergiaTasu: 1.598, // taastuvenergia tasu 0.84 + varustuskindluse tasu 0.758 (alates 01.01.2026), s/kWh ilma KM-ta
-    aktsiis: 0.21,            // elektriaktsiis, s/kWh ilma KM-ta
-    kuutasu: 0.00,            // fikseeritud kuutasud kokku (võrgu kuu- ja läbilaskevõimetasu, müüja kuutasu), €/kuu koos KM-ga; kuvatakse eraldi reana, 0 peidab rea
+    taastuvenergiaTasu: 1.598, // taastuvenergia tasu 0,0084 €/kWh + varustuskindluse tasu 0,00758 €/kWh (alates 01.01.2026) = 0.84 + 0.758 s/kWh ilma KM-ta
+    aktsiis: 0.21,            // elektriaktsiis 0,0021 €/kWh, s/kWh ilma KM-ta
+    tasakaalustamisTasu: 0.373, // tarbimise tasakaalustamisvõimsuse kulu 0,00373 €/kWh (Sunly arvel, alates 01.11.2026), s/kWh ilma KM-ta
+    kuutasu: 0.00,            // muud fikseeritud kuutasud (nt müüja kuutasu), €/kuu koos KM-ga; võrgu kuu- ja läbilaskevõimetasu arvutatakse allpool olevatest väljadest
     muugitasu: 1.054,         // võrku müüdud elektri müügitasu, s/kWh KOOS KM-ga: Sunly marginaal võrku andmisel 8,5 €/MWh + KM 24% = 0,85 × 1,24
                               // (alates 01.11.2026; enne 1.05); müügihind = börsihind ilma KM-ta − müügitasu (energialeht, paevad.json)
     kaibemaks: 24,            // käibemaksu määr, % (kasutatakse kõikjal, ka börsihinna KM-ga näitamisel)
     // Võrguteenuse fikseeritud tasud (Elektrilevi, madalpinge üle 63 A, pakett Võimsus VMA2), ILMA KM-ta. Need ei sõltu
-    // kWh-st, seega s/kWh hinnas neid pole: elektriinfo lehe hinna koostise all on need kirjas eraldi. Kuu € arvestuses
-    // ei kasutata (sõltuvad läbilaskevõimest A ja kasutusvõimsusest kW); arve kuutasu kokku sisesta "kuutasu" väljale.
+    // kWh-st, seega s/kWh hinnas neid pole: elektriinfo lehe hinna koostise all on need kirjas eraldi. Kuu € arvestusse
+    // (Maja üldelekter) lisatakse võrgu kuutasu + läbilaskevõime × peakaitse koos KM-ga (töövoog uuenda-hinnad.yml).
+    // Kasutusvõimsuse tasud (€ / kW) sõltuvad kuu suurimast võimsusest ja neid kuu € arvestusse ei lisata.
+    peakaitseA: 160,          // peakaitse (võrguühenduse läbilaskevõime), A
     vorguKuutasu: 30.41,      // võrguühenduse kuutasu, €/kuu
-    labilaskevoimeTasu: 0.32, // võrguühenduse läbilaskevõime, € / A kuus
+    labilaskevoimeTasu: 0.32, // võrguühenduse läbilaskevõime, € / A kuus (160 A × 0,32 = 51,20 €/kuu)
     kasutusvoimsusTasu: 2.45, // võrguühenduse kasutusvõimsus, € / kW kuus
     tarbimiskohaKasutusvoimsusTasu: 2.56 // tarbimiskoha kasutusvõimsus, € / kW kuus
   },
@@ -416,7 +419,7 @@ const CONFIG = {
 };
 </script>
 <!-- Mõlema lehe ühine skriptikood (aeg, vormindamine, DOM-abi, graafikute ühisosa); peab laadima enne põhiskripti -->
-<script src="js/common.js?v=20261109"></script>
-<script src="js/index.js?v=20261109"></script>
+<script src="js/common.js?v=20261109b"></script>
+<script src="js/index.js?v=20261109b"></script>
 </body>
 </html>

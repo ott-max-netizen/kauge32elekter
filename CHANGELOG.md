@@ -4,6 +4,23 @@ See fail kirjeldab rakenduse `index.html` versioonimuudatusi, arhitektuurilisi k
 
 ---
 
+## [3.5.0], energy-dashboard.html [2.8.0] ja graafikud.html [1.5.0] — 2026-11-09 · tasakaalustamisvõimsus ja peakaitse 160 A
+
+- **Tarbimise tasakaalustamisvõimsuse kulu** 0,00373 €/kWh + KM = uus `CONFIG.hinnad.tasakaalustamisTasu` 0,373 s/kWh
+  (ilma KM-ta) lõpphinnas kõigil lehtedel ja töövoos (elektriinfo lehe hinna koostises eraldi rida). Ajalugu: kuni
+  31.10.2026 0 (Sunly arvel alates 01.11.2026).
+- Taastuvenergia tasu 0,0084, varustuskindluse tasu 0,00758 ja elektriaktsiis 0,0021 €/kWh kontrollitud: vastavad
+  senistele väärtustele (`taastuvenergiaTasu` 1,598, `aktsiis` 0,21 s/kWh); muutust pole.
+- **Peakaitse 160 A** (`CONFIG.hinnad.peakaitseA`): kuu € („Maja üldelekter“, töövoo `fixed_monthly_eur`) sisaldab nüüd
+  võrgu kuutasu + läbilaskevõime × 160 A koos KM-ga – 101,20 €/kuu alates 01.06.2026, 103,39 €/kuu alates 01.02.2027
+  (hinnamuudatus). Varasemad kuud ilma võrgu kuutasuta (summad pole teada, `TASUDE_AJALUGU` 0). Kasutusvõimsuse
+  tasud (€ / kW) pole sees. `CONFIG.hinnad.kuutasu` on nüüd ainult muu kuutasu (nt müüja oma).
+- Elektriinfo lehe teade näitab fikseeritud kuutasude arvutust ja eelseisva hinnakirja kuutasude summa muutust.
+- Töövoo `CALC_VERSION` 5: kuud ja päevad arvutatakse järgmisel käivitusel uute tasudega ümber.
+- Kontrollitud: töövoo lõpphind ja kuutasu (31.10 / 02.11.2026 / 01.02.2027), kolm lehte brauseris kolme kuupäevaga.
+
+---
+
 ## [3.4.0], energy-dashboard.html [2.7.0] ja graafikud.html [1.4.0] — 2026-11-09 · Sunly hinnad ja võrguteenuse hinnakiri 01.02.2027
 
 - **Elektrimüüja Sunly (alates 01.11.2026):** müüja marginaal tarbimisel 4,5 €/MWh + KM → `CONFIG.hinnad.marginaal`

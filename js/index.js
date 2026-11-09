@@ -9,7 +9,7 @@ const CONFIG = readPageConfig();
 
 /* Tehnilised konstandid — neid ei ole tavakasutuses vaja muuta. Mõlema lehe ühised (TIME_ZONE, API_URL,
    MINUTE_MS, HOUR_MS, DAY_MS) on failis js/common.js. */
-const APP_VERSION = '3.4.0';
+const APP_VERSION = '3.5.0';
 const API_TIMEOUT_MS = 20000;
 const PLANNER_DURATIONS = [60, 120, 180, 240, 300, 360]; // minutit
 const MAX_PERIOD_MINUTES = 60;   // pikim lubatud hinnaperiood
@@ -558,22 +558,40 @@ function getNetworkTariff(now) {
   return { tariff: night ? 'oo' : 'paev', reason: 'kellaaeg' };
 }
 
-/** Võrgu fikseeritud tasud tekstina („kuutasu 30,41 €/kuu, läbilaskevõime 0,32 € / A kuus, …“) või '' (seadetes puuduvad). */
-function networkFixedFeesText(fees) {
-  const parts = [
-    ['kuutasu', fees.vorguKuutasu, '€/kuu'],
-    ['läbilaskevõime', fees.labilaskevoimeTasu, '€ / A kuus'],
-    ['kasutusvõimsus', fees.kasutusvoimsusTasu, '€ / kW kuus'],
-    ['tarbimiskoha kasutusvõimsus', fees.tarbimiskohaKasutusvoimsusTasu, '€ / kW kuus']
-  ].filter(([, v]) => typeof v === 'number' && Number.isFinite(v) && v > 0);
-  return parts.map(([label, v, unit]) => `${label} ${numberFormat.d2.format(v)}\u00a0${unit}`).join(', ');
+const posNum = v => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : 0);
+
+/** Fikseeritud kuutasud €/kuu (sama valem mis töövoo fixed_monthly_eur-is): võrgu kuutasu + läbilaskevõime × peakaitse
+ *  (ilma KM-ta) ja koos KM-ga + muu kuutasu (CONFIG.hinnad.kuutasu, juba koos KM-ga). */
+function fixedMonthlyFees(fees) {
+  const network = posNum(fees.vorguKuutasu) + posNum(fees.labilaskevoimeTasu) * posNum(fees.peakaitseA);
+  return { network, totalIncVat: network * (1 + Number(fees.kaibemaks) / 100) + posNum(fees.kuutasu) };
+}
+
+/** Fikseeritud kuutasude teade: „võrgu kuutasu 30,41 € + läbilaskevõime 160 A × 0,32 € = 81,61 €/kuu ilma KM-ta …“; '' kui puuduvad. */
+function fixedFeesText(fees) {
+  const m = fixedMonthlyFees(fees);
+  if (!(m.totalIncVat > 0)) return '';
+  const eur = v => `${numberFormat.d2.format(v)}\u00a0€`;
+  const parts = [];
+  if (m.network > 0) {
+    const terms = [];
+    if (posNum(fees.vorguKuutasu)) terms.push(`võrgu kuutasu ${eur(fees.vorguKuutasu)}`);
+    if (posNum(fees.labilaskevoimeTasu) && posNum(fees.peakaitseA)) terms.push(`läbilaskevõime ${numberFormat.d0.format(fees.peakaitseA)}\u00a0A × ${eur(fees.labilaskevoimeTasu)}`);
+    parts.push(`${terms.join(' + ')} = ${eur(m.network)}/kuu ilma KM-ta`);
+  }
+  if (posNum(fees.kuutasu)) parts.push(`muu kuutasu ${eur(fees.kuutasu)}/kuu koos KM-ga`);
+  const power = [['kasutusvõimsus', fees.kasutusvoimsusTasu], ['tarbimiskoha kasutusvõimsus', fees.tarbimiskohaKasutusvoimsusTasu]]
+    .filter(([, v]) => posNum(v)).map(([label, v]) => `${label} ${eur(v)} / kW kuus`);
+  return `Fikseeritud kuutasud (ei sisaldu s/kWh hinnas): ${parts.join('; ')} – kokku ${eur(m.totalIncVat)}/kuu koos KM-ga.`
+    + (power.length ? ` Lisaks kuu suurima võimsuse järgi: ${power.join(', ')} (ilma KM-ta).` : '');
 }
 
 /** Lähim tulevane hinnamuudatus tekstina: „Uus hinnakiri alates 01.02.2027: kuutasu 30,41 → 30,58 €/kuu, …“; '' kui muudatusi pole. */
 const TARIFF_CHANGE_LABELS = {
   marginaal: ['müüja marginaal', 's/kWh'], vorgutasuPaev: ['võrgutasu päev', 's/kWh'], vorgutasuOo: ['võrgutasu öö', 's/kWh'],
   taastuvenergiaTasu: ['taastuvenergia- ja varustuskindluse tasu', 's/kWh'], aktsiis: ['elektriaktsiis', 's/kWh'],
-  kuutasu: ['kuutasu kokku (koos KM)', '€/kuu'], muugitasu: ['müügitasu (koos KM)', 's/kWh'], kaibemaks: ['käibemaks', '%'],
+  tasakaalustamisTasu: ['tasakaalustamisvõimsuse kulu', 's/kWh'], peakaitseA: ['peakaitse', 'A'],
+  kuutasu: ['muu kuutasu (koos KM)', '€/kuu'], muugitasu: ['müügitasu (koos KM)', 's/kWh'], kaibemaks: ['käibemaks', '%'],
   vorguKuutasu: ['võrgu kuutasu', '€/kuu'], labilaskevoimeTasu: ['läbilaskevõime', '€ / A kuus'],
   kasutusvoimsusTasu: ['kasutusvõimsus', '€ / kW kuus'], tarbimiskohaKasutusvoimsusTasu: ['tarbimiskoha kasutusvõimsus', '€ / kW kuus']
 };
@@ -590,6 +608,11 @@ function upcomingTariffText(now) {
       const f = v => changeNumberFormatter.format(v);
       return `${label} ${f(Number(before[k]))} → ${f(next.values[k])}${unit ? `\u00a0${unit}` : ''}`;
     });
+  const fixedBefore = fixedMonthlyFees(before).totalIncVat;
+  const fixedAfter = fixedMonthlyFees(feesAt(new Date(next.start))).totalIncVat;
+  if (Math.abs(fixedAfter - fixedBefore) >= 0.005) {
+    diffs.push(`fikseeritud kuutasud kokku ${numberFormat.d2.format(fixedBefore)} → ${numberFormat.d2.format(fixedAfter)}\u00a0€/kuu koos KM-ga`);
+  }
   const when = changeDateFormatter.format(new Date(next.start));
   return diffs.length
     ? `Uus hinnakiri alates ${when}: ${diffs.join(', ')} (ilma KM-ta, kui pole märgitud). Hinnad arvestatakse sellest päevast automaatselt uutega.`
@@ -606,9 +629,11 @@ function calculateFinalPrice(spotExVatCentsKwh, now) {
     marginaal: Number(fees.marginaal),
     vorgutasu: network,
     taastuvenergia: Number(fees.taastuvenergiaTasu),
-    aktsiis: Number(fees.aktsiis)
+    aktsiis: Number(fees.aktsiis),
+    tasakaalustamine: Number(fees.tasakaalustamisTasu) || 0
   };
-  const subtotal = components.spot + components.marginaal + components.vorgutasu + components.taastuvenergia + components.aktsiis;
+  const subtotal = components.spot + components.marginaal + components.vorgutasu + components.taastuvenergia + components.aktsiis
+    + components.tasakaalustamine;
   const vat = subtotal * Number(fees.kaibemaks) / 100;
   return { ...components, tariff: tariff.tariff, tariffReason: tariff.reason, subtotal, vat, total: subtotal + vat };
 }
@@ -2162,7 +2187,7 @@ function renderFinalPrice(d) {
       : `Öötariif kehtib ${String(CONFIG.ootariif.algus).padStart(2, '0')}:00–${String(CONFIG.ootariif.lopp).padStart(2, '0')}:00${allDay.length ? ` ning ${allDay.join(' ja ')} kogu päeva` : ''}.`;
 
   const spotIncVat = calc.spot * vat;
-  const fixedAddonsIncVat = (calc.marginaal + calc.vorgutasu + calc.taastuvenergia + calc.aktsiis) * vat;
+  const fixedAddonsIncVat = (calc.marginaal + calc.vorgutasu + calc.taastuvenergia + calc.aktsiis + calc.tasakaalustamine) * vat;
 
   const row = (label, value, extra = {}) => el('tr', extra, [
     el('td', { text: label }),
@@ -2176,6 +2201,7 @@ function renderFinalPrice(d) {
       row(`Võrgutasu (${tariffLabel})`, calc.vorgutasu),
       row('Taastuvenergia- ja varustuskindluse tasu', calc.taastuvenergia),
       row('Elektriaktsiis', calc.aktsiis),
+      ...(calc.tasakaalustamine ? [row('Tasakaalustamisvõimsuse kulu', calc.tasakaalustamine)] : []),
       row(`Käibemaks ${vatPercent}%`, calc.vat),
       row('Hind koos tasudega ja KM-ga', calc.total, { class: 'breakdown__total', 'data-testid': 'final-total' })
     ])
@@ -2198,11 +2224,8 @@ function renderFinalPrice(d) {
       table
     ])
   ];
-  if (Number(fees.kuutasu) > 0) {
-    nodes.push(noticeEl(`Lisaks fikseeritud kuutasu: ${formatEur(Number(fees.kuutasu))}/kuu. Seda ei saa liita s/kWh hinnale, sest see ei sõltu tarbimisest.`));
-  }
-  const fixed = networkFixedFeesText(fees);
-  if (fixed) nodes.push(noticeEl(`Võrgu fikseeritud tasud (ilma KM-ta, ei sisaldu s/kWh hinnas): ${fixed}.`));
+  const fixed = fixedFeesText(fees);
+  if (fixed) nodes.push(noticeEl(fixed));
   const upcoming = upcomingTariffText(d.now);
   if (upcoming) nodes.push(noticeEl(upcoming));
 
@@ -2210,7 +2233,7 @@ function renderFinalPrice(d) {
   const shares = [
     ['Börsihind (ilma KM-ta)', calc.spot, 'var(--share-1)'],
     ['Võrgutasu', calc.vorgutasu, 'var(--share-2)'],
-    ['Müüja marginaal', calc.marginaal, 'var(--share-3)'],
+    ['Müüja marginaal ja tasakaalustamisvõimsus', calc.marginaal + calc.tasakaalustamine, 'var(--share-3)'],
     ['Taastuvenergia-, varustuskindluse tasu ja aktsiis', calc.taastuvenergia + calc.aktsiis, 'var(--share-4)'],
     [`Käibemaks ${vatPercent}%`, calc.vat, 'var(--share-5)']
   ];
@@ -2839,7 +2862,7 @@ function renderBuildingElectricity() {
     el('p', {
       class: 'building-note',
       text: data.source === 'estfeed'
-        ? 'Eurod on hinnang (≈), arvutatud ostetud kWh-st, börsihinnast ja vastaval ajal kehtinud tasudest koos KM-ga; kuutasu ainult siis, kui see on teada. Tegelik arve võib erineda.'
+        ? 'Eurod on hinnang (≈), arvutatud ostetud kWh-st, börsihinnast ja vastaval ajal kehtinud tasudest koos KM-ga; alates juunist 2026 ka võrgu kuutasu ja läbilaskevõimetasu (peakaitse järgi), kasutusvõimsuse tasud pole sees. Tegelik arve võib erineda.'
         : 'Eurod on haldaja sisestatud arvesummad. Võrguarvesti (Estfeed) andmeid ei õnnestunud laadida.'
     }),
     table
