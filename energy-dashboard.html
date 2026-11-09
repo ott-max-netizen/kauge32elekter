@@ -16,7 +16,7 @@
 <meta name="robots" content="noindex, nofollow, noarchive">
 <title>Kauge 32 energia</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="css/common.css?v=20261109h">
+<link rel="stylesheet" href="css/common.css?v=20261109i">
 <!-- Lukk (parooliga kaitse, README „Parooliga kaitse“): ilma defer'ita, et globaal Lukk oleks lehe skriptile olemas ja .app peituks enne esimest joonistamist -->
 <script src="js/lukk.js?v=20261103b"></script>
 <!-- Külastuste loendus (GoatCounter, küpsisteta; README „Külastuste statistika“). Skript on repo sees, sest CSP lubab ainult
@@ -116,7 +116,7 @@
     <section class="card" id="section-hours" aria-labelledby="h-hours" aria-busy="true">
       <div class="card__head">
         <h2 id="h-hours" class="card__title"><svg class="icon" aria-hidden="true" focusable="false"><use href="img/icons.svg?v=20261023#i-clock"></use></svg>Järgmised tunnid</h2>
-        <span class="card__hint">tunni keskmine börsihind, s/kWh</span>
+        <span class="card__hint">tunni keskmine börsihind, s/kWh koos käibemaksuga</span>
       </div>
       <div class="card__body" id="hours-body">
         <span class="skeleton skeleton--block hours-skeleton" id="hours-skeleton" aria-hidden="true"></span>
@@ -201,6 +201,7 @@
         <div id="days-legend" class="legend" role="group" aria-label="Päevade graafiku selgitus"></div>
         <details class="table-view" id="days-table">
           <summary><svg class="icon" aria-hidden="true" focusable="false"><use href="img/icons.svg?v=20261023#i-table"></use></svg><span id="days-table-title">Tabelivaade (päeva kaupa)</span><span class="table-view__hint" aria-hidden="true">keri →</span><svg class="icon" aria-hidden="true" focusable="false"><use href="img/icons.svg?v=20261023#i-chevron-down"></use></svg></summary>
+          <p class="table-note">Võrgu netokulu ja „Maja maksis“ on ilma kuutasudeta.</p>
           <div class="table-scroll" id="days-table-body"></div>
         </details>
       </div>
@@ -281,7 +282,7 @@
   </main>
 
   <footer class="app-footer">
-    <p><strong>Andmeallikad:</strong> päikesepark, akupank, maja tarbimine ja ost võrgust — inverter (Solarman OpenAPI GitHub Actionsi kaudu), 15-min mõõtmised; börsihind — Elering Live (Nord Pooli Eesti hinnapiirkond), sama andmefail, mida kasutab elektriinfo leht. Arve alus ehk ost võrgust võrguarvesti (Estfeed) järgi on elektriinfo lehel; inverteri mõõdetud ost erineb sellest ~2 %. Lõpphind, eurod ja soovitused on hinnangulised; tegelik arve sõltub elektri- ja võrgulepingust.</p>
+    <p><strong>Andmeallikad:</strong> päikesepark, akupank, maja tarbimine ja ost võrgust — inverter (Solarman OpenAPI GitHub Actionsi kaudu), 15-min mõõtmised; börsihind — Elering Live (Nord Pooli Eesti hinnapiirkond), sama andmefail, mida kasutab elektriinfo leht. Arve alus ehk ost võrgust võrguarvesti (Estfeed) järgi on aasta vaate plokis „Ost võrgust“ ja elektriinfo lehel; inverteri mõõdetud ostetud kWh erineb sellest ~2 %, eurodes on vahe suurem, sest inverteri eurodes pole fikseeritud kuutasusid. Lõpphind, eurod ja soovitused on hinnangulised; tegelik arve sõltub elektri- ja võrgulepingust.</p>
     <p id="footer-data" class="app-footer__data" hidden></p>
     <div class="app-footer__meta">
       <p id="footer-sources">Andmeid pole veel laaditud</p>
@@ -315,7 +316,7 @@ const CONFIG = {
   // Tühi ("") = kasuta alati allolevaid väärtusi.
   tariifideFail: "index.html",
 
-  // Hinnakategooriate piirid, s/kWh KOOS käibemaksuga (roheline < kollane < oranz).
+  // Hinnakategooriate piirid börsihinnale, s/kWh KOOS käibemaksuga (roheline < kollane < oranz).
   hinnapiirid: {
     roheline: 5,
     kollane: 10,
@@ -426,7 +427,7 @@ const CONFIG = {
 };
 </script>
 <!-- Mõlema lehe ühine skriptikood (aeg, vormindamine, DOM-abi, graafikute ühisosa); peab laadima enne põhiskripti -->
-<script src="js/common.js?v=20261109f"></script>
-<script src="js/energy-dashboard.js?v=20261109h"></script>
+<script src="js/common.js?v=20261109i"></script>
+<script src="js/energy-dashboard.js?v=20261109i"></script>
 </body>
 </html>

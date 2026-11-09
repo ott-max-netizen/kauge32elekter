@@ -15,7 +15,7 @@
 <meta name="robots" content="noindex, nofollow, noarchive">
 <title>Kauge 32 · Elektri ja päikese dashboard</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="css/common.css?v=20261109h">
+<link rel="stylesheet" href="css/common.css?v=20261109i">
 <!-- Lukk (parooliga kaitse, README „Parooliga kaitse“): ilma defer'ita, et globaal Lukk oleks lehe skriptile olemas ja .app peituks enne esimest joonistamist -->
 <script src="js/lukk.js?v=20261103b"></script>
 <!-- Külastuste loendus (GoatCounter, küpsisteta; README „Külastuste statistika“). Skript on repo sees, sest CSP lubab ainult
@@ -285,10 +285,12 @@ const CONFIG = {
     paevadeFail: "paevad.json"      // päevakokkuvõtted (töövoog uuenda-hinnad.yml): kaardi jaluses „Eile“ rida; tühi ("") lülitab välja
   },
 
-  // Hinnakategooriate piirid, ühik s/kWh KOOS käibemaksuga (sama number, mis
-  // ekraanil suurelt kuvatakse). Hind alla "roheline" = väga odav, alla "kollane"
-  // = soodne, alla "oranz" = mõõdukas, "oranz" ja rohkem = kallis.
-  // Ohutu muuta; hoia järjekord kasvav (roheline < kollane < oranz).
+  // Hinnakategooriate piirid BÖRSIHINNALE, ühik s/kWh KOOS käibemaksuga (ekraanil
+  // rida "Börsihind X" suure numbri all; suur number on maja lõpphind koos tasudega
+  // ja seda nende piiridega ei võrrelda). Börsihind alla "roheline" = väga odav,
+  // alla "kollane" = soodne, alla "oranz" = mõõdukas, "oranz" ja rohkem = kallis.
+  // Piiridest sõltuvad hinnaklass, kaardi värv, graafiku tulpade värv ja energialehe
+  // soovitused (odav / kallis hind). Ohutu muuta; hoia järjekord kasvav (roheline < kollane < oranz).
   hinnapiirid: {
     roheline: 5,
     kollane: 10,
@@ -438,7 +440,7 @@ const CONFIG = {
 };
 </script>
 <!-- Mõlema lehe ühine skriptikood (aeg, vormindamine, DOM-abi, graafikute ühisosa); peab laadima enne põhiskripti -->
-<script src="js/common.js?v=20261109f"></script>
-<script src="js/index.js?v=20261109h"></script>
+<script src="js/common.js?v=20261109i"></script>
+<script src="js/index.js?v=20261109i"></script>
 </body>
 </html>

@@ -144,6 +144,9 @@ mõnetunnise viivitusega, seega võib viimane `kwh` rida olla mitu tundi vana. F
   nädalavahetus, riigipühad; kuutasu jaotusest välja) ja `spotAvg` (kuu kWh-ga kaalutud keskmine börsihind, €/MWh ilma
   KM-ta) – energialehe „Trendid“ kaart; vanemas kirjes puuduvad. Lõplik kuu
   arvutatakse uuesti, kui `v` või `cfg` erineb; `noData: true` = selle kuu kohta mõõteandmeid pole (graafikul „—“).
+  `eur` sisaldab fikseeritud kuutasusid (v 3–4 ainult müüja kuutasu, praegu 0; v 5 võrgu kuutasu ja läbilaskevõime; v 6
+  ka kasutusvõimsus), `eurOo` ja `eurPaev` mitte – kuu kuutasud = eur − eurOo − eurPaev (energialeht kasutab seda;
+  jaotuseta kirjes 0).
 
 `paike.json` (töövoog `uuenda-paike.yml`) sisaldab inverteri hetkeseisu ja 15-min mõõtmisi:
 
@@ -359,7 +362,9 @@ Solarmani välja nimed ja märgid on failis muutmata; lehed tõlgendavad neid ni
   (koos tasude ja KM-ga)“), selle all „Börsihind X + tasud ja maksud Y · koos KM“ (tasud = ümardatud lõpphind −
   ümardatud börsihind). Hinnaklass, kaardi värv ja keskmise võrdlus on börsihinna põhised (CONFIG.hinnapiirid) ja
   märgitud sõnaga „börsihind“: „Kallis börsihind“, „Börsihind 5% üle tänase keskmise“; ekraanilugejale „Börsihinna
-  hinnang“. Graafikud näitavad börsihinda (pealkirjas kirjas).
+  hinnang“. Graafikud näitavad börsihinda (pealkirjas kirjas). Sõna „börsihind“ ilma täpsustuseta tähendab kõigil
+  kolmel lehel börsihinda koos KM-ga; KM-ita börsihind on alati märgitud „ilma KM-ta“ (hinna koostis, müügihinna
+  fakt, trendid).
 - **Piktogrammid:** üks süsteem – 24×24 stroke-SVG sprite `img/icons.svg` (`currentColor`, alati
   `aria-hidden`, tähendus on kõrval tekstina; JS-is `iconEl()`); samad kujundid energiavoo sõlmedes. Välk =
   elekter/hind, mast = elektrivõrk, päike/kuu = päikesepark, maja = maja, kell = planeerija, aku = aku,
@@ -377,19 +382,43 @@ Solarmani välja nimed ja märgid on failis muutmata; lehed tõlgendavad neid ni
   tasakaalustamisvõimsuse kulu (`tasakaalustamisTasu`): 0 enne 2026, 0,373 (3,73 €/MWh) 2026, 0,297 alates
   01.01.2027 ja 0,389 alates 01.05.2027 (`hinnamuudatused`). Sama tasu kehtib tootmisele
   (`tasakaalustamisTasuTootmine`): müügihind = börsihind ilma KM-ta − müügitasu − tasakaalustamisTasuTootmine × (1 + KM).
+  Energialehe müügihinna faktis on börsihind ilma KM-ta sama arv mis elektriinfo lehe hinna koostises (ümardus nagu
+  kuvamisel, `roundCents`) ja tasud = börsihind − müügihind.
   Aku laadimise ja tühjendamise topeltkoguse vabastus (Eleringi juhend, hübriidlahendus) eeldab salvesti eraldi
   mõõtepunkti, seetõttu arvestatakse tasu mõlemas suunas täismahus. Öötariif kehtib tööpäeviti 22–07 ning laupäeval, pühapäeval ja **riigipühadel** kogu
   ööpäeva (`CONFIG.ootariif.riigipuhadOnOo`, Elektrilevi hinnakiri).
 - **Kaart „Hind koos tasudega praegu“** (elektriinfo leht): suur lõpphind, võrrand „börsihind + tasud ja maksud“ (mõlemad
   koos KM-ga; tasud = ümardatud lõpphind − ümardatud börsihind, et summa klapiks) ja **hinna koostis** – üks rühmitatud
-  loend (eraldi koostise tabelit pole): elektrimüüja arve (börsihind, marginaal, tasakaalustamisvõimsus), võrguarve
+  loend (eraldi koostise tabelit pole): elektrimüüja arve („Börsihind ilma KM-ta“, marginaal, tasakaalustamisvõimsus), võrguarve
   (võrgutasu, taastuvenergia-, varustuskindluse tasu, aktsiis; rühma summa ka koos KM-ga arvega võrdlemiseks) ja
   käibemaks, iga rida s/kWh ilma KM-ta ja osakaaluga 0,1% täpsusega, lõpus „Kokku koos KM“. Lint näitab samu osakaale.
   Börsihind ≤ 0: lint ja protsendid jäävad ära, väärtused jäävad. All **kuutasude tabel** (võrgu kuutasu, läbilaskevõime ×
   peakaitse, kokku ilma ja koos KM-ga; kasutusvõimsus viimase lõppenud kuu `kwMax` näitega) ja avanev plokk **„Tulekul N
   hinnamuudatust · järgmine …“** (iga kuupäev eraldi, read „vana → uus“, kuutasude summa muutus). Telefonis üks veerg.
 - „Leia odavaim aeg“, elektriauto laadimine ja soovitused valivad akna **hinna koos tasudega**
-  järgi (öine võrgutasu on odavam), näidatakse ka börsihinda.
+  järgi (öine võrgutasu on odavam), näidatakse ka börsihinda. **Ootereegel `WAIT_RULE`** (js/common.js, mõlemal lehel
+  sama): koos tasudega on ees odavam 2 h aken – odavaim aken, mis algab kuni 60 min pärast, on vähemalt 10 % odavam (nt
+  tööpäeva öötariif kell 22), või järgmise 24 h odavaim 2 h aken on vähemalt 30 % odavam kui praegu. Reegel ei juhi
+  kõiki „Võimalusel oota“ soovitusi:
+  - **Elektriinfo hero:** kui börsihind on ≤ 0 või alla tänase keskmise, vaadatakse esmalt ootereeglit („Võimalusel
+    oota“ – „Börsihind on null või negatiivne / alla tänase keskmise, kuid koos tasudega tuleb odavam aeg: …“; lõpphind
+    on tasude tõttu tavaliselt > 0 ka negatiivse börsihinnaga) ja alles siis „Väga soodne aeg tarbimiseks“, „Kasuta
+    elektrit enne …“ või „Hea aeg elektrit kasutada“. Börsihinna ≤ 0 korral pole fakte „Järgmine soodsam periood“ ega
+    „Praegu on tänase päeva börsihinna tipp“. Kui börsihind on üle tänase keskmise, jääb vana reegel ilma
+    WAIT_RULE-i lävedeta: õhtul „Võimalusel oota homseni“ (homne odavaim 3 h aken on koos tasudega odavam kui praegu
+    ja ka järgmise 24 h odavaim 2 h aken `best2h` on homme; kui `best2h` on täna õhtul, ütleb hero selle akna, et mitte
+    vaielda vastu planeerijale ja faktile „Odavaim 2 h aken“), muidu „Võimalusel oota“, kui `best2h` algab hiljem, või
+    börsihinna järgi järgmine soodsam periood.
+  - **Energialeht:** ootereegel enne „odav hind“ haru, kui hind pole kallis („Oota“), ja „Lae akut võrgust“ lükkub
+    edasi, kui odavam aken algab enne hinnatippu („… Lae akut siis.“); kui aken algab pärast tippu, jääb „Lae akut“
+    (elektriinfo leht võib samal ajal öelda „Võimalusel oota“ – see käib tarbimise kohta). Kallis hind: aku kasutus,
+    „Säästa“ või „Võimalusel lükka tarbimine edasi“ börsihinna järgi järgmise soodsama perioodiga (mitte WAIT_RULE).
+    **Börsihind ≤ 0** on energialehel esimene reegel: kui ootereegel leiab odavama akna, on soovitus „Oota“ –
+    „Börsihind on null või negatiivne ja võrku müümine on praegu kahjumlik. Koos tasudega tuleb odavam aeg: … Lae
+    akut siis.“ (viimane lause ainult siis, kui aku pole täis), nagu elektriinfo hero. Muidu „Tarbi võrgust“ (müük on
+    kahjumlik, kasuta võrguelektrit ja lae akut). Erandid, kus elektriinfo võib samal ajal öelda „Võimalusel oota“:
+    päikese ülejääk (tarbimise edasilükkamisel läheks ülejääk kahjumiga võrku) ja aku laadimine enne hinnatippu
+    (odavam aken algab pärast tippu, nagu positiivse hinna korral).
 - Kuu € (`majaElekter`) on hinnang: 15-min ost × börsihind + **vastaval ajal kehtinud** tasud ja KM.
   `CONFIG.hinnad` sisaldab praegu kehtivaid tasusid; varasemate perioodide väärtused on töövoos
   `uuenda-hinnad.yml` (`KM_AJALUGU`: KM 22 % enne 01.07.2025; `TASUDE_AJALUGU`: taastuvenergia tasu
@@ -425,17 +454,17 @@ Solarmani välja nimed ja märgid on failis muutmata; lehed tõlgendavad neid ni
 - **Tasu muutumisel** lisa vana väärtus esmalt `TASUDE_AJALUGU`-sse (kuni muutuse kuupäevani) ja muuda
   siis `CONFIG.hinnad`-i. Iga kuu kirjes on sõrmejälg `cfg`; kui see erineb, arvutab töövoog vahemälus
   olevad kuud järgmisel käivitusel ise uuesti (`index.html`-i muutmine töövoogu kohe ei käivita).
-- **Fikseeritud kuutasu** (võrgu kuu- ja läbilaskevõimetasu, müüja kuutasu; €/kuu koos KM-ga) lisandub
-  ainult siis, kui see on sisestatud: praegune `CONFIG.hinnad.kuutasu`, varasemad perioodid
-  `TASUDE_AJALUGU["kuutasu"]` (Elektrilevi kuutasud muutusid 01.08.2025 ja 01.06.2026; summad on veel 0 –
-  täida arvete järgi). Jooksval kuul ja „aasta varem sama ajani“ summas lisatakse kuutasust sama osa
-  kuust, mis on möödunud. Kui arve on järjepidevalt suurem, sisesta kuutasu.
+- **Muu fikseeritud kuutasu** (`kuutasu`, nt müüja kuutasu; €/kuu koos KM-ga) lisandub ainult siis, kui see on
+  sisestatud: praegune `CONFIG.hinnad.kuutasu`, varasemad perioodid `TASUDE_AJALUGU["kuutasu"]` (summad on veel 0 –
+  täida arvete järgi). Võrgu kuu-, läbilaskevõime- ja kasutusvõimsuse tasu lisatakse kuu €-le alati (punkt „Võrgu fikseeritud tasud“).
+  Jooksval kuul ja „aasta varem sama ajani“ summas lisatakse kuutasudest sama osa kuust, mis on möödunud. Öö/päeva
+  jaotuses (`eurOo`, `eurPaev`) kuutasusid pole. Kui arve on järjepidevalt suurem, sisesta kuutasu.
 
 ## Energia töölaud (`energy-dashboard.html`)
 
 Eraldi leht, mis koondab ühte vaatesse päikesepargi tootmise, akupanga oleku, võrgu
 ostu/müügi, maja tarbimise ja börsihinna koos soovitusega (lae akut võrgust, kasuta
-akut, müü või tarbi). Elektriinfo lehe päikesekaart näitab samu mõõtmisi lühidalt ja viitab sellele lehele.
+akut, müü, tarbi või oota). Elektriinfo lehe päikesekaart näitab samu mõõtmisi lühidalt ja viitab sellele lehele.
 
 ```
 Solarman OpenAPI → GitHub Actions (uuenda-paike.yml) → paike.json ┐
@@ -499,8 +528,9 @@ Elering API      → GitHub Actions (uuenda-hinnad.yml) → hinnad.json ┴→ G
     *müük võrku* või *aku ootel* (alla 0,2 kW). Režiim on tuletatud mõõtmistest (laadimise allikas = suurem osa
     energiavoost), mitte inverteri plaan; riba kohal „Inverter praegu: Aku kasutus · alates 17:30“ (vananenud
     mõõtmisel „Inverter (mõõdetud 14:59): …“).
-  - **Hinnapaneel:** börsihinna tulbad, **ostuhind** (lõpphind koos tasudega, pidev joon), **müügihind**
-    (punktiir), päeva keskmine ja odavaim 2 h aken (lõpphinna järgi).
+  - **Hinnapaneel:** börsihinna tulbad (koos KM-ga, hinnaklassi toonis), **ostuhind** (lõpphind koos tasudega, pidev
+    joon), **müügihind** (punktiir), börsihinna päeva keskmine ja odavaim 2 h aken (lõpphinna järgi). Legendis „tulbad:
+    börsihind koos KM-ga“ ja „börsihinna päeva keskmine“.
   - **Alumine paneel** (lüliti „Täna“ ja „Eile“): *Energiavood* – päike, maja, ost võrgust (katkendjoon), aku võimsus
     (+ laeb / − tühjeneb) ja **aku laetus** (omaette paneel 0–100 % režiimiriba all, reservijoon 20 %,
     kaksiktelge pole); *Võrguga vahetus* – ost allapoole
@@ -529,14 +559,16 @@ Elering API      → GitHub Actions (uuenda-hinnad.yml) → hinnad.json ┴→ G
 - **Aasta vaade:** inverteri plokid on päevakokkuvõtete summa alates `paevad.json` `meta.from`-ist (päikesepargi
   kasutuselevõtt, 1.6.2026). **Kuud enne seda** (2026 jaanuar–mai, kogu 2025) on omaniku otsusel võrguarvesti
   kuusummadest (`hinnad.json` `majaElekter`): päikest ja akut veel polnud, seega päike, müük ja aku on 0 ning maja
-  tarbimine = ost võrgust (kWh ja € koos tasudega). Nii on aasta kogutarbimine kogu aasta kohta, tootmine ja aku tulevad
+  tarbimine = ost võrgust (kWh ja € koos kWh-tasudega, ilma fikseeritud kuutasudeta – nagu inverteri päevakokkuvõtetes;
+  kuutasud on plokis „Ost võrgust AAAA“). Nii on aasta kogutarbimine kogu aasta kohta, tootmine ja aku tulevad
   inverterist. Sama kuu kohta eri allikate arve ei liideta (võrguarvesti kuud on täielikult enne inverteri esimest päeva).
   Pealkirja vihjes on mõlemad allikad („jaan–mai (võrguarvesti) · 1.6–1.11 · 151 päeva (inverter)“), märkuses ja
   kogusummade tabeli selgituses samuti; graafikul ja tabelis on need kuud märgitud „(võrguarvesti)“. Graafik ja tabel on
   **kuu kaupa** (pooleli kuu ja puudulike päevadega kuu on tuhmimad). Lisaks on plokk **„Ost
   võrgust AAAA“** võrguarvesti (Estfeed) kuusummadest (`hinnad.json` `data.majaElekter`, arve alus): kogus, kulu
-  koos tasudega (≈, hinnang), keskmine hind, allikas ja lõikeaeg („võrguarvesti (Estfeed) · jaanuar–november, november
-  kuni 06:30 · arve alus“), puuduvad ja esialgsed kuud ning tabel „Kuude kaupa“. Jooksval aastal on ka võrdlus
+  koos tasude ja fikseeritud kuutasudega (≈, hinnang), keskmine hind, allikas ja lõikeaeg („võrguarvesti (Estfeed) · jaanuar–november, november
+  kuni 06:30 · arve alus“), puuduvad ja esialgsed kuud ning tabel „Kuude kaupa“ (lühikesed veerupäised „≈ €“ ja
+  „s/kWh“, kohal märge „Kulu ja keskmine hind koos kuutasudega.“). Jooksval aastal on ka võrdlus
   **„aasta varem sama ajani“** (eelmise aasta samad kuud, jooksev kuu `kwhToDate`/`eurToDate`-iga; ainult siis, kui
   kõik vastavad kuud on olemas). Aastal, millest inverteri mõõtmisi pole (2025), on kaardil ainult see plokk.
   Võrguarvesti ja inverteri numbreid ei liideta (vt „Mõõtmiste loogika“).
@@ -548,25 +580,27 @@ Elering API      → GitHub Actions (uuenda-hinnad.yml) → hinnad.json ┴→ G
   - **Päike:** toodang ja väärtus: otse majja läinud osa lõpphinnaga, akusse ja võrku läinud osa müügihinnaga
     (akusse läinud päikese hilisem väärtus on aku tulus, nii et sama kWh-d ei loeta kaks korda); „Päikesest kaetud“.
   - **Tarbimine:** maja tarbimine, selle hind ilma päikese ja akuta (kõik osta tarbimise ajal lõpphinnaga) ja võrgu netokulu.
-  - **Maja energiahind täna:** keskmine ostuhind (maja tarbimine perioodi lõpphinnaga) → maja maksis (võrgu netokulu /
-    maja tarbimine) ja „x % odavam“. Kõrval aku laetuse muutus, sest päeva lõpuks täitunud või tühjenenud aku
-    mõjutab võrdlust.
+  - **Maja energiahind täna (ilma kuutasudeta):** keskmine ostuhind (maja tarbimine perioodi lõpphinnaga) → maja maksis
+    (võrgu netokulu / maja tarbimine) ja „x % odavam“. Kõrval aku laetuse muutus, sest päeva lõpuks täitunud või
+    tühjenenud aku mõjutab võrdlust. Keskmises ostuhinnas ja „maja maksis“ pole fikseeritud kuutasusid (ka aasta vaate
+    võrguarvesti kuudel); pealkirjas ja päevade tabelivaate kohal on see märgitud.
 
 - **Trendid** (kaart lehe lõpus): kuni 24 kuud (`hinnad.json` `majaElekter`: jooksev aasta ja aasta varem samad kuud)
   neljal paneelil ühise kuuteljega, kaksiktelge pole: **kWh** – ost võrgust kuus (võrguarvesti) öö/päeva jaotusega
   (jaotuseta kuu neutraalne), päike kuus ja maja tarbimine kuus (inverteri päevakokkuvõtted; enne päikeseparki päike 0 ja
-  tarbimine = ost) ning kõigi kolme **12 kuu libisev keskmine**; **€** – kulu kuus koos tasudega ja 12 kuu keskmine;
-  **s/kWh** – börsihind kuus (`spotAvg`, ilma KM-ta), ostuhind (arve / ostetud kWh) ja „maja maksis“ (võrgu netokulu /
+  tarbimine = ost) ning kõigi kolme **12 kuu libisev keskmine**; **€** – kulu kuus koos tasude ja kuutasudega ja 12 kuu keskmine;
+  **s/kWh** – börsihind kuus (`spotAvg`, ilma KM-ta), ostuhind (kulu ilma kuutasudeta / ostetud kWh) ja „maja maksis“ (võrgu netokulu /
   tarbitud kWh, alates pargist) koos 12 kuu keskmistega; **tulu €** – aku tulu, päikese väärtus ja öötariifi sääst (öösel
   ostetud kWh × päeva ja öö võrgutasu vahe + KM, praeguste tasudega) virnastatult ja summa 12 kuu keskmine.
   Libisev keskmine = kuu ja 11 eelmise kuu keskmine, ainult lõppenud kuud ja kõik 12 peavad olemas olema (muidu auk
-  joones); jooksev kuu on tuhmim ega osale. Plaadid on viimase 12 lõppenud kuu **summad** (aastane tase): ost (kWh, €,
-  öö osa), maja tarbimine (ja päikese osa sellest), maja maksis s/kWh (kõrval ostuhind), tulu kokku (aku, päike,
+  joones); jooksev kuu on tuhmim ega osale. Plaadid on viimase 12 lõppenud kuu **summad** (aastane tase): ost (kWh, €
+  koos kuutasudega, öö osa), maja tarbimine (ja päikese osa sellest), maja maksis s/kWh (kõrval ostuhind; mõlemad ilma kuutasudeta), tulu kokku (aku, päike,
   öötariif). Tähelepanekud andmetest (ainult kui andmed lubavad): päikesepargi järgsed kuud vs aasta varem samad kuud
-  (ost, kulu, toodang) ja sama perioodi tarbimine koos päikese ja aku kaetud osaga, öö osakaal, viimase kuu hind 12 kuu
-  keskmise suhtes, börsihinna ja lõpphinna muutus (turg vs tasud), 12 kuu keskmise suund viimase 3 kuuga. Valitud kuu
-  rida graafiku kohal (hiir, puudutus, nooleklahvid), legend, selgitus ja tabelivaade. Kulu ei sisalda kuutasu, kui see
-  on seadetes 0.
+  (ost, kulu, toodang) ja sama perioodi tarbimine koos päikese ja aku kaetud osaga, öö osakaal, viimase kuu ostuhind 12 kuu
+  keskmise suhtes, börsihinna ja ostuhinna muutus (turg vs tasud; ostuhind ilma kuutasudeta), 12 kuu keskmise suund viimase 3 kuuga. Valitud kuu
+  rida graafiku kohal (hiir, puudutus, nooleklahvid), legend, selgitus ja tabelivaade. Kulu sisaldab fikseeritud
+  kuutasusid (tabelis „≈ € koos kuutasudega“, plaadil ja valitud kuu real „koos kuutasudega“); ostuhind ja „maja
+  maksis“ on ilma nendeta („ilma kuutasudeta“), sest inverteri päevakokkuvõtetes neid pole.
 
 **Brauser ei suhtle Solarmani API-ga:** päikese- ja akuandmed tulevad ainult failist `paike.json`, mille kirjutab
 töövoog GitHub Secretsis hoitud võtmetega. Brauseris pole ühtegi Solarmani võtit, parooli ega tokenit. (Varasem
@@ -842,6 +876,6 @@ tegemisega.
 
 ## Versioon ja muudatuste ajalugu
 
-- Praegune versioon: **v3.3.3** (`APP_VERSION` failis `js/index.js`), energialehel **v2.6.1**
-  (`js/energy-dashboard.js`), graafikute lehel **v1.3.2** (`js/graafikud.js`).
+- Praegune versioon: **v3.11.0** (`APP_VERSION` failis `js/index.js`), energialehel **v2.11.0**
+  (`js/energy-dashboard.js`), graafikute lehel **v1.5.1** (`js/graafikud.js`).
 - Üksikasjalik ülevaade UI/UX muudatustest, komponentide klassidest ja arhitektuurireeglitest (sh juhised Claude AI-le) asub failis [CHANGELOG.md](CHANGELOG.md).
