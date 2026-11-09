@@ -354,7 +354,12 @@ Solarmani välja nimed ja märgid on failis muutmata; lehed tõlgendavad neid ni
   `aria-label`. Kaksiktelge ei kasutata: eri suurused on eraldi paneelidel (nt aku laetus % on energialehel
   omaette paneel).
 - **Täpsus:** kW ja kWh ühe komakohaga mõlemal lehel, € kahe komakohaga; € hinnangud on „≈“-ga. Hero-number
-  (börsihind) on üks vaate kohta (52 / 60 px), teised suured numbrid astme võrra väiksemad.
+  (maja lõpphind koos tasude ja KM-ga) on üks vaate kohta (52 / 60 px), teised suured numbrid astme võrra väiksemad.
+- **Hero („Elekter praegu“, energialehe „Elektrihind praegu“):** suur number on maja lõpphind („Maja hind praegu
+  (koos tasude ja KM-ga)“), selle all „Börsihind X + tasud ja maksud Y · koos KM“ (tasud = ümardatud lõpphind −
+  ümardatud börsihind). Hinnaklass, kaardi värv ja keskmise võrdlus on börsihinna põhised (CONFIG.hinnapiirid) ja
+  märgitud sõnaga „börsihind“: „Kallis börsihind“, „Börsihind 5% üle tänase keskmise“; ekraanilugejale „Börsihinna
+  hinnang“. Graafikud näitavad börsihinda (pealkirjas kirjas).
 - **Piktogrammid:** üks süsteem – 24×24 stroke-SVG sprite `img/icons.svg` (`currentColor`, alati
   `aria-hidden`, tähendus on kõrval tekstina; JS-is `iconEl()`); samad kujundid energiavoo sõlmedes. Välk =
   elekter/hind, mast = elektrivõrk, päike/kuu = päikesepark, maja = maja, kell = planeerija, aku = aku,
