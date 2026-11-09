@@ -366,8 +366,14 @@ Solarmani välja nimed ja märgid on failis muutmata; lehed tõlgendavad neid ni
 
 ## Hinnad ja tariifid
 
-- Lõpphind = (börsihind + marginaal + võrgutasu + taastuvenergia- ja varustuskindluse tasu + aktsiis)
-  × (1 + KM). Öötariif kehtib tööpäeviti 22–07 ning laupäeval, pühapäeval ja **riigipühadel** kogu
+- Lõpphind = (börsihind + marginaal + võrgutasu + taastuvenergia- ja varustuskindluse tasu + aktsiis
+  + tarbimise tasakaalustamisvõimsuse kulu) × (1 + KM). Riiklikud ja müüja tasud ilma KM-ta: taastuvenergia tasu
+  0,84, varustuskindluse tasu 0,758 (`taastuvenergiaTasu` = 1,598), elektriaktsiis 0,21 ja Eleringi
+  tasakaalustamisvõimsuse kulu (`tasakaalustamisTasu`): 0 enne 2026, 0,373 (3,73 €/MWh) 2026, 0,297 alates
+  01.01.2027 ja 0,389 alates 01.05.2027 (`hinnamuudatused`). Sama tasu kehtib tootmisele
+  (`tasakaalustamisTasuTootmine`): müügihind = börsihind ilma KM-ta − müügitasu − tasakaalustamisTasuTootmine × (1 + KM).
+  Aku laadimise ja tühjendamise topeltkoguse vabastus (Eleringi juhend, hübriidlahendus) eeldab salvesti eraldi
+  mõõtepunkti, seetõttu arvestatakse tasu mõlemas suunas täismahus. Öötariif kehtib tööpäeviti 22–07 ning laupäeval, pühapäeval ja **riigipühadel** kogu
   ööpäeva (`CONFIG.ootariif.riigipuhadOnOo`, Elektrilevi hinnakiri).
 - „Leia odavaim aeg“, elektriauto laadimine ja soovitused valivad akna **hinna koos tasudega**
   järgi (öine võrgutasu on odavam), näidatakse ka börsihinda.
@@ -375,8 +381,34 @@ Solarmani välja nimed ja märgid on failis muutmata; lehed tõlgendavad neid ni
   `CONFIG.hinnad` sisaldab praegu kehtivaid tasusid; varasemate perioodide väärtused on töövoos
   `uuenda-hinnad.yml` (`KM_AJALUGU`: KM 22 % enne 01.07.2025; `TASUDE_AJALUGU`: taastuvenergia tasu
   1,05 s/kWh 2024, 0,84 alates 2025; varustuskindluse tasu 0,758 s/kWh alates 01.01.2026; elektriaktsiis
-  0,145 s/kWh enne 01.05.2025; allikad on kommentaarides). Võrgutasu kWh-hinnad ja marginaal on kõigil
-  kuudel CONFIG-i omad (Elektrilevi kWh-hinnad 2025–2026 hinnakirjamuudatustega ei muutunud).
+  0,145 s/kWh enne 01.05.2025; müüja marginaal 0,6 s/kWh ja müügitasu 1,05 s/kWh koos KM-ga enne 01.11.2026;
+  allikad on kommentaarides). Võrgupakett (Elektrilevi, peakaitse 160 A, ilma KM-ta): **Amper VML2** – päev 3,95,
+  öö 2,30 s/kWh, kuutasu 25,80 € ja läbilaskevõime 0,55 €/A kuni 31.07.2025, alates 01.08.2025 26,21 € ja 0,57 €/A
+  (arved 01/2025, 12/2025 ja 04/2026); **Võimsus VMA2** alates 01.05.2026 (`VMA2_ALATES`, arve 05/2026): 3,49 / 1,99
+  s/kWh, kuutasu 29,19 €, läbilaskevõime 0,29 €/A, kasutusvõimsus 2,45 €/kW; alates 01.06.2026 30,41 € ja 0,32 €/A
+  (arve 10/2026). Viis võrguarvet (01/2025, 12/2025, 04/2026, 05/2026, 10/2026) klapivad töövoo arvestusega sendi
+  täpsusega. Võrgutasud ja riiklikud tasud on arvel **netotarbimiselt** (ost − samal ajal võrku antu); töövoog kasutab
+  Estfeedi ostu kWh-d – maja müüb võrku väga vähe (10/2026: 0,11 kWh), seega vahe on tühine.
+- **Elektrimüüja alates 01.11.2026: Sunly.** Börsihinna marginaal tarbimisel 4,5 €/MWh + KM
+  (`CONFIG.hinnad.marginaal` = 0,45 s/kWh ilma KM-ta), võrku andmisel 8,5 €/MWh + KM
+  (`CONFIG.hinnad.muugitasu` = 0,85 × 1,24 = 1,054 s/kWh koos KM-ga; müügihind = börsihind ilma KM-ta − müügitasu).
+  Kõik hinnad kuvatakse s/kWh. Päevakokkuvõtete (`paevad.json`) müügihind kasutab sel päeval kehtinud müügitasu.
+- **Ette teada hinnamuudatused** (`CONFIG.hinnamuudatused`, nt uus võrguteenuse hinnakiri): kirje `alates`
+  ("AAAA-KK-PP", Tallinna päeva 00:00) ja muutuvad `CONFIG.hinnad` väärtused. Kuni kuupäevani kehtivad
+  `CONFIG.hinnad` väärtused, sellest alates kirje omad – nii lehtedel (`feesAt` / `tariffsAt`, js/common.js) kui
+  töövoos (`TASUDE_MUUDATUSED`, `tariff_at`); graafikute leht saab need hinnad.json-i `meta.tariffChanges`-ist.
+  Praegu: Elektrilevi hinnakiri madalpingel üle 63 A (Võimsus VMA2) alates 01.02.2027 – kuutasu 30,41 → 30,58 €/kuu,
+  läbilaskevõime 0,32 → 0,33 € / A kuus; kasutusvõimsus 2,45 ja tarbimiskoha kasutusvõimsus 2,56 € / kW kuus ning
+  kWh-hinnad jäävad samaks (ilma KM-ta).
+- **Võrgu fikseeritud tasud** (`vorguKuutasu`, `labilaskevoimeTasu`, `kasutusvoimsusTasu`,
+  `tarbimiskohaKasutusvoimsusTasu`, ilma KM-ta; peakaitse `peakaitseA` = 160 A) on elektriinfo lehe hinna koostise
+  all eraldi kirjas koos eelseisva hinnakirjamuudatusega; s/kWh hinnas neid pole. Kuu € arvestusse lisatakse
+  (võrgu kuutasu + läbilaskevõime × peakaitse) × KM + `kuutasu` (muu kuutasu koos KM-ga): 30,41 + 160 × 0,32 =
+  81,61 € → 101,20 €/kuu koos KM-ga (VMA2), 01.02.2027 alates 30,58 + 160 × 0,33 = 83,38 € → 103,39 €. VML2 ajal
+  25,80 + 160 × 0,55 = 113,80 € ja alates 01.08.2025 26,21 + 160 × 0,57 = 117,41 € ilma KM-ta (töövoo
+  `TASUDE_AJALUGU`). VMA2 kasutusvõimsuse tasu (2,45 €/kW) lisatakse kuu suurima võimsuse järgi: perioodi kWh /
+  kestus (15 min) Estfeedi mõõtmistest, ümardatud täis-kW-ni (arve 05/2026: 20,5 kW → 21 kW = 51,45 €); kuu kirjes
+  `kwMax`. Tarbimiskoha kasutusvõimsust (2,56 €/kW) maja arvel pole ja seda ei arvestata.
 - **Tasu muutumisel** lisa vana väärtus esmalt `TASUDE_AJALUGU`-sse (kuni muutuse kuupäevani) ja muuda
   siis `CONFIG.hinnad`-i. Iga kuu kirjes on sõrmejälg `cfg`; kui see erineb, arvutab töövoog vahemälus
   olevad kuud järgmisel käivitusel ise uuesti (`index.html`-i muutmine töövoogu kohe ei käivita).

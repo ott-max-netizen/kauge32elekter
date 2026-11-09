@@ -312,6 +312,42 @@ function isPublicHoliday(year, month, day) {
   return diff === -2 || diff === 0 || diff === 49;
 }
 
+/**
+ * Ette teada hinnamuudatused (index.html CONFIG.hinnamuudatused): [{ alates: "AAAA-KK-PP", <CONFIG.hinnad võti>: number, … }].
+ * Tagastab kasvavas järjekorras [{ alates, start (ms, Tallinna päeva 00:00), values: { võti: number } }]; arvestatakse
+ * ainult base-is olemas olevaid võtmeid (base = CONFIG.hinnad), vigane kirje jäetakse välja (hoiatusega konsoolis).
+ * Sama reegel on töövoos uuenda-hinnad.yml (load_tariff_changes).
+ */
+function normalizeTariffChanges(list, base) {
+  if (!Array.isArray(list)) return [];
+  const out = [];
+  for (const item of list) {
+    const m = item && typeof item.alates === 'string' ? /^(\d{4})-(\d{2})-(\d{2})$/.exec(item.alates) : null;
+    const y = m ? Number(m[1]) : 0, mo = m ? Number(m[2]) : 0, d = m ? Number(m[3]) : 0;
+    const check = m ? new Date(Date.UTC(y, mo - 1, d)) : null;
+    if (!check || check.getUTCMonth() !== mo - 1 || check.getUTCDate() !== d) {
+      console.warn('CONFIG.hinnamuudatused: vigane kirje (alates peab olema "AAAA-KK-PP")', item);
+      continue;
+    }
+    const values = {};
+    for (const key of Object.keys(item)) {
+      if (key !== 'alates' && base && key in base && typeof item[key] === 'number' && Number.isFinite(item[key])) values[key] = item[key];
+    }
+    out.push({ alates: item.alates, start: tallinnLocalToUtc(y, mo, d, 0, 0).getTime(), values });
+  }
+  return out.sort((a, b) => a.start - b.start);
+}
+
+/** Hetkel date kehtivad tasud: base (CONFIG.hinnad) + kõik muudatused, mille alguskuupäev on käes (hilisem kirjutab üle). */
+function tariffsAt(base, changes, date) {
+  const t = date instanceof Date ? date.getTime() : Number(date);
+  const out = { ...base };
+  for (const c of changes || []) {
+    if (c.start <= t) Object.assign(out, c.values);
+  }
+  return out;
+}
+
 function clamp(value, min, max) { return Math.min(max, Math.max(min, value)); }
 
 /** Praeguse hinna võrdlus tänase keskmisega: "42% alla tänase keskmise (9,11 s/kWh)". */
