@@ -4,6 +4,30 @@ See fail kirjeldab rakenduse `index.html` versioonimuudatusi, arhitektuurilisi k
 
 ---
 
+## [3.4.0], energy-dashboard.html [2.7.0] ja graafikud.html [1.4.0] — 2026-11-09 · Sunly hinnad ja võrguteenuse hinnakiri 01.02.2027
+
+- **Elektrimüüja Sunly (alates 01.11.2026):** müüja marginaal tarbimisel 4,5 €/MWh + KM → `CONFIG.hinnad.marginaal`
+  0,6 → 0,45 s/kWh (ilma KM-ta); müügitasu võrku andmisel 8,5 €/MWh + KM → `muugitasu` 1,05 → 1,054 s/kWh (koos KM-ga).
+  Vanad väärtused on töövoo `TASUDE_AJALUGU`-s (kuni 01.11.2026), nii et varasemad kuud ja päevad arvestatakse
+  endiste hindadega. Päevakokkuvõtete müügihind kasutab nüüd sel ajal kehtinud müügitasu (enne kõigil päevadel praegust).
+- **Ette teada hinnamuudatused** `CONFIG.hinnamuudatused` (index.html, varukoopia energy-dashboard.html-is): kirje
+  `alates` kuupäevast kehtivad uued väärtused automaatselt – lehtedel `feesAt`/`tariffsAt` (js/common.js
+  `normalizeTariffChanges`), töövoos `TASUDE_MUUDATUSED` (`tariff_at`, kirje sõrmejälg), graafikute lehel hinnad.json
+  `meta.tariffChanges`. Esimene kirje: Elektrilevi võrguteenuse hinnakiri madalpingel üle 63 A (VMA2) alates
+  01.02.2027 (kuutasu 30,58 €/kuu, läbilaskevõime 0,33 € / A kuus; kWh-hinnad 3,49 / 1,99 s/kWh ja kasutusvõimsuse
+  tasud 2,45 / 2,56 € / kW kuus samad).
+- **Võrgu fikseeritud tasud** `CONFIG.hinnad` uute väljadena (`vorguKuutasu` 30,41, `labilaskevoimeTasu` 0,32,
+  `kasutusvoimsusTasu` 2,45, `tarbimiskohaKasutusvoimsusTasu` 2,56; ilma KM-ta). Elektriinfo lehe hinna koostise all on
+  teade nende kohta ja eelseisva hinnakirja muutuste kohta (nt „kuutasu 30,41 → 30,58 €/kuu“); s/kWh hinda need ei muuda.
+- Energialehe müügihinna rida näitab müügitasu suurust. Töövoo `meta.tariffs`-is on ka `muugitasu`.
+- Muudetud tasude tõttu muutub kirje sõrmejälg: töövoog arvutab vahemälus olevad kuud ja päevad järgmisel käivitusel
+  uuesti (päevad Solarmanist partiide kaupa).
+- Kontrollitud: töövoo `tariff_at` (31.10.2026 → 0,6 / 1,05; 01.11.2026 → 0,45 / 1,054; tulevane muudatus jõustub
+  kuupäeva 00:00-st, vigane kirje jäetakse hoiatusega välja), JS `normalizeTariffChanges`/`tariffsAt` (üleminek
+  2027-01-31T22:00Z), kolm lehte brauseris kuupäevadega 09.11.2026, 31.01.2027 ja 02.02.2027 (konsoolivigu pole).
+
+---
+
 ## [3.3.3], energy-dashboard.html [2.6.1] ja graafikud.html [1.3.2] — 2026-11-03 · turvaauditi järelkontroll (J1–J5)
 
 Audit `main` 737a1f6 (NIST SP 800-63B/132/38D, SLSA v1.0 + CIS GitHub, Mozilla/W3C WebAppSec, OWASP ASVS L2). Lehtede

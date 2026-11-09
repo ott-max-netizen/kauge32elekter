@@ -375,8 +375,24 @@ Solarmani välja nimed ja märgid on failis muutmata; lehed tõlgendavad neid ni
   `CONFIG.hinnad` sisaldab praegu kehtivaid tasusid; varasemate perioodide väärtused on töövoos
   `uuenda-hinnad.yml` (`KM_AJALUGU`: KM 22 % enne 01.07.2025; `TASUDE_AJALUGU`: taastuvenergia tasu
   1,05 s/kWh 2024, 0,84 alates 2025; varustuskindluse tasu 0,758 s/kWh alates 01.01.2026; elektriaktsiis
-  0,145 s/kWh enne 01.05.2025; allikad on kommentaarides). Võrgutasu kWh-hinnad ja marginaal on kõigil
-  kuudel CONFIG-i omad (Elektrilevi kWh-hinnad 2025–2026 hinnakirjamuudatustega ei muutunud).
+  0,145 s/kWh enne 01.05.2025; müüja marginaal 0,6 s/kWh ja müügitasu 1,05 s/kWh koos KM-ga enne 01.11.2026;
+  allikad on kommentaarides). Võrgutasu kWh-hinnad on kõigil kuudel CONFIG-i omad (Elektrilevi kWh-hinnad
+  2025–2027 hinnakirjamuudatustega ei muutunud: päev 3,49, öö 1,99 s/kWh).
+- **Elektrimüüja alates 01.11.2026: Sunly.** Börsihinna marginaal tarbimisel 4,5 €/MWh + KM
+  (`CONFIG.hinnad.marginaal` = 0,45 s/kWh ilma KM-ta), võrku andmisel 8,5 €/MWh + KM
+  (`CONFIG.hinnad.muugitasu` = 0,85 × 1,24 = 1,054 s/kWh koos KM-ga; müügihind = börsihind ilma KM-ta − müügitasu).
+  Kõik hinnad kuvatakse s/kWh. Päevakokkuvõtete (`paevad.json`) müügihind kasutab sel päeval kehtinud müügitasu.
+- **Ette teada hinnamuudatused** (`CONFIG.hinnamuudatused`, nt uus võrguteenuse hinnakiri): kirje `alates`
+  ("AAAA-KK-PP", Tallinna päeva 00:00) ja muutuvad `CONFIG.hinnad` väärtused. Kuni kuupäevani kehtivad
+  `CONFIG.hinnad` väärtused, sellest alates kirje omad – nii lehtedel (`feesAt` / `tariffsAt`, js/common.js) kui
+  töövoos (`TASUDE_MUUDATUSED`, `tariff_at`); graafikute leht saab need hinnad.json-i `meta.tariffChanges`-ist.
+  Praegu: Elektrilevi hinnakiri madalpingel üle 63 A (Võimsus VMA2) alates 01.02.2027 – kuutasu 30,41 → 30,58 €/kuu,
+  läbilaskevõime 0,32 → 0,33 € / A kuus; kasutusvõimsus 2,45 ja tarbimiskoha kasutusvõimsus 2,56 € / kW kuus ning
+  kWh-hinnad jäävad samaks (ilma KM-ta).
+- **Võrgu fikseeritud tasud** (`vorguKuutasu`, `labilaskevoimeTasu`, `kasutusvoimsusTasu`,
+  `tarbimiskohaKasutusvoimsusTasu`, ilma KM-ta) on elektriinfo lehe hinna koostise all eraldi kirjas koos
+  eelseisva hinnakirjamuudatusega. s/kWh hinnas ja kuu € arvestuses neid pole (sõltuvad läbilaskevõimest A ja
+  kasutusvõimsusest kW); arve järgi kuutasu kokku käib `CONFIG.hinnad.kuutasu` väljale.
 - **Tasu muutumisel** lisa vana väärtus esmalt `TASUDE_AJALUGU`-sse (kuni muutuse kuupäevani) ja muuda
   siis `CONFIG.hinnad`-i. Iga kuu kirjes on sõrmejälg `cfg`; kui see erineb, arvutab töövoog vahemälus
   olevad kuud järgmisel käivitusel ise uuesti (`index.html`-i muutmine töövoogu kohe ei käivita).

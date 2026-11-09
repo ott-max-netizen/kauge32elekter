@@ -330,17 +330,27 @@ const CONFIG = {
     kallis: "Kallis"
   },
 
-  // Maja elektripaketi tasud, s/kWh ILMA käibemaksuta (v.a "kuutasu" €/kuu, "muugitasu" s/kWh koos KM-ga ja "kaibemaks" %).
+  // Maja elektripaketi tasud, s/kWh ILMA käibemaksuta (v.a "kuutasu" €/kuu, "muugitasu" s/kWh koos KM-ga, võrgu fikseeritud
+  // tasud €/kuu, € / A, € / kW kuus ja "kaibemaks" %). Varukoopia: tavaliselt loetakse index.html-i omad (tariifideFail).
   hinnad: {
-    marginaal: 0.6,
+    marginaal: 0.45,  // Sunly börsihinna marginaal tarbimisel 4,5 €/MWh (alates 01.11.2026)
     vorgutasuPaev: 3.49,
     vorgutasuOo: 1.99,
     taastuvenergiaTasu: 1.598,
     aktsiis: 0.21,
     kuutasu: 0.00,
-    muugitasu: 1.05,  // võrku müüdud elektri müügitasu s/kWh KOOS KM-ga (müügihind = börsihind ilma KM-ta − müügitasu)
-    kaibemaks: 24
+    muugitasu: 1.054, // võrku müüdud elektri müügitasu s/kWh KOOS KM-ga: Sunly 8,5 €/MWh + KM (müügihind = börsihind ilma KM-ta − müügitasu)
+    kaibemaks: 24,
+    vorguKuutasu: 30.41,
+    labilaskevoimeTasu: 0.32,
+    kasutusvoimsusTasu: 2.45,
+    tarbimiskohaKasutusvoimsusTasu: 2.56
   },
+
+  // Ette teada hinnamuudatused (sama mis index.html-is): "alates" kuupäevast kehtivad kirje väärtused.
+  hinnamuudatused: [
+    { alates: "2027-02-01", vorgutasuPaev: 3.49, vorgutasuOo: 1.99, vorguKuutasu: 30.58, labilaskevoimeTasu: 0.33, kasutusvoimsusTasu: 2.45, tarbimiskohaKasutusvoimsusTasu: 2.56 }
+  ],
 
   // Öötariifi kehtivus Tallinna aja järgi täistundides (0–23).
   ootariif: {
@@ -410,7 +420,7 @@ const CONFIG = {
 };
 </script>
 <!-- Mõlema lehe ühine skriptikood (aeg, vormindamine, DOM-abi, graafikute ühisosa); peab laadima enne põhiskripti -->
-<script src="js/common.js?v=20261103b"></script>
-<script src="js/energy-dashboard.js?v=20261103b"></script>
+<script src="js/common.js?v=20261109"></script>
+<script src="js/energy-dashboard.js?v=20261109"></script>
 </body>
 </html>

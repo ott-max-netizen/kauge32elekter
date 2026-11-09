@@ -7,7 +7,7 @@
 
 const CONFIG = readPageConfig();
 
-const APP_VERSION = '1.3.2';
+const APP_VERSION = '1.4.0';
 const BATTERY_IDLE_KW = 0.2;     // väiksem aku võimsus = „ootel“ (hoidevool), nagu energialehel
 const TARIFF_KEYS = ['marginaal', 'vorgutasuPaev', 'vorgutasuOo', 'taastuvenergiaTasu', 'aktsiis', 'kaibemaks', 'algus', 'lopp'];
 const MAX_PERIOD_MINUTES = 60;   // common.js nõue (pikim hinnaperiood)
@@ -20,6 +20,7 @@ const state = {
   vat: 1 + CONFIG.kaibemaks / 100,
   prices: [],        // [{ t (ms), end (ms), spot (börsihind s/kWh ilma KM-ta) }]
   tariffs: null,     // hinnad.json meta.tariffs (töövoo kasutatud index.html CONFIG): tasud s/kWh ilma KM-ta, KM %, öötariif
+  tariffChanges: [], // hinnad.json meta.tariffChanges (index.html CONFIG.hinnamuudatused): kuupäevast kehtivad tasud
   realTime: null,    // paike.json realTime: aku laetus ja võimsus praegu
   frames: [],        // [{ t, pv, load, buy } kW]
   days: [],          // paevad.json kirjed (noData-ta), kuupäeva järgi
@@ -86,6 +87,7 @@ function readPrices(json) {
     aktsiis: t.aktsiis, kaibemaks: t.kaibemaks, algus: t.algus, lopp: t.lopp,
     nadalavahetusOnOo: t.nadalavahetusOnOo !== false, riigipuhadOnOo: t.riigipuhadOnOo !== false
   } : null;
+  state.tariffChanges = state.tariffs ? normalizeTariffChanges(json.meta.tariffChanges, state.tariffs) : [];
   const vatPct = t && num(t.kaibemaks) != null && t.kaibemaks >= 0 && t.kaibemaks < 100 ? t.kaibemaks : CONFIG.kaibemaks;
   state.vat = 1 + vatPct / 100;
   const rows = (Array.isArray(json.data.ee) ? json.data.ee : [])
@@ -201,7 +203,7 @@ function networkTariff(date) {
  *  ja varustuskindluse tasu + aktsiis, KM kogu summale; kuutasud pole sees. Tasudeta (vana fail) ainult börsihind KM-ga. */
 function priceParts(spot, date) {
   if (!state.tariffs) return { spot: spot * state.vat, fees: 0, total: spot * state.vat, tariff: null };
-  const f = state.tariffs;
+  const f = tariffsAt(state.tariffs, state.tariffChanges, date);
   const tariff = networkTariff(date);
   const fees = f.marginaal + (tariff === 'oo' ? f.vorgutasuOo : f.vorgutasuPaev) + f.taastuvenergiaTasu + f.aktsiis;
   return { spot: spot * state.vat, fees: fees * state.vat, total: (spot + fees) * state.vat, tariff };

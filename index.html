@@ -304,25 +304,54 @@ const CONFIG = {
   },
 
   // Maja elektripaketi PRAEGU kehtivad tasud. Kõik s/kWh (senti ühe kilovatt-tunni kohta) ILMA
-  // käibemaksuta, välja arvatud "kuutasu" (eurot kuus koos KM-ga, nagu arvel) ja
-  // "kaibemaks" (protsent). Rakendus lisab käibemaksu kogu summale ühe korra.
+  // käibemaksuta, välja arvatud "kuutasu" (eurot kuus koos KM-ga, nagu arvel), "muugitasu" (s/kWh koos KM-ga),
+  // võrgu fikseeritud tasud (€/kuu, € / A, € / kW kuus ilma KM-ta) ja "kaibemaks" (protsent).
+  // Rakendus lisab käibemaksu kogu summale ühe korra. Elektrimüüja alates 01.11.2026: Sunly.
   // Võta väärtused elektrilepingust ja võrguettevõtja hinnakirjast. Ohutu muuta.
   // Neid väärtusi loevad ka energialeht ja töövoog uuenda-hinnad.yml (kuu € „Maja üldelektris“,
   // kasutatud väärtused on hinnad.json-i meta.tariffs-is). Töövoog arvutab iga kuu sel ajal kehtinud
   // tasudega: varasemate perioodide väärtused (taastuvenergia- ja varustuskindluse tasu, aktsiis,
-  // kuutasu) on töövoos TASUDE_AJALUGU-s, KM-i omad KM_AJALUGU-s. TASU MUUTUMISEL lisa vana väärtus
-  // kõigepealt TASUDE_AJALUGU-sse (kuni muutuse kuupäevani) ja muuda siis siin – muidu arvutatakse
+  // kuutasu, marginaal, müügitasu) on töövoos TASUDE_AJALUGU-s, KM-i omad KM_AJALUGU-s. TASU MUUTUMISEL lisa vana
+  // väärtus kõigepealt TASUDE_AJALUGU-sse (kuni muutuse kuupäevani) ja muuda siis siin – muidu arvutatakse
   // ka varasemad kuud uue tasuga. Vahemälus olevad kuud arvutab töövoog järgmisel käivitusel ise uuesti.
+  // Ette teada TULEVASE muudatuse (uus hinnakiri) kirjuta allpool "hinnamuudatused" alla – siis ei pea kuupäeva ootama.
   hinnad: {
-    marginaal: 0.6,          // müüja marginaal börsipaketis, s/kWh ilma KM-ta
-    vorgutasuPaev: 3.49,      // võrgutasu päevatariif, s/kWh ilma KM-ta
-    vorgutasuOo: 1.99,        // võrgutasu öötariif, s/kWh ilma KM-ta
+    marginaal: 0.45,         // müüja marginaal tarbimisel, s/kWh ilma KM-ta: Sunly börsihinna marginaal 4,5 €/MWh (alates 01.11.2026; enne 0.6)
+    vorgutasuPaev: 3.49,      // võrgutasu päevatariif (elektri edastamine: päev), s/kWh ilma KM-ta
+    vorgutasuOo: 1.99,        // võrgutasu öötariif (elektri edastamine: öö), s/kWh ilma KM-ta
     taastuvenergiaTasu: 1.598, // taastuvenergia tasu 0.84 + varustuskindluse tasu 0.758 (alates 01.01.2026), s/kWh ilma KM-ta
     aktsiis: 0.21,            // elektriaktsiis, s/kWh ilma KM-ta
     kuutasu: 0.00,            // fikseeritud kuutasud kokku (võrgu kuu- ja läbilaskevõimetasu, müüja kuutasu), €/kuu koos KM-ga; kuvatakse eraldi reana, 0 peidab rea
-    muugitasu: 1.05,          // võrku müüdud elektri müügitasu (müügilepingu marginaal), s/kWh KOOS KM-ga; müügihind = börsihind ilma KM-ta − müügitasu (energialeht, paevad.json)
-    kaibemaks: 24             // käibemaksu määr, % (kasutatakse kõikjal, ka börsihinna KM-ga näitamisel)
+    muugitasu: 1.054,         // võrku müüdud elektri müügitasu, s/kWh KOOS KM-ga: Sunly marginaal võrku andmisel 8,5 €/MWh + KM 24% = 0,85 × 1,24
+                              // (alates 01.11.2026; enne 1.05); müügihind = börsihind ilma KM-ta − müügitasu (energialeht, paevad.json)
+    kaibemaks: 24,            // käibemaksu määr, % (kasutatakse kõikjal, ka börsihinna KM-ga näitamisel)
+    // Võrguteenuse fikseeritud tasud (Elektrilevi, madalpinge üle 63 A, pakett Võimsus VMA2), ILMA KM-ta. Need ei sõltu
+    // kWh-st, seega s/kWh hinnas neid pole: elektriinfo lehe hinna koostise all on need kirjas eraldi. Kuu € arvestuses
+    // ei kasutata (sõltuvad läbilaskevõimest A ja kasutusvõimsusest kW); arve kuutasu kokku sisesta "kuutasu" väljale.
+    vorguKuutasu: 30.41,      // võrguühenduse kuutasu, €/kuu
+    labilaskevoimeTasu: 0.32, // võrguühenduse läbilaskevõime, € / A kuus
+    kasutusvoimsusTasu: 2.45, // võrguühenduse kasutusvõimsus, € / kW kuus
+    tarbimiskohaKasutusvoimsusTasu: 2.56 // tarbimiskoha kasutusvõimsus, € / kW kuus
   },
+
+  // Ette teada hinnamuudatused (nt uus võrguteenuse hinnakiri). Iga kirje: "alates" (kuupäev "AAAA-KK-PP", kehtib sellest
+  // päevast 00:00 Tallinna aja järgi) ja muutuvad CONFIG.hinnad väärtused samades ühikutes; nimetamata väärtused jäävad
+  // samaks. Kuni kuupäevani kehtivad ülal olevad väärtused, kuupäevast alates kirje omad – lehed ja töövoog
+  // (hinnad.json, paevad.json) lähevad uutele hindadele üle ise, vanad hinnad jäävad varasemate perioodide arvestusse.
+  // Pärast kuupäeva võib kirje ülal olevatesse väärtustesse tõsta (vana väärtus töövoo TASUDE_AJALUGU-sse), kuid see pole kohustuslik.
+  hinnamuudatused: [
+    {
+      // Elektrilevi võrguteenuse hinnakiri madalpingel üle 63 A (Võimsus VMA2), kehtib alates 01.02.2027 (ilma KM-ta).
+      // Muutuvad kuutasu 30,41 → 30,58 €/kuu ja läbilaskevõime 0,32 → 0,33 € / A kuus; kWh-hinnad ja kasutusvõimsus samad.
+      alates: "2027-02-01",
+      vorgutasuPaev: 3.49,
+      vorgutasuOo: 1.99,
+      vorguKuutasu: 30.58,
+      labilaskevoimeTasu: 0.33,
+      kasutusvoimsusTasu: 2.45,
+      tarbimiskohaKasutusvoimsusTasu: 2.56
+    }
+  ],
 
   // Öötariifi kehtivus võrgutasu valimiseks. Kellaajad Tallinna aja järgi täistundides (0–23).
   ootariif: {
@@ -387,7 +416,7 @@ const CONFIG = {
 };
 </script>
 <!-- Mõlema lehe ühine skriptikood (aeg, vormindamine, DOM-abi, graafikute ühisosa); peab laadima enne põhiskripti -->
-<script src="js/common.js?v=20261103b"></script>
-<script src="js/index.js?v=20261103b"></script>
+<script src="js/common.js?v=20261109"></script>
+<script src="js/index.js?v=20261109"></script>
 </body>
 </html>

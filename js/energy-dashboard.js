@@ -9,7 +9,7 @@ const CONFIG = readPageConfig();
 
 /* Tehnilised konstandid — neid ei ole tavakasutuses vaja muuta. Mõlema lehe ühised (TIME_ZONE, API_URL,
    MINUTE_MS, HOUR_MS, DAY_MS) on failis js/common.js. */
-const APP_VERSION = '2.6.1';
+const APP_VERSION = '2.7.0';
 const PRICE_TIMEOUT_MS = 20000;
 const SOLAR_TIMEOUT_MS = 30000;
 const TARIFF_TIMEOUT_MS = 5000;
@@ -25,6 +25,7 @@ const SOLAR_POWER_FIELDS = ['generationPower', 'usePower', 'gridPower', 'purchas
 /* Kehtivad tariifid ja päikeseandmete aegumislävi: CONFIG-i väärtused, mis kirjutatakse üle index.html-i omadega (vt loadTariffs). */
 const TARIFFS = {
   hinnad: { ...CONFIG.hinnad },
+  muudatused: normalizeTariffChanges(CONFIG.hinnamuudatused, CONFIG.hinnad),   // CONFIG.hinnamuudatused (ette teada hinnakirjad)
   ootariif: { ...CONFIG.ootariif },
   hinnapiirid: { ...CONFIG.hinnapiirid },
   hinnasildid: { ...CONFIG.hinnasildid },
@@ -205,6 +206,7 @@ async function loadTariffs() {
       const v = num(cfg.hinnad, key);
       if (v != null) TARIFFS.hinnad[key] = v;
     }
+    if (Array.isArray(cfg.hinnamuudatused)) TARIFFS.muudatused = normalizeTariffChanges(cfg.hinnamuudatused, TARIFFS.hinnad);
     for (const key of ['algus', 'lopp']) {
       const v = num(cfg.ootariif, key);
       if (v != null && v >= 0 && v <= 24) TARIFFS.ootariif[key] = v;
@@ -253,6 +255,8 @@ function tariffMismatches(meta) {
    6. Börsihinnad — hinnad.json (Elering), sama muster mis index.html-is
    ========================================================================== */
 function vatFactor() { return 1 + Number(TARIFFS.hinnad.kaibemaks) / 100; }
+/** Hetkel date kehtivad tasud: TARIFFS.hinnad koos selleks ajaks jõustunud hinnamuudatustega (index.html CONFIG.hinnamuudatused). */
+function feesAt(date) { return tariffsAt(TARIFFS.hinnad, TARIFFS.muudatused, date); }
 
 /** Eleringi toorandmed -> { start, end, timestamp, spotExVatCentsKwh, spotIncVatCentsKwh, durationMinutes }. */
 function normalizePrices(rawList) {
@@ -520,7 +524,7 @@ function getNetworkTariff(date) {
 
 /** Lõpphind s/kWh: börsihind ilma KM-ta + tasud, KM lisatakse kogu summale üks kord. */
 function calculateFinalPrice(spotExVatCentsKwh, date) {
-  const fees = TARIFFS.hinnad;
+  const fees = feesAt(date);
   const tariff = getNetworkTariff(date);
   const network = Number(tariff === 'oo' ? fees.vorgutasuOo : fees.vorgutasuPaev);
   const subtotal = spotExVatCentsKwh + Number(fees.marginaal) + network + Number(fees.taastuvenergiaTasu) + Number(fees.aktsiis);
@@ -532,8 +536,8 @@ function finalCents(period) {
   if (period.$finalCents === undefined) period.$finalCents = calculateFinalPrice(period.spotExVatCentsKwh, period.start).total;
   return period.$finalCents;
 }
-/** Võrku müüdud kWh hind: börsihind ilma KM-ta miinus müügitasu. */
-function sellCents(period) { return period.spotExVatCentsKwh - (Number(TARIFFS.hinnad.muugitasu) || 0); }
+/** Võrku müüdud kWh hind: börsihind ilma KM-ta miinus perioodil kehtiv müügitasu. */
+function sellCents(period) { return period.spotExVatCentsKwh - (Number(feesAt(period.start).muugitasu) || 0); }
 
 /* ==========================================================================
    7. Solarman — andmefail paike.json (GitHub Actions)
@@ -2662,7 +2666,7 @@ function buildTrendMonths(d) {
   }
   const todayKey = tallinnDateKey(d.now);
   if (d.totals && d.totals.pvKwh != null && !state.days.list.some(r => r.paev === todayKey)) addDay(todayKey.slice(0, 7), d.totals);
-  const h = TARIFFS.hinnad;
+  const h = feesAt(d.now);
   // Öötariifi sääst: öösel ostetud kWh × (päeva − öö võrgutasu) × KM; praeguste tasudega (hinnang)
   const nightSaveRate = Math.max(0, Number(h.vorgutasuPaev) - Number(h.vorgutasuOo)) * vatFactor() / 100;
   const pad = n => String(n).padStart(2, '0');
@@ -3045,7 +3049,7 @@ function renderTrends(d) {
   } else {
     host.querySelector('.stats').replaceChildren(...tiles);
   }
-  byId('trend-note').textContent = `12 kuu libisev keskmine = kuu ja sellele eelneva 11 kuu keskmine kuus; ainult lõppenud kuud, kõik 12 peavad olemas olema (jooksev kuu on graafikul tuhmim). Ost võrgust, öö/päeva jaotus ja kulu: võrguarvesti (Estfeed), kulu on hinnang sel ajal kehtinud börsihinna, tasude ja KM-ga (arve alus). Öö = öötariifi aeg (${TARIFFS.ootariif.algus}–${TARIFFS.ootariif.lopp}, nädalavahetus, riigipühad). Päike, maja tarbimine, „maja maksis“ (võrgu netokulu / tarbitud kWh), aku tulu ja päikese väärtus: inverteri päevakokkuvõtted${fromKey ? `, enne päikeseparki (${formatDayKey(fromKey)}) päike ja aku 0 ning tarbimine = ost` : ''}; * = kuus pole kõiki päevi. Börsihind: kuu kWh-ga kaalutud keskmine ilma KM-ta. Öötariifi sääst = öösel ostetud kWh × päeva ja öö võrgutasu vahe (${numberFormat.d2.format(Math.max(0, Number(TARIFFS.hinnad.vorgutasuPaev) - Number(TARIFFS.hinnad.vorgutasuOo)))} s/kWh + KM, praeguste tasudega). Kulu ei sisalda kuutasu, kui see on seadetes 0.`;
+  byId('trend-note').textContent = `12 kuu libisev keskmine = kuu ja sellele eelneva 11 kuu keskmine kuus; ainult lõppenud kuud, kõik 12 peavad olemas olema (jooksev kuu on graafikul tuhmim). Ost võrgust, öö/päeva jaotus ja kulu: võrguarvesti (Estfeed), kulu on hinnang sel ajal kehtinud börsihinna, tasude ja KM-ga (arve alus). Öö = öötariifi aeg (${TARIFFS.ootariif.algus}–${TARIFFS.ootariif.lopp}, nädalavahetus, riigipühad). Päike, maja tarbimine, „maja maksis“ (võrgu netokulu / tarbitud kWh), aku tulu ja päikese väärtus: inverteri päevakokkuvõtted${fromKey ? `, enne päikeseparki (${formatDayKey(fromKey)}) päike ja aku 0 ning tarbimine = ost` : ''}; * = kuus pole kõiki päevi. Börsihind: kuu kWh-ga kaalutud keskmine ilma KM-ta. Öötariifi sääst = öösel ostetud kWh × päeva ja öö võrgutasu vahe (${numberFormat.d2.format(Math.max(0, Number(feesAt(new Date()).vorgutasuPaev) - Number(feesAt(new Date()).vorgutasuOo)))} s/kWh + KM, praeguste tasudega). Kulu ei sisalda kuutasu, kui see on seadetes 0.`;
   byId('trend-insights').replaceChildren(...insights.map(text => el('li', {}, [iconEl('info'), text])));
   byId('trend-insights').hidden = !insights.length;
   if (state.trendIndex == null || state.trendIndex >= rows.length) state.trendIndex = rows.length - 1;
@@ -3161,8 +3165,8 @@ function renderPrice(d) {
   const facts = [];
   // Aken valitakse lõpphinna järgi (öine võrgutasu on odavam), börsihind on kõrval – nagu elektriinfo lehel
   if (d.best2h) facts.push(['fact-best-window', `Odavaim 2 h aken: ${describeRange(d.best2h.start, d.best2h.end, d.now)}, koos tasudega ${formatCents(d.best2h.avgFinal)} (börsihind ${formatCents(d.best2h.avg)}).`]);
-  facts.push(['fact-sell-price', `Müügihind praegu ${formatCents(sellCents(current))} (börsihind ilma KM-ta${Number(TARIFFS.hinnad.muugitasu) ? ' − müügitasu' : ''}).`]);
-  facts.push([null, `Kehtib ${finalPrice.tariff === 'oo' ? 'öötariif' : 'päevatariif'} (võrgutasu ${formatCents(finalPrice.tariff === 'oo' ? TARIFFS.hinnad.vorgutasuOo : TARIFFS.hinnad.vorgutasuPaev)} ilma KM-ta).`]);
+  facts.push(['fact-sell-price', `Müügihind praegu ${formatCents(sellCents(current))} (börsihind ilma KM-ta${Number(feesAt(current.start).muugitasu) ? ` − müügitasu ${formatCents(Number(feesAt(current.start).muugitasu))}` : ''}).`]);
+  facts.push([null, `Kehtib ${finalPrice.tariff === 'oo' ? 'öötariif' : 'päevatariif'} (võrgutasu ${formatCents(finalPrice.tariff === 'oo' ? feesAt(d.now).vorgutasuOo : feesAt(d.now).vorgutasuPaev)} ilma KM-ta).`]);
   facts.push([null, d.hasTomorrow ? 'Homsed börsihinnad on saadaval (vt graafikul „Homme“).' : tomorrowNotice(d.tomorrowStatus)]);
 
   setChildren(host,

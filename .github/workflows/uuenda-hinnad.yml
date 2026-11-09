@@ -184,8 +184,19 @@ jobs:
                   # https://www.err.ee/1609965290/valitsus-otsustas-maiks-plaanitud-aktsiisitousud-ara-jatta
                   (datetime(2025, 5, 1, tzinfo=TZ), 0.145),
               ),
-              # Võrgutasu kWh-hinnad (vorgutasuPaev/vorgutasuOo): Elektrilevi 01.08.2025 ja 01.06.2026 hinnakirja
-              # muudatustes kWh-põhised hinnad ei muutunud (muutusid kuu- ja läbilaskevõimetasud), seega ajalugu pole:
+              # Müüja marginaal tarbimisel (s/kWh ilma KM-ta): kuni 31.10.2026 0,6; alates 01.11.2026 on elektrimüüja Sunly,
+              # börsihinna marginaal tarbimisel 4,5 €/MWh + KM (= CONFIG 0,45).
+              "marginaal": (
+                  (datetime(2026, 11, 1, tzinfo=TZ), 0.6),
+              ),
+              # Müügitasu võrku antud elektrilt (s/kWh KOOS KM-ga, müügihind = börsihind ilma KM-ta − müügitasu): kuni
+              # 31.10.2026 1,05; alates 01.11.2026 Sunly börsihinna marginaal võrku andmisel 8,5 €/MWh + KM 24% (= CONFIG 1,054).
+              "muugitasu": (
+                  (datetime(2026, 11, 1, tzinfo=TZ), 1.05),
+              ),
+              # Võrgutasu kWh-hinnad (vorgutasuPaev/vorgutasuOo): Elektrilevi 01.08.2025, 01.06.2026 ja 01.02.2027 hinnakirja
+              # muudatustes kWh-põhised hinnad ei muutunud (3,49 / 1,99; muutusid kuu- ja läbilaskevõimetasud), seega ajalugu pole.
+              # 01.02.2027 hinnakiri (madalpinge üle 63 A, VMA2) on index.html CONFIG.hinnamuudatused-es (TASUDE_MUUDATUSED):
               # https://elektrilevi.ee/en/uudised/vorgutasu-muutub-alates-1-augustist
               # https://elektrilevi.ee/en/uudised/vorgutasu-keskmine-hind-muutub-alates-juunikuust-kolm-koma-neli-protsenti
               # Fikseeritud kuutasu (võrgu kuu- ja läbilaskevõimetasu + müüja kuutasu), €/kuu koos KM-ga. Elektrilevi
@@ -196,13 +207,17 @@ jobs:
                   (datetime(2026, 6, 1, tzinfo=TZ), 0.0),  # 01.08.2025–31.05.2026 – TÄIDA arvelt
               ),
           }
+          # Ette teada tulevased muudatused index.html CONFIG.hinnamuudatused-est (load_tariff_config): [(alates, {võti: väärtus})]
+          # kasvavas järjekorras; tariff_at kasutab kirje väärtust alates selle kuupäevast (pärast TASUDE_AJALUGU-t).
+          TASUDE_MUUDATUSED = []
           TARIFF_DEFAULTS = {  # kasutatakse ainult siis, kui index.html CONFIG-ist võtit ei leita
-              "marginaal": 0.6,
+              "marginaal": 0.45,
               "vorgutasuPaev": 3.49,
               "vorgutasuOo": 1.99,
               "taastuvenergiaTasu": 1.598,
               "aktsiis": 0.21,
               "kuutasu": 0.0,
+              "muugitasu": 1.054,
               "kaibemaks": 24.0,
               "algus": 22.0,
               "lopp": 7.0,
@@ -461,7 +476,8 @@ jobs:
                   return cfg, "default"
               missing = []
               for group, key in (("hinnad", "marginaal"), ("hinnad", "vorgutasuPaev"), ("hinnad", "vorgutasuOo"), ("hinnad", "taastuvenergiaTasu"),
-                                 ("hinnad", "aktsiis"), ("hinnad", "kuutasu"), ("hinnad", "kaibemaks"), ("ootariif", "algus"), ("ootariif", "lopp")):
+                                 ("hinnad", "aktsiis"), ("hinnad", "kuutasu"), ("hinnad", "muugitasu"), ("hinnad", "kaibemaks"),
+                                 ("ootariif", "algus"), ("ootariif", "lopp")):
                   v = config_number(page, group, key)
                   if v is not None:
                       cfg[key] = v
@@ -475,19 +491,49 @@ jobs:
                       missing.append(f"ootariif.{key}")
               if missing:
                   note("Osa tasude seadeid puudub; nende asemel on kasutatud vaikeväärtusi", f"index.html CONFIG-is puudub {', '.join(missing)}")
+              TASUDE_MUUDATUSED[:] = load_tariff_changes(config_value(page, "hinnamuudatused"))
               return cfg, "index.html"
 
+          def load_tariff_changes(items):
+              """index.html CONFIG.hinnamuudatused -> [(alates, {võti: väärtus})] kasvavas järjekorras (sama reegel mis
+              js/common.js normalizeTariffChanges-is): "alates" = "AAAA-KK-PP" (Tallinna päeva 00:00), väärtused ainult
+              TARIFF_DEFAULTS-i arvulistele võtmetele (muud võtmed, nt võrgu fikseeritud tasud, on ainult lehtedele)."""
+              if items is None:
+                  return []
+              if not isinstance(items, list):
+                  note("Hinnamuudatusi ei saanud lugeda; kasutatud on praeguseid tasusid", "index.html CONFIG.hinnamuudatused pole loend")
+                  return []
+              out = []
+              for item in items:
+                  m = re.fullmatch(r"(\d{4})-(\d{2})-(\d{2})", str(item.get("alates") or "")) if isinstance(item, dict) else None
+                  try:
+                      start = datetime(int(m.group(1)), int(m.group(2)), int(m.group(3)), tzinfo=TZ) if m else None
+                  except ValueError:
+                      start = None
+                  if start is None:
+                      note("Osa hinnamuudatusi on vigased ja jäeti välja", "CONFIG.hinnamuudatused kirje alates peab olema \"AAAA-KK-PP\"")
+                      continue
+                  values = {k: float(v) for k, v in item.items()
+                            if k in TARIFF_DEFAULTS and isinstance(v, float) and math.isfinite(v) and k not in ("algus", "lopp")}
+                  out.append((start, values))
+              return sorted(out, key=lambda x: x[0])
+
           def tariff_at(cfg, key, dt_tl):
-              """Hetkel dt_tl kehtinud tasu: TASUDE_AJALUGU kirje või CONFIG-i praegune väärtus."""
+              """Hetkel dt_tl kehtinud tasu: TASUDE_AJALUGU kirje (minevik), viimane jõustunud TASUDE_MUUDATUSED kirje
+              (index.html CONFIG.hinnamuudatused) või CONFIG-i praegune väärtus."""
               for until, value in TASUDE_AJALUGU.get(key, ()):
                   if dt_tl < until:
                       return value
-              return cfg[key]
+              value = cfg[key]
+              for start, values in TASUDE_MUUDATUSED:
+                  if start <= dt_tl and key in values:
+                      value = values[key]
+              return value
 
           def cfg_fingerprint(cfg):
               """Kuu kirje sõrmejälg: arvutusversioon, KM ja tasude ajalugu ning CONFIG-i tasud. Muutusel arvutatakse
               vahemälus olevad kuud uuesti (perioodikohaste tasudega, mitte tänastega)."""
-              payload = {"v": CALC_VERSION, "km": KM_AJALUGU, "tasud": TASUDE_AJALUGU,
+              payload = {"v": CALC_VERSION, "km": KM_AJALUGU, "tasud": TASUDE_AJALUGU, "muudatused": TASUDE_MUUDATUSED,
                          "cfg": {k: cfg[k] for k in sorted(TARIFF_DEFAULTS)}}
               return hashlib.sha1(json.dumps(payload, sort_keys=True, default=str).encode("utf-8")).hexdigest()[:12]
 
@@ -1118,14 +1164,6 @@ jobs:
               if msg not in PAEVAD_HOIATUSED:
                   PAEVAD_HOIATUSED.append(msg)
 
-          def read_sell_fee():
-              """Müügitasu s/kWh index.html CONFIG.hinnad.muugitasu-st (sama väärtus, mida energialeht kasutab müügihinnaks)."""
-              fee = config_number(read_page_config("index.html"), "hinnad", "muugitasu")
-              if fee is not None:
-                  return fee
-              paevad_note("Müügitasu ei saanud lugeda; müügihind on börsihind ilma KM-ta", "index.html CONFIG.hinnad.muugitasu puudub")
-              return 0.0
-
           def read_battery_capacity():
               """Aku kasutatav mahutavus kWh energy-dashboard.html CONFIG.aku.mahtKwh-st (aku tulu laetuse muutuse jaoks); None, kui puudub."""
               capacity = config_number(read_page_config("energy-dashboard.html"), "aku", "mahtKwh")
@@ -1193,7 +1231,7 @@ jobs:
               to_battery = min(pv - to_home, charge)
               return to_home, to_battery
 
-          def compute_day_record(day, frames, price_by_ts, tariff_cfg, sell_fee, cfg_hash, src, until=None):
+          def compute_day_record(day, frames, price_by_ts, tariff_cfg, cfg_hash, src, until=None):
               """Ühe Tallinna päeva kirje 15-min kaadritest; None, kui päeval kaadreid pole. until (Unix s): mõõtmiste lõpp
               (pooleli päeva kontrolliks; lõppenud päeval päeva lõpp)."""
               d0 = datetime(day.year, day.month, day.day, tzinfo=TZ)
@@ -1221,8 +1259,10 @@ jobs:
                       continue
                   hours += h
                   spot = price_by_ts.get(ts - ts % SOLAR_FRAME_S, price_by_ts.get(ts - ts % 3600))
-                  buy = calc_final_cents_kwh(spot, datetime.fromtimestamp(ts, TZ), tariff_cfg) / 100.0 if spot is not None else None
-                  sell = (spot / 10.0 - sell_fee) / 100.0 if spot is not None else None
+                  dt_tl = datetime.fromtimestamp(ts, TZ)
+                  buy = calc_final_cents_kwh(spot, dt_tl, tariff_cfg) / 100.0 if spot is not None else None
+                  # Müügihind = börsihind ilma KM-ta − sel ajal kehtinud müügitasu (CONFIG.hinnad.muugitasu, TASUDE_AJALUGU)
+                  sell = (spot / 10.0 - tariff_at(tariff_cfg, "muugitasu", dt_tl)) / 100.0 if spot is not None else None
                   to_home, to_battery = solar_split(s)
                   def add(key, value, value_eur):
                       kwh[key] += value
@@ -1365,8 +1405,8 @@ jobs:
                           old_days[rec["paev"]] = rec
               except (OSError, ValueError, AttributeError):
                   old_file = None
-              sell_fee = read_sell_fee()
-              day_hash = hashlib.sha1(json.dumps({"v": PAEVAD_VERSION, "cfg": CFG_HASH, "muuk": sell_fee}, sort_keys=True).encode("utf-8")).hexdigest()[:12]
+              sell_fee = tariff_at(tariff_cfg, "muugitasu", now)   # praegune (meta.sellFee); päevakirjetes perioodikohane
+              day_hash = hashlib.sha1(json.dumps({"v": PAEVAD_VERSION, "cfg": CFG_HASH}, sort_keys=True).encode("utf-8")).hexdigest()[:12]
               today = now.date()
               yesterday = today - timedelta(days=1)
               first = read_solar_start() or yesterday
@@ -1404,7 +1444,7 @@ jobs:
               price_map = {r["timestamp"]: r["price"] for r in ee}
               prev_y = days.get(yesterday.isoformat()) or {}
               if not (is_current(prev_y) and prev_y.get("complete")) or needs_profile(yesterday, prev_y):
-                  rec = compute_day_record(yesterday, paike_frames, price_map, tariff_cfg, sell_fee, day_hash, "paike")
+                  rec = compute_day_record(yesterday, paike_frames, price_map, tariff_cfg, day_hash, "paike")
                   if rec and (not prev_y or rec["complete"] or not prev_y.get("complete")):
                       store(rec)
 
@@ -1436,7 +1476,7 @@ jobs:
                           if frames is None:
                               paevad_note("Solarmani päevapäring ebaõnnestus; osa varasemaid päevakokkuvõtteid puudub")
                               break
-                          rec = compute_day_record(day, frames, batch_prices, tariff_cfg, sell_fee, day_hash, "solarman")
+                          rec = compute_day_record(day, frames, batch_prices, tariff_cfg, day_hash, "solarman")
                           store(rec or {"paev": day.isoformat(), "noData": True, "src": "solarman", "v": PAEVAD_VERSION, "cfg": day_hash})
                       print(f"Päevakokkuvõtted: Solarmanist laaditi {len(batch)} päeva, ootel veel {max(0, len(todo) - len(batch))}.")
 
@@ -1475,6 +1515,8 @@ jobs:
               "estfeedOk": estfeed_ok,
               "estfeedUntil": iso_utc(max(kwh_ends)) if kwh_ends else None,
               "tariffs": {**{k: tariff_cfg[k] for k in TARIFF_DEFAULTS}, "source": tariff_source},
+              # Ette teada hinnamuudatused (index.html CONFIG.hinnamuudatused, graafikute leht): kuupäevast kehtivad väärtused
+              "tariffChanges": [{"alates": start.date().isoformat(), **values} for start, values in TASUDE_MUUDATUSED],
               "warnings": HOIATUSED,
           }
 
