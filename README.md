@@ -386,7 +386,9 @@ Solarmani välja nimed ja märgid on failis muutmata; lehed tõlgendavad neid ni
   öö 2,30 s/kWh, kuutasu 25,80 € ja läbilaskevõime 0,55 €/A kuni 31.07.2025, alates 01.08.2025 26,21 € ja 0,57 €/A
   (arved 01/2025, 12/2025 ja 04/2026); **Võimsus VMA2** alates 01.05.2026 (`VMA2_ALATES`, arve 05/2026): 3,49 / 1,99
   s/kWh, kuutasu 29,19 €, läbilaskevõime 0,29 €/A, kasutusvõimsus 2,45 €/kW; alates 01.06.2026 30,41 € ja 0,32 €/A
-  (OLETUS, juuni arvega kinnitamata). Kõik neli arvet klapivad töövoo arvestusega sendi täpsusega.
+  (arve 10/2026). Viis võrguarvet (01/2025, 12/2025, 04/2026, 05/2026, 10/2026) klapivad töövoo arvestusega sendi
+  täpsusega. Võrgutasud ja riiklikud tasud on arvel **netotarbimiselt** (ost − samal ajal võrku antu); töövoog kasutab
+  Estfeedi ostu kWh-d – maja müüb võrku väga vähe (10/2026: 0,11 kWh), seega vahe on tühine.
 - **Elektrimüüja alates 01.11.2026: Sunly.** Börsihinna marginaal tarbimisel 4,5 €/MWh + KM
   (`CONFIG.hinnad.marginaal` = 0,45 s/kWh ilma KM-ta), võrku andmisel 8,5 €/MWh + KM
   (`CONFIG.hinnad.muugitasu` = 0,85 × 1,24 = 1,054 s/kWh koos KM-ga; müügihind = börsihind ilma KM-ta − müügitasu).

@@ -202,8 +202,9 @@ jobs:
               # kuutasu 25,80 €/kuu ja läbilaskevõime 0,55 €/A (01/2025; sama eeldatud 11–12/2024), alates 01.08.2025 26,21 € ja
               # 0,57 €/A (arved 12/2025 ja 04/2026). Võimsus VMA2 alates 01.05.2026 (arve 05/2026): 3,49 / 1,99 s/kWh, kuutasu
               # 29,19 €, läbilaskevõime 0,29 €/A ja kasutusvõimsus 2,45 €/kW (21 kW = 51,45 €; tarbimiskoha kasutusvõimsust
-              # arvel pole). Alates 01.06.2026 (Elektrilevi hinnakirjamuudatus) 30,41 € ja 0,32 €/A – OLETUS, juuni arvega
-              # kinnitamata. Arved 01/2025, 12/2025, 04/2026 ja 05/2026 klapivad selle arvestusega sendi täpsusega.
+              # arvel pole). Alates 01.06.2026 (Elektrilevi hinnakirjamuudatus) 30,41 € ja 0,32 €/A (arve 10/2026; kasutusvõimsus
+              # 34,84 -> 35 kW). Võrguarved 01/2025, 12/2025, 04/2026, 05/2026 ja 10/2026 klapivad selle arvestusega sendi
+              # täpsusega; müüja arvete 04, 05 ja 10/2026 tasakaalustamisvõimsuse kulu (0,00373 €/kWh) samuti.
               # 01.02.2027 hinnakiri on index.html CONFIG.hinnamuudatused-es:
               # https://elektrilevi.ee/en/uudised/vorgutasu-muutub-alates-1-augustist
               # https://elektrilevi.ee/en/uudised/vorgutasu-keskmine-hind-muutub-alates-juunikuust-kolm-koma-neli-protsenti

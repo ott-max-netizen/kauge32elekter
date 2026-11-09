@@ -4,6 +4,15 @@ See fail kirjeldab rakenduse `index.html` versioonimuudatusi, arhitektuurilisi k
 
 ---
 
+## 2026-11-09 · arvetega kontroll (töövoo kommentaarid, README)
+
+- Võrguarve 10/2026 (VMA2) klapib sendi täpsusega (482,73 € / 598,59 €): kinnitab kuutasu 30,41 € ja 0,32 €/A alates
+  01.06.2026 (enne oletus) ning kasutusvõimsuse ümardamise (34,84 → 35 kW).
+- Müüja arved 04, 05 ja 10/2026: tasakaalustamisvõimsuse kulu 0,00373 €/kWh × tarbimine klapib (29,18 / 27,10 / 26,79 €);
+  müüja kuutasu pole. Arvestuse loogikas muudatusi pole.
+
+---
+
 ## [3.7.0] ja energy-dashboard.html [2.9.2] — 2026-11-09 · VMA2 algus 01.05.2026 ja kasutusvõimsuse tasu
 
 - Arvete 04/2026 (Amper VML2) ja 05/2026 (Võimsus VMA2) järgi algas VMA2 **01.05.2026** (`VMA2_ALATES`; enne oletus
