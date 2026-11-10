@@ -15,12 +15,12 @@
 <meta name="robots" content="noindex, nofollow, noarchive">
 <title>Kauge 32 graafikud</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="css/common.css?v=20261109i">
+<link rel="stylesheet" href="css/common.css?v=20261109j">
 <!-- Lukk (parooliga kaitse, README „Parooliga kaitse“): ilma defer'ita, et globaal Lukk oleks lehe skriptile olemas ja .app peituks enne esimest joonistamist -->
-<script src="js/lukk.js?v=20261103b"></script>
+<script src="js/lukk.js?v=20261109j"></script>
 <!-- Külastuste loendus (GoatCounter, küpsisteta; README „Külastuste statistika“). Skript on repo sees, sest CSP lubab ainult
      sama saidi skripte; loendus läheb sendBeacon-iga (connect-src). Saadetakse lehe nimi, ekraani laius ja tulek, mitte andmeid. -->
-<script data-goatcounter="https://kauge32.goatcounter.com/count" data-goatcounter-settings='{"no_events":true,"path":"/graafikud.html","title":"Graafikud"}' async src="js/vendor/goatcounter-count.js?v=c031008-k32b"></script>
+<script data-goatcounter="https://kauge32.goatcounter.com/count" data-goatcounter-settings='{"no_events":true,"path":"/graafikud.html","title":"Graafikud"}' async src="js/vendor/goatcounter-count.js?v=c031008-k32c"></script>
 <link rel="stylesheet" href="css/graafikud.css?v=20261103b">
 <!-- Raamimise kaitse ja teema enne esimest joonistamist (ilma defer'ita) -->
 <script src="js/teema.js?v=20261103b"></script>
@@ -63,6 +63,9 @@
   </header>
 
   <noscript><p class="notice">Graafikute kuvamiseks peab brauseris olema JavaScript lubatud.</p></noscript>
+
+  <!-- Uus versioon (js/common.js jaotis 10, README „Lehe automaatne uuendus“): tühi elav ala, riba luuakse skriptist -->
+  <div id="uuendus" class="uuendus" role="status" aria-live="polite"></div>
 
   <!-- DOM-järjekord = telefoni järjekord = fookuse järjekord. Iga kaart joonistub, kui jõuab vaatesse (.reveal). -->
   <main class="layout" id="layout">
@@ -210,7 +213,7 @@
     <section class="card reveal" id="section-months" aria-labelledby="h-months" data-chart="months">
       <div class="card__head">
         <h2 id="h-months" class="card__title"><svg class="icon" aria-hidden="true" focusable="false"><use href="img/icons.svg?v=20261023#i-receipt"></use></svg>Maja üldelekter kuude kaupa</h2>
-        <span class="card__hint">ost võrgust (arvesti)</span>
+        <span class="card__hint">ost võrgust (arvesti); € koos kuutasudega (hinnang)</span>
       </div>
       <div class="card__controls">
         <fieldset class="segmented segmented--small" id="months-metric">
@@ -229,7 +232,7 @@
   </main>
 
   <footer class="app-footer">
-    <p><strong>Andmed:</strong> elektri hind — Elering (Nord Pool, Eesti hinnapiirkond) börsihind ilma KM-ta + müüja marginaal + võrgutasu (päeva- või öötariif) + taastuvenergia- ja varustuskindluse tasu + aktsiis + tasakaalustamisvõimsuse kulu, kogu summale käibemaks (kuutasud pole sees); tasud on hinnad.json-is töövoo kasutatud elektriinfo lehe seaded; päike, aku, maja tarbimine ja ost võrgust päevade lõikes — inverter (Solarman); maja üldelekter kuude kaupa — võrguarvesti (Elering Estfeed). Värvid hinnagraafikul on päeva sees suhtelised (odavaim → kalleim), mitte elektriinfo lehe hinnaklassid.</p>
+    <p><strong>Andmed:</strong> elektri hind — Elering (Nord Pool, Eesti hinnapiirkond) börsihind ilma KM-ta + müüja marginaal + võrgutasu (päeva- või öötariif) + taastuvenergia- ja varustuskindluse tasu + aktsiis + tasakaalustamisvõimsuse kulu, kogu summale käibemaks (kuutasud pole sees); tasud on hinnad.json-is töövoo kasutatud elektriinfo lehe seaded; päike, aku, maja tarbimine ja ost võrgust päevade lõikes — inverter (Solarman); maja üldelekter kuude kaupa — võrguarvesti (Elering Estfeed), eurod koos fikseeritud kuutasudega (hinnang). Värvid hinnagraafikul on päeva sees suhtelised (odavaim → kalleim), mitte elektriinfo lehe hinnaklassid.</p>
     <div class="app-footer__meta">
       <p id="footer-version"></p>
       <p>Külastusi loendatakse anonüümselt (GoatCounter), küpsiseid ei kasutata.</p>
@@ -255,7 +258,7 @@ const CONFIG = {
 };
 </script>
 <!-- Mõlema lehe ühine skriptikood (aeg, vormindamine, DOM-abi, graafikute ühisosa); peab laadima enne põhiskripti -->
-<script src="js/common.js?v=20261109i"></script>
-<script src="js/graafikud.js?v=20261109f"></script>
+<script src="js/common.js?v=20261109j"></script>
+<script src="js/graafikud.js?v=20261109j"></script>
 </body>
 </html>

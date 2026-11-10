@@ -16,12 +16,12 @@
 <meta name="robots" content="noindex, nofollow, noarchive">
 <title>Kauge 32 energia</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="css/common.css?v=20261109i">
+<link rel="stylesheet" href="css/common.css?v=20261109j">
 <!-- Lukk (parooliga kaitse, README „Parooliga kaitse“): ilma defer'ita, et globaal Lukk oleks lehe skriptile olemas ja .app peituks enne esimest joonistamist -->
-<script src="js/lukk.js?v=20261103b"></script>
+<script src="js/lukk.js?v=20261109j"></script>
 <!-- Külastuste loendus (GoatCounter, küpsisteta; README „Külastuste statistika“). Skript on repo sees, sest CSP lubab ainult
      sama saidi skripte; loendus läheb sendBeacon-iga (connect-src). Saadetakse lehe nimi, ekraani laius ja tulek, mitte andmeid. -->
-<script data-goatcounter="https://kauge32.goatcounter.com/count" data-goatcounter-settings='{"no_events":true,"path":"/energy-dashboard.html","title":"Energia"}' async src="js/vendor/goatcounter-count.js?v=c031008-k32b"></script>
+<script data-goatcounter="https://kauge32.goatcounter.com/count" data-goatcounter-settings='{"no_events":true,"path":"/energy-dashboard.html","title":"Energia"}' async src="js/vendor/goatcounter-count.js?v=c031008-k32c"></script>
 <link rel="stylesheet" href="css/energy-dashboard.css?v=20261103">
 <!-- Raamimise kaitse ja teema enne esimest joonistamist (ilma defer'ita) -->
 <script src="js/teema.js?v=20261103b"></script>
@@ -72,6 +72,9 @@
     <p id="banner-message" class="banner__text"></p>
     <button type="button" class="btn" id="retry-button">Proovi uuesti<span id="retry-count" class="btn__count" aria-hidden="true" hidden></span></button>
   </div>
+
+  <!-- Uus versioon (js/common.js jaotis 10, README „Lehe automaatne uuendus“): tühi elav ala, riba luuakse skriptist -->
+  <div id="uuendus" class="uuendus" role="status" aria-live="polite"></div>
 
   <!-- Bento (p 4.3): DOM-järjekord = telefoni järjekord = fookuse järjekord -->
   <main class="layout" id="layout">
@@ -427,7 +430,7 @@ const CONFIG = {
 };
 </script>
 <!-- Mõlema lehe ühine skriptikood (aeg, vormindamine, DOM-abi, graafikute ühisosa); peab laadima enne põhiskripti -->
-<script src="js/common.js?v=20261109i"></script>
-<script src="js/energy-dashboard.js?v=20261109i"></script>
+<script src="js/common.js?v=20261109j"></script>
+<script src="js/energy-dashboard.js?v=20261109j"></script>
 </body>
 </html>

@@ -33,7 +33,7 @@ Elering API → GitHub Actions → hinnad.json → GitHub Pages → index.html b
 | `img/icons.svg` | piktogrammide sprite (`<symbol id="i-…">`), mida kasutavad mõlemad lehed |
 | `js/index.js`, `js/energy-dashboard.js`, `js/graafikud.js` | **lehtede põhiskriptid** (olek, andmete laadimine, arvutused, renderdamine); failides, sest turvapoliitika lubab ainult samalt saidilt laaditud skripte (vt „Turvalisus“). Lehe seaded (`CONFIG`) on HTML-is (vt „Seadete muutmine“) |
 | `js/teema.js` | raamimise kaitse ja teema valik enne esimest joonistamist (kõigil lehtedel `<head>`-is) |
-| `js/common.js` | **mõlema lehe ühine skriptikood**: Tallinna aeg, vormindamine, hinnaarvutuste abifunktsioonid, DOM-abi ja graafikute ühisosa (Chart.js virn, tooltip, pluginad); laaditakse enne lehe põhiskripti, lehepõhine kood (`CONFIG`, olek, renderdamine) jääb HTML-i |
+| `js/common.js` | **mõlema lehe ühine skriptikood**: Tallinna aeg, vormindamine, hinnaarvutuste abifunktsioonid, DOM-abi ja graafikute ühisosa (Chart.js virn, tooltip, pluginad) ning lehe uue versiooni kontroll ja automaatne uuesti laadimine (vt „Lehe automaatne uuendus“); laaditakse enne lehe põhiskripti, lehepõhine kood (`CONFIG`, olek, renderdamine) jääb HTML-i |
 | `js/vendor/chart.umd.min.js` | Chart.js 4.5.1 (MIT, `js/vendor/CHART_LICENSE.md`); graafikud joonistatakse sellega, teek on repo sees, sest CSP lubab skripte ainult samalt saidilt |
 | `js/vendor/goatcounter-count.js` | GoatCounteri loendusskript (`count.js`, ISC, `js/vendor/GOATCOUNTER_LICENSE.md`): anonüümne külastuste statistika, vt „Külastuste statistika“ |
 | `hinnad.json`, `paike.json`, `paevad.json` | GitHub Actionsi kirjutatud andmefailid (`paevad.json`: inverteri päevakokkuvõtted kWh ja €); parooliga kaitstud lehel krüpteeritud ümbrikud |
@@ -43,16 +43,112 @@ Elering API → GitHub Actions → hinnad.json → GitHub Pages → index.html b
 | `firebase.json`, `.firebaserc`, `.github/workflows/firebase-hosting-*.yml` | **Firebase Hosting** (projekt `kauge32-elekter`): GitHub Pagesi kõrval teine koopia samadest failidest (`firebase.json`: ainult lehe failid, HTTP turvapäised, puuduv fail → 404, vt „Turvalisus“). `firebase-hosting-merge.yml` avaldab live-kanalisse pärast iga `main`-i push'i **ja iga andmefailide commit'i**: andmetöövood saadavad pärast õnnestunud push'i sündmuse `repository_dispatch` `andmed-uuendatud`, muutuseta käivitused ei avalda midagi. PR-idele teeb eelvaate `firebase-hosting-pull-request.yml`. Töövood on käsitsi muudetud – ära genereeri neid `firebase init hosting:github`-iga üle (kaoksid käivitajad, õigused ja SHA-d, vt „Turvalisus“) |
 
 CSS-i, `js/*.js`-i või sprite'i muutmisel suurenda HTML-i linkides `?v=` väärtust (GitHub Pages hoiab faile
-vahemälus 10 min).
+vahemälus 10 min); lahti olevad lehed märkavad uut `?v=` väärtust (ja muudetud `CONFIG`-it) ning laadivad end ise
+uuesti, vt „Lehe automaatne uuendus“.
 
 Kõigi kolme lehe päises on sama lehtede navigatsioon **Elektriinfo** / **Energia** / **Graafikud** (aktiivne leht on
 esile tõstetud); elektriinfo lehe päikesekaardil on lisaks link energialehele.
+
+## Lehe automaatne uuendus
+
+Lahti seisev leht (nt seinaekraan) uuendab andmeid ise, aga koodi mitte: varem jäi see vanale versioonile seni, kuni
+keegi lehe uuesti laadis. Nüüd kontrollib iga leht aeg-ajalt, kas serveris on uus versioon, ja laadib end ise uuesti,
+kui seda keegi ei kasuta (`js/common.js` jaotis 10, `startUpdateCheck`).
+
+**Kontroll**
+
+- 1 min pärast avamist, siis iga ~30 min (+ 0–2 min juhuslikult; ka peidetud vahelehel). Lisaks vahelehele naastes ja
+  võrgu taastudes, kui viimasest kontrollist on üle 30 min, ning alati tagasi-/edasi-nupuga lehe vahemälust naastes.
+- Leht loeb oma HTML-i samalt aadressilt vahemälu kinnitusega (`no-cache`: muutmata leht on lühike 304 vastus) ja
+  võrdleb `js/` ja `css/` aadresside `?v=` märke ning `lehe-config` plokki avatud lehe omadega. Energialehel võrreldakse
+  lisaks `index.html`-i `lehe-config` plokki (tariifid).
+- Süntaksiveaga `CONFIG` on viga, mitte uus versioon: lahti olevad lehed jäävad vanale (vt „Seadete muutmine“).
+- Uus versioon on kindel, kui kaks kontrolli vähemalt 2 min vahega näitavad sama; vahetult (≤ 30 s) enne laadimist
+  kontrollitakse veel kord.
+
+**Riba** (`#uuendus` vahetult enne `<main>`-i; ekraanilugejale `role="status"`):
+
+| Olukord | Tekst |
+|---|---|
+| leht laadib end ise | „Uus versioon on saadaval – leht uueneb ise, kui seda mõnda aega ei kasutata.“ |
+| ise ei laadi (vt „Kaitse“ ja „Ära uuenda ise“) | „Uus versioon on saadaval – laadi leht uuesti, kui sobib.“ |
+| uus leht küsiks parooli | „Uus versioon on saadaval – uuesti laadimisel küsib leht parooli.“ |
+
+Nupp **Laadi kohe** laadib lehe kohe (ootamise ajal on nupul „Laadin…“). **Ära uuenda ise** (ainult esimese teksti
+juures) lülitab automaatse laadimise selles vahelehes välja kuni järgmise uue versioonini.
+
+**„Keegi ei kasuta“:** vaheleht on vähemalt 1 min peidus või nähtaval lehel pole 30 min olnud puudutust,
+hiireliigutust, klahvivajutust, kerimisratast ega sisestust **ja** riba on olnud vähemalt 2 min nähtav. Mitte kunagi
+parooliakna, tekstivälja fookuse ega printimise ajal; võrgu puudumisel ei laadita.
+
+**Tühi leht:** kui lehe skript ei käivitu (viga, vigane `CONFIG`, puuduv fail), käivitub kontroll siiski
+(`load`-sündmusel). Parandatud väljalase laaditakse siis kohe pärast kinnitust (ilma jõudeoleku tingimuseta,
+tsüklikaitsega). Sama kehtib, kui `js/lukk.js` puudub, lehe avamine (`Lukk.valmis()`) ebaõnnestub või leht on vähemalt
+2 min järjest tühi ilma parooliaknata (avamine ripub).
+
+**Energialeht ja `index.html`-i tariifid:** energialeht loeb tariifid `index.html`-i `CONFIG`-ist ainult avamisel.
+
+- Kui `index.html`-i `CONFIG` muutub, laadib lahti olev energialeht end uuesti samade reeglitega.
+- Kui avamisel `index.html`-i lugeda ei õnnestunud (varukoopia), laadib leht end uuesti, kui `index.html` on jälle
+  loetav.
+- `index.html`-i lugemise viga kontrolli ajal ei sega lehe enda versiooni kontrolli. Kontroll loeb `index.html`-i sama
+  ajapiiriga kui avamine (5 s): aeglane vastus on viga, mitte uus versioon.
+
+**Valikud jäävad:** päevade vahelehed; perioodid, näitajad ja muud raadionupud, mida muudeti (1 h / 15 min samm
+valitakse laiuse järgi uuesti, kui seda ei muudetud); elektriinfo lehe vaatefilter; id-ga tabelivaated, ka maja
+üldelektri tabel. **Ei jää:** legendis peidetud seeriad, graafikul valitud periood ja energialehe „Kuude kaupa“ plokid.
+Kerimiskoha taastab brauser; kui taastatud valik muutis paigutust, seab leht kerimiskoha uuesti (kui leht on andmete
+laadimise ajal veel lühem, siis lehe kasvades, kuni 2 min või kasutaja esimese tegevuseni).
+
+**Parooliga leht:** vt „Parooliga kaitse“. Kui leht ei avaneks pärast laadimist ise (nt „Lukusta leht“ teises
+vahelehes või „Jäta meelde“ aegub), ise ei laadita ja riba näitab teksti „… küsib leht parooli“.
+
+**Kaitse**
+
+- Kuni 3 katset sama vana versiooni pealt (2 ja 10 min vahega; GitHub Pages võib vana HTML-i anda veel kuni 10 min),
+  siis riba „laadi … kui sobib“ ja uus katse 6 h pärast.
+- Kui katse kirjet ei saa salvestada (sessionStorage), ise ei laadita: riba jääb „laadi … kui sobib“ peale. Ilma
+  sessionStorage'ita on ainult riba.
+- Võrguvead (ka 404, 5xx ja ajapiir: lehe enda HTML 15 s, energialehel `index.html` 5 s) on vaiksed: ainult brauseri
+  konsoolis (`console.info`).
+- `file://` ja teise lehe raami (iframe) all kontrolli pole.
+- Uuesti laadimist ei loendata külastuseks ja `#toggle-goatcounter` eemaldatakse aadressist (vt „Külastuste statistika“).
+
+**Reeglid muutjale**
+
+- Iga väljalase tõstab muudetud faili `?v=` väärtust. Muu HTML-i teksti ega ainult sprite'i (`img/icons.svg`)
+  muutust ei tuvastata – siis tõsta ka `css/common.css?v=`.
+- `src`/`href` on jutumärkides ja `?v=` väärtuses pole `&`-märki; `lehe-config` ei sisalda `<script`, `<link` ega
+  `<!--`; `<noscript>`/`<template>` sees pole skripti- ega stiiliviiteid.
+- `index.html`-i silt jääb täpselt kujule `<script type="text/plain" id="lehe-config">` (energialehe `loadTariffs` ja
+  kontroll loevad seda sama regexiga).
+- Lehe skript on viimane `js/` skript, mis pole ühine (`js/common.js`, `js/lukk.js`, `js/teema.js`, `js/vendor/…`).
+  `js/lukk.js`, `js/common.js` või lehe skripti ümbernimetamine jätab lahti olevad vanad vahelehed uuendusest pimedaks.
+- **`js/common.js`-i ja `js/lukk.js`-i muudatus proovi enne avaldamist kõigil kolmel lehel** (ka parooliga):
+  - `js/common.js`-i tipptaseme viga peatab ka uuenduse.
+  - Lehe skripti viga ja `js/lukk.js`-i viga, mis jätab lehe tühjaks, parandab järgmine väljalase ise (tühja lehe
+    varurežiim). Tühi leht: fail ei laadi, `Lukk.valmis()` lükatakse tagasi või leht on ≥ 2 min tühi ilma parooliaknata.
+  - Kui katkine `js/lukk.js` jätab parooliakna (või selle veateate) ette, ei laadi leht end ise (parooliakna ajal ei
+    laadita kunagi). Siis tuleb lahti olevad vahelehed käsitsi uuesti laadida.
+- Jaotise 10 globaalnimed (`UPDATE_…`, `startUpdateCheck`, `noteUpdateDependency` jt) ei tohi lehtede skriptides
+  korduda (energialeht ainult kutsub `noteUpdateDependency`-t).
+
+**Teada**
+
+- Enne seda versiooni avatud ja siiani lahti olevad vahelehed tuleb üks kord käsitsi uuesti laadida.
+- Graafikute leht uuendab andmeid ainult vahelehele naastes (kood uueneb nagu teistel lehtedel).
+- Kui server annab just laadimise hetkel vealehe (nt 5xx), jääb leht sellele, kuni keegi selle uuesti laadib. Risk on
+  väike: ≤ 30 s enne laadimist kontrollitakse, et server annab kehtiva lehe.
+- Tühi leht (varurežiim) ei saa parooliga lehel vahelehe kirjet pikendada: kui katkine väljalase kestab üle 12 h,
+  küsib parandatud leht parooli.
 
 ## Seadete muutmine
 
 Tasud, tariifid ja maja andmed on `index.html`-is objektis `CONFIG` (iga rea
 juures on selgitus). Muuda ainult numbreid ja tekste; jäta sulud, komad ja
-jutumärgid alles. Muudatus jõuab lehele mõne minuti jooksul.
+jutumärgid alles. Avatavale lehele jõuab muudatus mõne minuti jooksul (GitHub Pages hoiab HTML-i vahemälus kuni
+10 min). Lahti olevatele lehtedele jõuab see tavaliselt tunni jooksul, kui neid ei kasutata (vt „Lehe automaatne
+uuendus“).
 
 `CONFIG` on HTML-is plokis `<script type="text/plain" id="lehe-config">` (energialehel ja graafikute lehel samamoodi
 nende enda seaded). Plokk ei käivitu: lehe skript (`js/<leht>.js`) loeb selle ilma `eval`-ita (`readPageConfig`,
@@ -63,6 +159,11 @@ nende enda seaded). Plokk ei käivitu: lehe skript (`js/<leht>.js`) loeb selle i
 (`loadTariffs`) loevad `index.html`-i `CONFIG`-ist tariifid sama reegliga: iga väärtus tuleb oma kohast (nt
 `CONFIG.hinnad.marginaal`) ja kommentaarid ei sega – rida `// vana marginaal: 0.75` võib rahulikult alles jääda. Kui
 `index.html`-i `CONFIG` on vigane, kasutab töövoog vaiketasusid ja energialeht oma varukoopiat (mõlemad annavad hoiatuse).
+
+Lahti olevad lehed võtavad oma muudetud `CONFIG`-i ise üle. Energialeht loeb `index.html`-i tariifid ainult avamisel,
+aga lahti olev energialeht jälgib ka `index.html`-i `CONFIG`-it ja laadib end selle muutumisel ise uuesti (vt „Lehe
+automaatne uuendus“). Süntaksiveaga `CONFIG`-it (ka `index.html`-i oma) lahti olevad lehed üle ei võta, vaid jäävad
+vanale. Pärast parandust jõuab see neile tavapäraselt.
 
 ## Kui hinnad ei uuene
 
@@ -255,7 +356,8 @@ Solarmani välja nimed ja märgid on failis muutmata; lehed tõlgendavad neid ni
 ## Päikeseenergia (elektriinfo lehe päikesekaart)
 
 - **„Eile“ rida** kaardi põhjas (`paevad.json`, `CONFIG.paike.paevadeFail`): eilne aku tulu (`batteryGainEur`), maja
-  makstud hind (võrgu netokulu / maja tarbimine) ja keskmine ostuhind s/kWh ning link energialehe perioodivalikule.
+  makstud hind (võrgu netokulu / maja tarbimine) ja keskmine ostuhind s/kWh (ilma kuutasudeta: „Eile (inverter, ilma
+  kuutasudeta)“) ning link energialehe perioodivalikule.
   Kirje või faili puudumisel on rida peidetud.
 - Kõik päikese, maja tarbimise ja aku numbrid on **mõõtmised** failist `paike.json` (vt allpool
   „Energia töölaud“). Mudelit ega prognoosi ei kuvata: kogused on summad kuni viimase mõõtmiseni
@@ -408,7 +510,9 @@ Solarmani välja nimed ja märgid on failis muutmata; lehed tõlgendavad neid ni
     WAIT_RULE-i lävedeta: õhtul „Võimalusel oota homseni“ (homne odavaim 3 h aken on koos tasudega odavam kui praegu
     ja ka järgmise 24 h odavaim 2 h aken `best2h` on homme; kui `best2h` on täna õhtul, ütleb hero selle akna, et mitte
     vaielda vastu planeerijale ja faktile „Odavaim 2 h aken“), muidu „Võimalusel oota“, kui `best2h` algab hiljem, või
-    börsihinna järgi järgmine soodsam periood.
+    börsihinna järgi järgmine soodsam periood. „N% odavam kui praegu“ näidatakse kõigis harudes ainult siis, kui akna
+    lõpphind on > 0. Kui hero ütleb „Väga soodne aeg tarbimiseks“ ja praegu algav aken pole koos tasudega praegusest
+    hinnast üle 0,1 s/kWh kallim, ei näita planeerija seda akent „Väldi võimalusel“ all.
   - **Energialeht:** ootereegel enne „odav hind“ haru, kui hind pole kallis („Oota“), ja „Lae akut võrgust“ lükkub
     edasi, kui odavam aken algab enne hinnatippu („… Lae akut siis.“); kui aken algab pärast tippu, jääb „Lae akut“
     (elektriinfo leht võib samal ajal öelda „Võimalusel oota“ – see käib tarbimise kohta). Kallis hind: aku kasutus,
@@ -458,7 +562,8 @@ Solarmani välja nimed ja märgid on failis muutmata; lehed tõlgendavad neid ni
   sisestatud: praegune `CONFIG.hinnad.kuutasu`, varasemad perioodid `TASUDE_AJALUGU["kuutasu"]` (summad on veel 0 –
   täida arvete järgi). Võrgu kuu-, läbilaskevõime- ja kasutusvõimsuse tasu lisatakse kuu €-le alati (punkt „Võrgu fikseeritud tasud“).
   Jooksval kuul ja „aasta varem sama ajani“ summas lisatakse kuutasudest sama osa kuust, mis on möödunud. Öö/päeva
-  jaotuses (`eurOo`, `eurPaev`) kuutasusid pole. Kui arve on järjepidevalt suurem, sisesta kuutasu.
+  jaotuses (`eurOo`, `eurPaev`) kuutasusid pole. Kui arve on järjepidevalt suurem, sisesta kuutasu. Energialeht
+  nimetab selle kuutasude loetelus „võimalik muu kuutasu“ (kuu summast seda eraldi ei tuletata).
 
 ## Energia töölaud (`energy-dashboard.html`)
 
@@ -503,6 +608,8 @@ Elering API      → GitHub Actions (uuenda-hinnad.yml) → hinnad.json ┴→ G
   mõlemal lehel kehtib sama lävi. Vanema mõõtmise korral on energiavoo graafika tuhm ja liikumatu (tekst jääb täiskontrastiga) ja pealkirjas on
   mõõtmise kellaaeg („Energiavoog kell 14:59“). Kui `index.html`-i ei õnnestu lugeda, kasutatakse
   energialehe varukoopiat ja bänneris on vastav teade; erinevus `hinnad.json`-i `meta.tariffs`-iga kuvatakse samuti.
+  Tariifid loetakse avamisel. Kui `index.html`-i `CONFIG` hiljem muutub (või selle lugemine avamisel ebaõnnestus),
+  laadib lahti olev energialeht end uuesti (vt „Lehe automaatne uuendus“).
 - Tänased kogused on inverteri 15-min mõõtmiste summad kuni viimase mõõtmiseni („Täna kuni 14:59
   (inverter)“; pooleli kaader ainult `lastUpdateTime`-ni); arve alus (ost võrgust Estfeedi arvestist) on elektriinfo lehel. „Päikesest kaetud“ on sama
   mõõdik mis elektriinfo lehel.
@@ -583,7 +690,8 @@ Elering API      → GitHub Actions (uuenda-hinnad.yml) → hinnad.json ┴→ G
   - **Maja energiahind täna (ilma kuutasudeta):** keskmine ostuhind (maja tarbimine perioodi lõpphinnaga) → maja maksis
     (võrgu netokulu / maja tarbimine) ja „x % odavam“. Kõrval aku laetuse muutus, sest päeva lõpuks täitunud või
     tühjenenud aku mõjutab võrdlust. Keskmises ostuhinnas ja „maja maksis“ pole fikseeritud kuutasusid (ka aasta vaate
-    võrguarvesti kuudel); pealkirjas ja päevade tabelivaate kohal on see märgitud.
+    võrguarvesti kuudel); see on märgitud pealkirjas, päevade/kuude graafiku legendis, valitud päeva/kuu real ja
+    graafiku nimes ning päevade tabelivaate kohal.
 
 - **Trendid** (kaart lehe lõpus): kuni 24 kuud (`hinnad.json` `majaElekter`: jooksev aasta ja aasta varem samad kuud)
   neljal paneelil ühise kuuteljega, kaksiktelge pole: **kWh** – ost võrgust kuus (võrguarvesti) öö/päeva jaotusega
@@ -628,7 +736,7 @@ väärtustele. **Vähendatud liikumise** eelistusega (`prefers-reduced-motion`) 
 | Aku | `paike.json` `frames`, `realTime`; `paevad.json` | plaadid: laetus praegu (ja laeb / tühjeneb / ootel, < 0,2 kW = ootel), laetud ja tühjendatud kWh valitud päeval (täna või eile; laetuse algus → lõpp, suurim võimsus), aku tulu eile ja 30 päeva; graafikud: laetus % ja laadimine (üles) / tühjenemine (alla) kW 15 min kaupa – kaks eraldi graafikut, et ühelgi poleks kahte y-telge |
 | Päevad | `paevad.json` | päike + ost võrgust virnas (sisse tulnud energia) ja maja tarbimine joonena, 30 või 90 päeva; tooltipis aku tulu |
 | Tarbimine kellaaja järgi | `paevad.json` `loadH` | viimase 14 päeva keskmine kW kellatunni järgi, tööpäev vs puhkepäev (nädalavahetus ja riigipühad) |
-| Maja üldelekter kuude kaupa | `hinnad.json` `data.majaElekter` | viimased 12 kuud arvesti järgi (kWh või €) ja aasta varasem sama kuu; pooleli kuu on heledam |
+| Maja üldelekter kuude kaupa | `hinnad.json` `data.majaElekter` | viimased 12 kuud arvesti järgi (kWh või €; € koos fikseeritud kuutasudega, hinnang) ja aasta varasem sama kuu; pooleli kuu on heledam |
 
 - **Loetavus:** iga graafiku ühik on telje kohal (s/kWh, kW, %, kWh, €); hinnagraafikul on otsesildid (praegu, kalleim,
   odavaim ja keskmine joone otsas, kattuv madalama prioriteediga silt jääb ära); 15-min graafikute ajatelg ainult
@@ -664,8 +772,16 @@ sest see on avalikus repo's niikuinii.
 3. Ava leht: see küsib parooli. Tuletatud võti (mitte parool) on **mitte-eksporditav** `CryptoKey` ja seda hoitakse
    brauseri IndexedDB-s (`kauge32-lukk`): „Jäta meelde selles seadmes“ korral püsivalt, märkimata ainult selle
    vahelehe jaoks (vahelehe sulgemisel ei saa kirjet enam kasutada ja see kustub järgmisel avamisel, hiljemalt 12 h
-   pärast viimast kasutust). Jaluse „Lukusta leht“ unustab kõik selle brauseri võtmed kohe. Varasem
-   `localStorage`/`sessionStorage`-is hoitud võti kolitakse automaatselt üle ja kustutatakse.
+   pärast viimast laadimist). Jaluse „Lukusta leht“ unustab kõik selle brauseri võtmed kohe. Varasem
+   `localStorage`/`sessionStorage`-is hoitud võti kolitakse automaatselt üle ja kustutatakse. Vahetult enne
+   automaatset uuesti laadimist (uus versioon, vt „Lehe automaatne uuendus“) pikendab lahti olev vaheleht oma
+   olemasolevat kirjet 12 h peale. Puuduvat kirjet ei looda: kui mõnes vahelehes vajutati „Lukusta leht“ või sama
+   brauseri teine avamine kustutas aegunud kirje, ei laadi leht end ise uuesti, vaid näitab riba. „Jäta meelde“
+   30 päeva ei pikene. Enne laadimist kontrollitakse värsket `lukk.json`-i (15 s): parooli vahetus → ei laadi;
+   laadimise viga või ajapiir → proovib 5 min pärast uuesti.
+
+Kui `lukk.json`-i laadimine avamisel ebaõnnestub või see ei vasta 15 s jooksul, proovib leht iga 30 s järel ise uuesti
+(nupp „Proovi uuesti“ kohe). Kui fail taas laadib ja leht küsib parooli, on fookus paroolil.
 
 Kuni `lukk.json`-i pole, töötab leht nagu enne (parooli ei küsita) ja loeb tavatekstis andmefaile. Kui `lukk.json` on
 olemas, võtab leht samalt saidilt vastu **ainult krüpteeritud** andmefaile (`Lukk.fetch`): tavatekstis fail annab selle
@@ -713,7 +829,7 @@ lihtsalt kustutada, jääb töövoog veaga seisma (krüpteeritud faili ei saa av
   (`tuleta_sool`: HMAC-SHA256(PBKDF2(uus parool, vana sool), …)) – mõlemad töövood arvutavad sama soola, seega nende
   samaaegsed commit'id ei lähe konflikti; vana parooli uuesti kasutamine ei anna sama `lukk.json`-i. Avatud leht märkab
   uut soola ja küsib uue parooli („Parool on vahetatud“). „Jäta meelde“ võti kehtib 30 päeva salvestamisest (ei pikene
-  kasutamisega), vahelehe võti 12 h viimasest kasutusest. Ebaturvalisel ühendusel (http:// mitte-localhost aadressil, kus
+  kasutamisega), vahelehe võti 12 h viimasest laadimisest (ka automaatsest). Ebaturvalisel ühendusel (http:// mitte-localhost aadressil, kus
   brauser WebCrypto-t ei luba) lukus leht ei avane ja näitab teadet HTTPS-i kohta.
 - Parooli saab proovida piiramatult (failid on avalikud), seega loeb parooli pikkus: PBKDF2 600 000 iteratsiooni
   teeb ühe katse kalliks, aga lühikese sõnastikusõna murrab see siiski. Lehekülg ise katseid ei piira ega saagi piirata.
@@ -742,22 +858,27 @@ haldajal). See ei kasuta küpsiseid ega püsivaid kasutaja-ID-sid ja brauserisse
 - **Sündmused** (parooliga lehel, `js/lukk.js` → `js/common.js` `countEvent`): `lukk-kysitud` „Parooli vaade“ (avamisvaade
   näidati) ja `lukk-avatud` „Parool sisestatud“ (õige parool). Salvestatud võtmega avamine sündmust ei tee. Nende suhe
   näitab, kui paljud parooli vaatest edasi jõuavad.
-- **Ei loendata:** lehe andmepäringuid (hinnad iga 10 min, energialeht iga 5 min) ega minutitikki – lahti seisev leht on
-  üks avamine. Lehe andmeid (hinnad, kWh, eurod) ei saadeta kunagi.
+- **Ei loendata:** lehe andmepäringuid (hinnad iga 10 min, energialeht iga 5 min) ega minutitikki (lahti seisev leht on
+  üks avamine) ega lehe uuesti laadimist uue versiooni tõttu (automaatne või „Laadi kohe“). Lehe andmeid (hinnad, kWh,
+  eurod) ei saadeta kunagi.
 
 **Kuidas numbreid lugeda:** GoatCounteri unikaalsed külastused on seansid (mitte inimesed); reklaamiblokeerijaga
 brauserid ei loe, seega on arvud alammäär. `localhost`-i ja `file://` avamisi ei loendata (testimine).
 
 **Oma külastused välja:** ava selles brauseris leht aadressiga, mille lõpus on `#toggle-goatcounter` (nt
 `…/kauge32elekter/#toggle-goatcounter`); teade kinnitab, et loendus on selles brauseris välja lülitatud. Sama aadress
-lülitab selle tagasi sisse.
+lülitab selle tagasi sisse. Lehe automaatne uuesti laadimine eemaldab `#toggle-goatcounter` aadressist ja jätab lüliti
+vahele, nii et loendus ei lülitu ise ümber ja teade ei peata seinaekraani.
 
 **Tehniliselt:** skript `js/vendor/goatcounter-count.js` (GoatCounteri `count.js`, commit `c031008`) on repo sees, sest
 CSP lubab skripte ainult samalt saidilt; see laaditakse `async`, nii et lehe joonistamist ei pidurda. Loendus läheb
 `navigator.sendBeacon`-iga aadressile `https://kauge32.goatcounter.com/count` (CSP `connect-src`); pildipõhine
-varuvariant on CSP `img-src`-iga tahtlikult blokeeritud. Failis on kaks Kauge 32 muudatust: `q: ''` (päringustringi ei
-saadeta) ja `localStorage` on `try`/`catch`-is (keelatud salvestusruumiga brauser ei viska viga); märgitud faili alguses. Uuendamisel vaheta fail GoatCounteri repo `public/count.js`-iga, korda neid muudatusi,
-uuenda `js/vendor/GOATCOUNTER_LICENSE.md`-i commit ja HTML-i linkides `?v=` (praegu `c031008-k32b`).
+varuvariant on CSP `img-src`-iga tahtlikult blokeeritud. Failis on kolm Kauge 32 muudatust: `q: ''` (päringustringi ei
+saadeta), `localStorage` on `try`/`catch`-is (keelatud salvestusruumiga brauser ei viska viga) ja uuesti laadimise märk:
+kui sessionStorage'is on `kauge32_uuendus_loendus` (`js/common.js` seab selle vahetult enne uue versiooni laadimist) ja
+see on alla 60 s vana, seab skript `no_onload` (avamist ei loendata) ja jätab `#toggle-goatcounter` lüliti vahele; märk
+kustutatakse esimesel lugemisel. Muudatused on märgitud faili alguses. Uuendamisel vaheta fail GoatCounteri repo `public/count.js`-iga, korda neid muudatusi,
+uuenda `js/vendor/GOATCOUNTER_LICENSE.md`-i commit ja HTML-i linkides `?v=` (praegu `c031008-k32c`).
 
 ## Otsingumootorid
 
@@ -876,6 +997,6 @@ tegemisega.
 
 ## Versioon ja muudatuste ajalugu
 
-- Praegune versioon: **v3.11.0** (`APP_VERSION` failis `js/index.js`), energialehel **v2.11.0**
-  (`js/energy-dashboard.js`), graafikute lehel **v1.5.1** (`js/graafikud.js`).
+- Praegune versioon: **v3.12.0** (`APP_VERSION` failis `js/index.js`), energialehel **v2.12.0**
+  (`js/energy-dashboard.js`), graafikute lehel **v1.6.0** (`js/graafikud.js`).
 - Üksikasjalik ülevaade UI/UX muudatustest, komponentide klassidest ja arhitektuurireeglitest (sh juhised Claude AI-le) asub failis [CHANGELOG.md](CHANGELOG.md).
