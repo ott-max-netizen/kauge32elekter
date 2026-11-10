@@ -9,7 +9,7 @@ const CONFIG = readPageConfig();
 
 /* Tehnilised konstandid — neid ei ole tavakasutuses vaja muuta. Mõlema lehe ühised (TIME_ZONE, API_URL,
    MINUTE_MS, HOUR_MS, DAY_MS) on failis js/common.js. */
-const APP_VERSION = '3.11.0';
+const APP_VERSION = '3.12.0';
 const API_TIMEOUT_MS = 20000;
 const PLANNER_DURATIONS = [60, 120, 180, 240, 300, 360]; // minutit
 const MAX_PERIOD_MINUTES = 60;   // pikim lubatud hinnaperiood
@@ -18,6 +18,7 @@ const FAST_REFRESH_MS = 2 * MINUTE_MS;         // kontrolli samm, kuni homsed hi
 const FAST_REFRESH_WINDOW_MS = 90 * MINUTE_MS; // kui kaua pärast avaldamist tihedalt kontrollitakse
 const REFRESH_COOLDOWN_MS = 15 * 1000;         // „Värskenda“ / „Proovi uuesti“ vähim vahe kahe laadimise vahel
 const ESTFEED_LAG_NOTICE_MIN = 120;            // kui Estfeedi viimane mõõtmine on vanem, näidatakse selle vanust
+const AVOID_NOW_MARGIN_CENTS = 0.1;   // „Väga soodne“ ajal: praegu algav aken, mis on praegusest hinnast kallim kuni nii palju (s/kWh koos tasudega), pole „Väldi“
 
 /* ==========================================================================
    2. Olek — hoitakse ainult JavaScripti mälus
@@ -44,6 +45,7 @@ const state = {
   error: null,            // eestikeelne veateade, kui andmeid pole üldse õnnestunud laadida
   refreshFailed: false,   // uuendamine ebaõnnestus, kuvatakse varasemaid andmeid
   derived: null,          // viimati arvutatud tuletatud andmed (vt derive)
+  recommendation: null,   // viimane hero soovitus (renderAll); renderPlanner ei kutsu „Väga soodne“ ajal praegust akent vältima
   chartKey: '',           // millise sisendiga graafik viimati joonistati
   chartBestKey: '',       // graafikule joonistatud odavaima akna algus-lõpp (uuendatakse paigas)
   solarRaw: null,         // paike.json-i data (inverteri mõõtmised), vt buildSolarView
@@ -1158,12 +1160,12 @@ function buildRecommendation(d, a) {
   // Börsihind ≤ 0: väga soodne (ka siis, kui tänane keskmine on veel madalam), v.a kui koos tasudega tuleb odavam aeg
   if (a.price <= 0) {
     if (wait) return waitRec('Börsihind on null või negatiivne');
-    return { title: 'Väga soodne aeg tarbimiseks', text: 'Börsihind on praegu null või negatiivne.', usedKey: null };
+    return { title: 'Väga soodne aeg tarbimiseks', text: 'Börsihind on praegu null või negatiivne.', usedKey: null, veryCheap: true };
   }
   if (a.isBelowAverage) {
     if (wait) return waitRec('Börsihind on alla tänase keskmise');
     if (a.lowRank <= 0.2) {
-      return { title: 'Väga soodne aeg tarbimiseks', text: 'Praegune börsihind on üks tänase päeva madalamaid.', usedKey: null };
+      return { title: 'Väga soodne aeg tarbimiseks', text: 'Praegune börsihind on üks tänase päeva madalamaid.', usedKey: null, veryCheap: true };
     }
     if (a.cheapUntil && !a.cheapUntilOpen) {
       return {
@@ -1187,16 +1189,16 @@ function buildRecommendation(d, a) {
   // on täna õhtul, ütleb soovitus allpool sama akna („Võimalusel oota“, best2h)
   const tomorrowBest = best2h && dayWord(best2h.start, now) === 'homme';
   if (hasTomorrow && eveningNow && tomorrowBest && startsLater(best3h) && dayWord(best3h.start, now) === 'homme' && nowFinal > 0 && best3h.avgFinal < nowFinal) {
-    const cheaper = `${formatPercentAbs((nowFinal - best3h.avgFinal) / nowFinal * 100)} odavam kui praegu`;
+    const cheaper = best3h.avgFinal > 0 ? `, ${formatPercentAbs((nowFinal - best3h.avgFinal) / nowFinal * 100)} odavam kui praegu` : '';
     return {
       title: 'Võimalusel oota homseni',
-      text: `Börsihind on praegu üle tänase keskmise. ${describeRange(best3h.start, best3h.end, now)} on hind koos tasudega keskmiselt ${formatCents(best3h.avgFinal)}, ${cheaper}.`,
+      text: `Börsihind on praegu üle tänase keskmise. ${describeRange(best3h.start, best3h.end, now)} on hind koos tasudega keskmiselt ${formatCents(best3h.avgFinal)}${cheaper}.`,
       usedKey: null
     };
   }
   if (startsLater(best2h)) {
     // best2h on järgmise 24 h ODAVAIM 2-tunnine aken (mitte esimene praegusest odavam), seega öeldakse seda nii
-    const cheaper = nowFinal > 0 && best2h.avgFinal < nowFinal
+    const cheaper = nowFinal > 0 && best2h.avgFinal > 0 && best2h.avgFinal < nowFinal
       ? `, ${formatPercentAbs((nowFinal - best2h.avgFinal) / nowFinal * 100)} odavam kui praegu` : '';
     return {
       title: 'Võimalusel oota',
@@ -2204,7 +2206,14 @@ function renderPlanner(d) {
       reference ? el('p', { class: 'plan__saving', text: describeSaving(best.avgFinal, reference.avg, labelNom, labelGen) }) : null,
       el('p', { class: 'plan__tip', text: tip })
     ]));
-    if (worst && worst.start.getTime() !== best.start.getTime()) {
+    // Hero ütleb „Väga soodne aeg tarbimiseks“ (buildRecommendation, veryCheap): praegu algavat akent ei kutsuta siis vältima, kui
+    // see pole koos tasudega praegusest hinnast üle AVOID_NOW_MARGIN_CENTS kallim (tasase või peaaegu tasase börsihinnaga päeval on
+    // see lihtsalt üks võrdselt kallitest); tõeline tipp kohe praeguse odava hetke järel jääb näha
+    const nowFinal = d.current ? d.current.finalCentsKwh : null;
+    const hideAvoid = Boolean(state.recommendation && state.recommendation.veryCheap) && Boolean(worst)
+      && worst.start.getTime() <= nowMs + MINUTE_MS && nowFinal != null
+      && roundCents(worst.avgFinal - nowFinal) <= AVOID_NOW_MARGIN_CENTS;
+    if (worst && worst.start.getTime() !== best.start.getTime() && !hideAvoid) {
       nodes.push(el('p', { class: 'plan__avoid', 'data-testid': 'plan-avoid' }, [
         'Väldi võimalusel: ',
         el('strong', { text: describeRange(worst.start, worst.end, d.now) }),
@@ -2562,7 +2571,7 @@ function renderSolarYesterday(d) {
       market != null ? ` (keskmine ostuhind ${numberFormat.d2.format(market)}${diff != null && Math.abs(diff) >= 0.005 ? `, ${formatPercentAbs(diff * 100)} ${diff > 0 ? 'odavam' : 'kallim'}` : ''})` : '']);
   }
   host.replaceChildren(
-    el('span', { class: 'sun-card__yesterday-label', text: 'Eile (inverter): ' }),
+    el('span', { class: 'sun-card__yesterday-label', text: 'Eile (inverter, ilma kuutasudeta): ' }),
     ...parts.flatMap((part, i) => (i ? [' · ', ...part] : part)),
     el('a', { class: 'link-btn', href: 'energy-dashboard.html#section-results', text: 'Perioodid energialehel (eile, 7 päeva, kuud, aastad)' })
   );
@@ -3001,7 +3010,7 @@ function renderBuildingElectricity() {
     el('p', {
       class: 'building-note',
       text: data.source === 'estfeed'
-        ? 'Eurod on hinnang (≈), arvutatud ostetud kWh-st, börsihinnast ja vastaval ajal kehtinud tasudest koos KM-ga; koos võrgu kuutasu, läbilaskevõime- ja kasutusvõimsuse tasuga (peakaitse ja kuu suurima võimsuse järgi, sel ajal kehtinud võrgupaketiga). Tegelik arve võib erineda.'
+        ? 'Eurod on hinnang (≈), arvutatud ostetud kWh-st, börsihinnast ja vastaval ajal kehtinud tasudest koos KM-ga; koos võrgu kuutasu, läbilaskevõime- ja kasutusvõimsuse tasuga (peakaitse ja kuu suurima võimsuse järgi, sel ajal kehtinud võrgupaketiga; kasutusvõimsuse tasu alates 05/2026) ning võimaliku muu kuutasuga. Tegelik arve võib erineda.'
         : 'Eurod on haldaja sisestatud arvesummad. Võrguarvesti (Estfeed) andmeid ei õnnestunud laadida.'
     }),
     table
@@ -3014,6 +3023,7 @@ function renderAll() {
   state.derived = d;
   const a = d.current ? analyzeNow(d) : null;
   const rec = a ? buildRecommendation(d, a) : null;
+  state.recommendation = rec;
   renderStatus();
   renderCurrentPrice(d, a, rec);
   renderPlanner(d);

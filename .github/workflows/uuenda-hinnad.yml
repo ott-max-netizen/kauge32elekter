@@ -943,7 +943,9 @@ jobs:
               if cutoff_ts is not None and todate_kwh > 0 and kuutasu > 0:
                   todate_eur += kuutasu * min(1.0, max(0, cutoff_ts - t0) / month_s)
 
-              # Öö/päeva jaotus (kuutasu jääb jaotusest välja: see pole tariifiajaga seotud)
+              # Öö/päeva jaotus (kuutasu jääb jaotusest välja: see pole tariifiajaga seotud). Andmeleping: eurOo + eurPaev = eur − kuutasu
+              # (kuutasu möödunud osa, vt eespool); energialeht (js/energy-dashboard.js normalizeMaja) tuletab kuu kuutasud = eur − eurOo
+              # − eurPaev ning ostuhind ja „maja maksis“ on ilma kuutasudeta. Kuutasu jaotusesse lisamisel muuda ka normalizeMaja-t ja suurenda CALC_VERSION-it.
               rec = {
                   "kuu": f"{year:04d}-{month:02d}",
                   "kwh": round(total_kwh, 2),

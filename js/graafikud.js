@@ -7,7 +7,7 @@
 
 const CONFIG = readPageConfig();
 
-const APP_VERSION = '1.5.1';
+const APP_VERSION = '1.6.0';
 const BATTERY_IDLE_KW = 0.2;     // väiksem aku võimsus = „ootel“ (hoidevool), nagu energialehel
 const TARIFF_KEYS = ['marginaal', 'vorgutasuPaev', 'vorgutasuOo', 'taastuvenergiaTasu', 'aktsiis', 'kaibemaks', 'algus', 'lopp'];
 const MAX_PERIOD_MINUTES = 60;   // common.js nõue (pikim hinnaperiood)
@@ -907,7 +907,7 @@ function drawMonths() {
   const partial = months.map(m => Boolean(m.cur && m.cur.complete === false));
   byId('months-note').textContent = partial.some(Boolean) ? 'viimane kuu on pooleli' : '';
   const lastM = months[months.length - 1];
-  byId('c-months').setAttribute('aria-label', `Maja üldelekter, viimased 12 kuud (${metric === 'eur' ? 'eurodes' : 'kWh'}): ${labels[11]} ${value(lastM.cur) != null ? fmt(value(lastM.cur)) : '—'}${value(lastM.prev) != null ? `, aasta varem ${fmt(value(lastM.prev))}` : ''}.`);
+  byId('c-months').setAttribute('aria-label', `Maja üldelekter, viimased 12 kuud (${metric === 'eur' ? 'eurodes, koos kuutasudega' : 'kWh'}): ${labels[11]} ${value(lastM.cur) != null ? fmt(value(lastM.cur)) : '—'}${value(lastM.prev) != null ? `, aasta varem ${fmt(value(lastM.prev))}` : ''}.`);
   upsert('c-months', {
     type: 'bar',
     plugins: [UNIT_PLUGIN],

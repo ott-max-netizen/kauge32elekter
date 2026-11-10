@@ -14,6 +14,11 @@
  * tallinnLocalToUtc, getPriceCategory ja init. Lisaks describeRange(start, end, now) ja calculateFinalPrice(spotExVat, date)
  * → { tariff: 'oo' | 'paev', total, … } (kasutab ainult waitWindowText, mida graafikute leht ei kutsu).
  *
+ * start() käivitab ka lehe uue versiooni kontrolli (jaotis 10: automaatne uuesti laadimine, kui lehte ei kasutata); kui lehe
+ * skript start()-ini ei jõua, käivitab kontrolli load-sündmus varurežiimis (tühi leht; samuti, kui Lukk.valmis() lükatakse
+ * tagasi või ripub). Energialeht teatab noteUpdateDependency kaudu, et kasutab index.html-i CONFIG-it. Jaotise 10 globaalid
+ * ei tohi lehtede skriptides korduda.
+ *
  * Muutmisel suurenda kõigi HTML-failide lingis `js/common.js?v=` väärtust (GitHub Pages hoiab faile vahemälus 10 min).
  */
 'use strict';
@@ -1516,9 +1521,21 @@ const K_PLUGINS = [kBarSize, kBestWindow, kSelected, kThresholds, kMissing, kYea
 /** Teemanupu nimi (i-contrast, p 8 ja 9.1): eelistus, mitte efektiivne teema. */
 const THEME_LABELS = { auto: 'Teema: automaatne', dark: 'Teema: tume', light: 'Teema: hele' };
 
-/** Parooliga kaitstud lehel (lukk.json) käivitub init() alles pärast parooli sisestamist (js/lukk.js). */
+/** Parooliga kaitstud lehel (lukk.json) käivitub init() alles pärast parooli sisestamist (js/lukk.js). Uue versiooni kontroll
+ *  (jaotis 10) käivitub enne seda: ka rippuva init-i, puuduva js/lukk.js-i või ebaõnnestunud avamisega (Lukk.valmis() lükati
+ *  tagasi või ripub; leht jääb tühjaks) lehe parandab järgmine väljalase. */
 function start() {
-  Lukk.valmis().then(init, error => console.error('Lukk: lehe avamine ebaõnnestus', error));
+  const update = startUpdateCheck(typeof Lukk === 'undefined');   // ilma js/lukk.js-ita on leht tühi: varurežiim
+  if (typeof Lukk === 'undefined') {
+    console.error('Lukk: js/lukk.js ei laadinud – lehte ei avata');
+    return;
+  }
+  let opening;
+  try { opening = Promise.resolve(Lukk.valmis()); } catch (error) { opening = Promise.reject(error); }
+  update.ready(opening.then(init, error => {
+    console.error('Lukk: lehe avamine ebaõnnestus', error);
+    update.rescue();   // leht jääb tühjaks (html.lukk-ootel): kontroll varurežiimi
+  }));
 }
 
 /* ==========================================================================
@@ -1544,3 +1561,552 @@ document.addEventListener('k32:lukk', event => {
   const title = COUNT_EVENTS[event.detail];
   if (title) countEvent(`lukk-${event.detail}`, title);
 });
+
+/* ==========================================================================
+   10. Lehe uus versioon: kontroll ja automaatne uuesti laadimine (README „Lehe automaatne uuendus“)
+   Lahti seisev leht laeb andmeid fetch'iga, aga koodi mitte. Siin loetakse aeg-ajalt lehe enda HTML (vahemälu kinnitusega
+   no-cache, sama aadress, mille location.reload() hiljem saab) ja võrreldakse sama saidi skriptide ja stiilide aadresse
+   (?v= märgid) ning lehe-config plokki avatud lehe omadega; süntaksiveaga CONFIG on viga, mitte uus versioon. Energialehel
+   lisandub index.html-i lehe-config (tariifid loetakse ainult avamisel, noteUpdateDependency). Uus versioon kinnitatakse teise
+   kontrolliga ≥ 2 min hiljem; leht laaditakse uuesti, kui seda keegi ei kasuta, ja vahetult enne seda kontrollitakse veel kord.
+   Seni on nähtav riba „Laadi kohe“ / „Ära uuenda ise“. Kui lehe skript start()-ini ei jõudnud (tipptaseme viga, vigane CONFIG,
+   fail ei laadinud), käivitab kontrolli load-sündmus varurežiimis: tühi leht laaditakse kohe pärast kinnitust (tsüklikaitsega).
+   Varurežiimi läheb kontroll ka siis, kui js/lukk.js puudub, Lukk.valmis() lükatakse tagasi või leht on blankMs järjest tühi
+   (html.lukk-ootel ilma avamisvaateta: avamine ripub). Võrguvead on vaiksed (ainult console.info).
+   ========================================================================== */
+const UPDATE_CHECK = Object.freeze({
+  firstMs: MINUTE_MS,               // esimene kontroll pärast avamist (kohe, kui vahemälust tuli vana HTML)
+  everyMs: 30 * MINUTE_MS,          // edasi iga 30 min: väljalase jõuab lahtistele lehtedele ~½ h jooksul
+  jitterMs: 2 * MINUTE_MS,          // + 0–2 min juhuslikult (vahelehed ei päri korraga)
+  confirmMs: 2 * MINUTE_MS,         // uus allkiri kinnitatakse teise kontrolliga ≥ 2 min hiljem (avaldamine, CDN-i sõlmed, tagasivõtmine)
+  idleMs: 30 * MINUTE_MS,           // nähtav leht: nii kaua ilma kasutaja tegevuseta = „keegi ei kasuta“
+  hiddenMs: MINUTE_MS,              // peidetud vaheleht: nii kaua peidus = „keegi ei kasuta“
+  noticeMs: 2 * MINUTE_MS,          // nähtaval lehel on riba „leht uueneb ise“ enne laadimist vähemalt nii kaua näha (WCAG 2.2.1)
+  tickMs: 30 * 1000,                // automaatne režiim: tingimuste kontroll (ilma võrgu ja IndexedDB-ta)
+  timeoutMs: 15 * 1000,             // lehe enda HTML-i päringu ajapiir (lisasõltuvusel lehe skripti oma, noteUpdateDependency)
+  blankMs: 2 * MINUTE_MS,           // tavarežiim: leht nii kaua järjest tühi (html.lukk-ootel, #lukk peidus) = avamine ripub → varurežiim
+  lockMs: 20 * 1000,                // Lukk.taastub ülempiir (js/lukk.js-i enda lukk.json-i ajapiir on 15 s): rippuv päring ei peata kontrolli
+  freshMs: 30 * 1000,               // automaatsele laadimisele eelneb nii värske õnnestunud kontroll (server annab kehtiva lehe)
+  freshRetryMs: 5 * MINUTE_MS,      // ebaõnnestunud värskuskontroll või lukk.json-i viga: järgmine automaatne katse alles nii kaua pärast
+  onlineGapMs: MINUTE_MS,           // online-sündmus: kontroll mitte sagedamini (vilkuv ühendus)
+  restoreMs: 2 * MINUTE_MS,         // valikud, kerimiskoht ja tegevuse aeg võetakse ainult nii värskest kirjest (üks kord)
+  restoreEveryMs: 5 * 1000,         // hiljem tekkiv element (indexi building-table): korduskatse …
+  restoreTries: 12,                 // … kuni 1 min
+  retryWaitMs: [2 * MINUTE_MS, 10 * MINUTE_MS],   // sama vana versiooni kordus pärast 1. ja 2. ebaõnnestunud laadimist
+  maxAttempts: 3,                   // siis riba „laadi … kui sobib“ (GitHub Pages hoiab HTML-i vahemälus kuni 10 min) …
+  slowRetryMs: 6 * 60 * MINUTE_MS,  // … ja uus katse alles 6 h pärast viimast
+  movePx: 2                         // pointermove on tegevus ainult ≥ 2 px liikumisel
+});
+const UPDATE_STORE = `kauge32_uuendus:${location.pathname}`;      // sessionStorage { vana, katseid, aeg, tegevus, valikud, kerimine }
+const UPDATE_OFF = `kauge32_uuendus_keeld:${location.pathname}`;  // sessionStorage: „Ära uuenda ise“ selle sihtversiooni jaoks
+const UPDATE_COUNT_SKIP = 'kauge32_uuendus_loendus';              // sessionStorage: aeg (ms); loendusskript ei loenda järgmist avamist
+const UPDATE_ASSET = /^(?:js|css)\//;                             // allkirjas ainult sama saidi failid (mitte laienduste/tõlkija omad)
+const UPDATE_SHARED_SCRIPT = /^js\/(?:vendor\/|(?:common|lukk|teema)\.js$)/;   // ühised skriptid: lehe skript on viimane muu js/
+const UPDATE_CHOICES = 'input[type="radio"][id]:checked, [role="tab"][id][aria-selected="true"], .view-pill[id][aria-pressed="true"], details[id][open]';
+const TEXT_ENTRY = 'input:not([type="radio"]):not([type="checkbox"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="hidden"]):not([type="range"]):not([type="color"]), textarea, [contenteditable]:not([contenteditable="false"])';
+const UPDATE_TEXT = {
+  auto: 'Uus versioon on saadaval – leht uueneb ise, kui seda mõnda aega ei kasutata.',
+  manual: 'Uus versioon on saadaval – laadi leht uuesti, kui sobib.',
+  lock: 'Uus versioon on saadaval – uuesti laadimisel küsib leht parooli.'
+};
+let updateStarted = false;                         // kontroll käivitatud (start() või load-varukäivitus): üks kord lehe kohta
+let updateDependency = null;                       // { file, signature, timeoutMs }: lehe skripti teatatud lisasõltuvus (energialeht: index.html-i CONFIG)
+const NO_UPDATE = Object.freeze({ ready() {}, rescue() {} });   // kontrolli pole (file:, iframe, lehe skripti pole, viga)
+
+function fnv1a(text) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193);
+  return (h >>> 0).toString(16).padStart(8, '0');
+}
+
+function pageSignature(urls, config) {
+  return fnv1a(`${urls.filter(u => UPDATE_ASSET.test(u)).sort().join('\n')}\n\n${String(config).replace(/\r\n?/g, '\n')}`);
+}
+
+/** Ühe CONFIG-ploki allkiri (lisasõltuvus); CRLF = LF. */
+function configSignature(text) {
+  return fnv1a(String(text).replace(/\r\n?/g, '\n'));
+}
+
+/** Avatud lehe allkiri ja lehe skripti tee (nt js/index.js). */
+function loadedPageVersion() {
+  const urls = [...document.querySelectorAll('script[src], link[rel="stylesheet"][href]')]
+    .map(node => node.getAttribute(node.tagName === 'SCRIPT' ? 'src' : 'href'));
+  const own = [...document.querySelectorAll('script[src]')].map(node => node.getAttribute('src').split('?')[0])
+    .filter(path => path.startsWith('js/') && !UPDATE_SHARED_SCRIPT.test(path));
+  const config = byId('lehe-config');
+  return { signature: pageSignature(urls, config ? config.textContent : ''), pageScript: own.length ? own[own.length - 1] : null };
+}
+
+/** Sama saidi HTML vahemälu kinnitusega (no-cache: muutmata leht = 304), ajapiiriga; CRLF -> LF. */
+async function fetchSameSiteHtml(url, timeoutMs = UPDATE_CHECK.timeoutMs) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, { cache: 'no-cache', credentials: 'same-origin', signal: controller.signal });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    if (new URL(response.url, location.href).origin !== location.origin) throw new Error('vastus tuli teiselt saidilt');
+    if (!/text\/html/i.test(response.headers.get('Content-Type') || '')) throw new Error('vastus pole HTML');
+    return (await response.text()).replace(/\r\n?/g, '\n');
+  } catch (error) {
+    // abort() põhjus ei jõua igas brauseris veateatesse
+    throw controller.signal.aborted ? new Error(`${url} ei vastanud ${timeoutMs / 1000} s jooksul`) : error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Serveri allkiri. CSP/Trusted Types ei luba DOMParserit stringiga, seega sama reegel regexiga. Eeldused (README): src/href
+ *  jutumärkides, ?v= aadressides pole &-märki, lehe-config ei sisalda <script, <link ega <!--, <noscript>/<template> sees pole
+ *  skripti- ega stiiliviiteid. Süntaksiveaga CONFIG (haldaja käsitsi muudatus) on viga, mitte uus versioon. */
+async function fetchServerSignature(pageScript) {
+  const html = (await fetchSameSiteHtml(location.pathname + location.search)).replace(/<!--[\s\S]*?-->/g, '');
+  const config = /<script\b[^>]*\bid="lehe-config"[^>]*>([\s\S]*?)<\/script>/i.exec(html);
+  const urls = [];
+  for (const [tag] of html.matchAll(/<script\b[^>]*>/gi)) { const m = /\ssrc="([^"]*)"/i.exec(tag); if (m) urls.push(m[1]); }
+  for (const [tag] of html.matchAll(/<link\b[^>]*>/gi)) { const m = /\srel="stylesheet"/i.test(tag) && /\shref="([^"]*)"/i.exec(tag); if (m) urls.push(m[1]); }
+  const paths = urls.filter(u => UPDATE_ASSET.test(u)).map(u => u.split('?')[0]);
+  if (!config || !['js/lukk.js', 'js/common.js', pageScript].every(p => paths.includes(p))) throw new Error('vastus pole selle lehe HTML');
+  try { parseConfigLiteral(config[1]); } catch (error) { throw new Error(`uue versiooni CONFIG on vigane (${error.message})`); }
+  return pageSignature(urls, config[1]);
+}
+
+/** Lehe skript kasutab teise lehe CONFIG-it (energialeht: index.html-i tariifid, loadTariffs ainult avamisel): selle muutus on
+ *  lahti oleva lehe jaoks samuti uus versioon. configText = loetud lehe-config ploki tekst; null = lugemine ebaõnnestus (leht
+ *  kasutab varukoopiat; iga kehtiv plokk on siis uus versioon). timeoutMs = lehe enda lugemise ajapiir: kontroll loeb faili sama
+ *  tingimusega, nii et aeglane vastus on viga, mitte uus versioon (muidu laadiks leht end asjatult uuesti ja saaks jälle vea).
+ *  Kutsutakse init-i ajal, pärast startUpdateCheck-i. */
+function noteUpdateDependency(file, configText, timeoutMs = UPDATE_CHECK.timeoutMs) {
+  updateDependency = { file, timeoutMs, signature: configText == null ? 'viga' : configSignature(configText) };
+}
+
+/** Lisasõltuvuse serveripoolne allkiri: sama reegel mis energialehe loadTariffs-il (sama regex toorest HTML-ist, kommentaare ei
+ *  eemaldata; sama ajapiir), süntaksiveaga CONFIG on viga, mitte uus versioon. */
+async function fetchDependencySignature(file, timeoutMs) {
+  const html = await fetchSameSiteHtml(file, timeoutMs);
+  const block = /<script type="text\/plain" id="lehe-config">([\s\S]*?)<\/script>/.exec(html);
+  if (!block) throw new Error(`${file}: CONFIG plokki ei leitud`);
+  try { parseConfigLiteral(block[1]); } catch (error) { throw new Error(`${file}: CONFIG on vigane (${error.message})`); }
+  return configSignature(block[1]);
+}
+
+function storageWorks() {
+  try { sessionStorage.setItem(`${UPDATE_STORE}:test`, '1'); sessionStorage.removeItem(`${UPDATE_STORE}:test`); return true; }
+  catch (error) { return false; }
+}
+
+function readUpdateRecord() {
+  try {
+    const rec = JSON.parse(sessionStorage.getItem(UPDATE_STORE) || 'null');
+    if (!rec || typeof rec.vana !== 'string' || !Number.isInteger(rec.katseid) || rec.katseid < 1 || !Number.isFinite(rec.aeg)) return null;
+    return { vana: rec.vana, katseid: rec.katseid, aeg: rec.aeg, tegevus: Number.isFinite(rec.tegevus) ? rec.tegevus : rec.aeg,
+      valikud: Array.isArray(rec.valikud) ? rec.valikud.filter(id => typeof id === 'string') : [],
+      kerimine: Number.isFinite(rec.kerimine) && rec.kerimine > 0 ? rec.kerimine : 0 };
+  } catch (error) { return null; }
+}
+
+function writeUpdateRecord(rec) {
+  try { if (rec) sessionStorage.setItem(UPDATE_STORE, JSON.stringify(rec)); else sessionStorage.removeItem(UPDATE_STORE); }
+  catch (error) { /* salvestusruum keelatud või täis: laadimise eel loetakse kirje tagasi */ }
+}
+
+/** Lubadus või ajapiiri järel fallback (rippuv päring ei peata kontrolli). */
+function withTimeout(promise, ms, fallback) {
+  let timer = 0;
+  const limit = new Promise(resolve => { timer = setTimeout(resolve, ms, fallback); });
+  return Promise.race([promise, limit]).finally(() => clearTimeout(timer));
+}
+
+/** Valikute id-d: raadionupud ainult gruppidest, mida muudeti change-sündmusega (laiuse järgi valitud 1 h / 15 min jääb automaatseks). */
+function collectChoices(chosenGroups) {
+  return [...document.querySelectorAll(UPDATE_CHOICES)]
+    .filter(node => !node.matches('input[type="radio"]') || chosenGroups.has(node.name))
+    .map(node => node.id);
+}
+
+/** Valikud lehe enda sündmuste kaudu; hiljem tekkivad elemendid (indexi building-table) proovitakse uuesti. Tagastab, mitu
+ *  valikut selles käigus tegelikult muudeti. */
+function restoreChoices(ids, triesLeft = UPDATE_CHECK.restoreTries) {
+  const missing = [];
+  let applied = 0;
+  for (const id of ids) {
+    const node = byId(id);
+    if (!node) { missing.push(id); continue; }
+    if (node.matches('details')) {
+      if (!node.open) { node.open = true; applied++; }
+    } else if (node.matches('input[type="radio"]')) {
+      // ka Firefoxi vormitaastus (checked ilma change'ita); vaikimisi valitud nuppu ei puudutata
+      if (!node.checked || !node.defaultChecked) { node.checked = true; node.dispatchEvent(new Event('change', { bubbles: true })); applied++; }
+    } else if (node.matches('[role="tab"], .view-pill')) {
+      if (node.getAttribute('aria-selected') === 'false' || node.getAttribute('aria-pressed') === 'false') { node.click(); applied++; }
+    }
+  }
+  if (missing.length && triesLeft > 1) setTimeout(() => restoreChoices(missing, triesLeft - 1), UPDATE_CHECK.restoreEveryMs);
+  return applied;
+}
+
+/** Riba #uuendus (elav ala role="status", tühjana 0 px ja ligipääsupuus); mode null tühjendab. Kui fookus oli ribal, liigub see
+ *  „Laadi kohe“ nupule. onReload() → Promise<boolean>: false = laadimist ei toimunud, nupp jälle kasutatav. Ootamise ajal
+ *  (lukk.json kuni 20 s) on nupul „Laadin…“ ja aria-disabled – mitte disabled, sest keelatud nupult kaoks fookus body peale. */
+function renderUpdateBar(mode, { onReload, onOff } = {}) {
+  const host = byId('uuendus');
+  if (!host || (host.dataset.mode || null) === mode) return;
+  const hadFocus = host.contains(document.activeElement);
+  if (!mode) { delete host.dataset.mode; host.replaceChildren(); return; }
+  host.dataset.mode = mode;
+  const reload = el('button', { type: 'button', class: 'btn' }, 'Laadi kohe');
+  let pending = false;
+  const idle = () => {
+    pending = false;
+    reload.removeAttribute('aria-disabled');
+    reload.classList.remove('is-loading');
+    reload.textContent = 'Laadi kohe';
+  };
+  reload.addEventListener('click', () => {
+    if (pending) return;
+    pending = true;
+    reload.setAttribute('aria-disabled', 'true');
+    reload.classList.add('is-loading');
+    reload.textContent = 'Laadin…';
+    Promise.resolve(onReload()).then(done => { if (!done) idle(); }, idle);
+  });
+  const buttons = [reload];
+  if (mode === 'auto') {
+    const off = el('button', { type: 'button', class: 'btn btn--ghost' }, 'Ära uuenda ise');
+    off.addEventListener('click', onOff);
+    buttons.push(off);
+  }
+  host.replaceChildren(el('div', { class: 'banner banner--info' },
+    [iconEl('refresh'), el('p', { class: 'banner__text', text: UPDATE_TEXT[mode] }), ...buttons]));
+  if (hadFocus) reload.focus();
+}
+
+/** Lehe uue versiooni kontroll. start() kutsub enne Lukk-i ja init-i (rescue = js/lukk.js puudub); kui lehe skript start()-ini
+ *  ei jõudnud, kutsub load-sündmus (rescue = true). Varurežiimis on leht tühi: kinnitatud uus versioon laaditakse kohe, ilma
+ *  jõudeoleku, luku ja „Ära uuenda ise“ tingimusteta (tsüklikaitse kehtib). Tavarežiim läheb hiljem varurežiimi, kui
+ *  Lukk.valmis() lükatakse tagasi (start() → rescue()) või kontroll näeb lehte blankMs järjest tühjana (html.lukk-ootel ilma
+ *  avamisvaateta: avamine ripub). Tagastab { ready(lubadus), rescue() }: ready saab init-i lubaduse, mille järel taastatakse
+ *  valikud ja arvutatakse režiim uuesti. */
+function startUpdateCheck(rescue = false) {
+  if (updateStarted) return NO_UPDATE;
+  updateStarted = true;
+  try {
+    if ((location.protocol !== 'http:' && location.protocol !== 'https:') || window.top !== window.self) return NO_UPDATE;
+    const local = loadedPageVersion();
+    if (!local.pageScript) return NO_UPDATE;
+    const storage = storageWorks();
+    const chosenGroups = new Set();
+    const startedAt = Date.now();
+    let lastActivity = startedAt;
+    let userInput = false;            // kasutaja sündmus pärast avamist: kerimiskohta siis ei muudeta
+    /** Avatud lehe allkiri; energialehel pärast loadTariffs-i koos index.html-i CONFIG-iga („oma+sõltuvus“). */
+    const localSignature = () => (updateDependency ? `${local.signature}+${updateDependency.signature}` : local.signature);
+
+    // Eelmine uuesti laadimine: õnnestus, kui lehe enda allkiri muutus (kirje kustub); muidu jääb katse kulunuks. Kirje vana võib
+    // sisaldada sõltuvuse osa, mida saab võrrelda alles pärast init-i: tryReload ja modeFor võrdlevad kogu allkirja, nii et
+    // sõltuvuse muutuse järel jääv kirje ei klapi ega mõju. Valikud, kerimiskoht ja tegevuse aeg ainult värskest kirjest ja üks kord.
+    const prev = readUpdateRecord();
+    let restoreIds = [];
+    let restoreScroll = 0;
+    if (prev) {
+      if (startedAt - prev.aeg < UPDATE_CHECK.restoreMs) {
+        restoreIds = prev.valikud;
+        restoreScroll = prev.kerimine;
+        lastActivity = Math.min(lastActivity, prev.tegevus);
+      }
+      writeUpdateRecord(prev.vana.split('+')[0] !== local.signature ? null : { ...prev, valikud: [], kerimine: 0 });
+    }
+
+    // Tegevus: ainult kasutaja sündmused (isTrusted); scroll ei loe (kerimisankurdus tekitab seda ilma kasutajata)
+    const activity = () => { lastActivity = Date.now(); };
+    const onInput = event => { if (event.isTrusted) { userInput = true; activity(); } };
+    for (const type of ['pointerdown', 'keydown', 'wheel', 'touchstart', 'input', 'change', 'focusin']) {
+      window.addEventListener(type, onInput, { capture: true, passive: true });
+    }
+    let moveX = null;
+    let moveY = null;
+    window.addEventListener('pointermove', event => {
+      if (!event.isTrusted) return;
+      if (moveX !== null && Math.abs(event.clientX - moveX) + Math.abs(event.clientY - moveY) < UPDATE_CHECK.movePx) return;
+      moveX = event.clientX;
+      moveY = event.clientY;
+      onInput(event);
+    }, { capture: true, passive: true });
+    window.addEventListener('change', event => {
+      const t = event.target;
+      if (t instanceof HTMLInputElement && t.type === 'radio' && t.name) chosenGroups.add(t.name);
+    }, true);
+    let printing = false;
+    window.addEventListener('beforeprint', () => { printing = true; });
+    window.addEventListener('afterprint', () => { printing = false; activity(); });
+
+    let hiddenSince = document.hidden ? startedAt : 0;
+    let lastCheckAt = startedAt;      // viimane õnnestunud kontroll
+    let lastAttemptAt = startedAt;    // viimane päring (avamine loeb)
+    let nextCheckAt = startedAt + UPDATE_CHECK.firstMs;
+    let candidate = null;             // { signature, at }: uus allkiri, veel kinnitamata
+    let target = null;                // kinnitatud uus allkiri
+    let mode = null;                  // null | 'auto' | 'manual' | 'lock'
+    let autoSince = 0;                // millal riba läks režiimi 'auto' (noticeMs)
+    let offTarget = null;             // „Ära uuenda ise“
+    let timer = 0;
+    let running = false;
+    let rerun = false;
+    let reloadRun = null;             // käimasolev laadimise katse (Promise<boolean>)
+    let manualWanted = false;         // „Laadi kohe“: käimasolev katse laadib igal juhul (ka automaatse katse ajal vajutatud)
+    let navigating = false;           // location.reload() on kutsutud
+    let pauseUntil = 0;               // automaatne katse ei saanud lukk.json-i: järgmine alles siis
+    let recordLost = false;           // tsüklikaitse kirje ei püsinud: lehe eluajal ainult 'manual' (riba ei vaheta igal kontrollil)
+    let serverDep = null;             // lisasõltuvuse viimane õnnestunult loetud allkiri (lugemise viga: jääb eelmine)
+    let blankSince = 0;               // tavarežiim: millest alates on kontroll näinud lehte järjest tühjana (0 = polnud tühi)
+
+    const unused = now => {
+      if (printing) return false;
+      const lock = byId('lukk');
+      if ((lock && !lock.hidden) || document.documentElement.classList.contains('lukk-ootel')) return false;
+      const focused = document.activeElement;
+      if (focused && focused !== document.body && focused.matches(TEXT_ENTRY)) return false;
+      if (document.hidden) return hiddenSince > 0 && now - hiddenSince >= UPDATE_CHECK.hiddenMs;
+      return now - lastActivity >= UPDATE_CHECK.idleMs && now - autoSince >= UPDATE_CHECK.noticeMs;
+    };
+    const isOff = sig => {
+      if (offTarget === sig) return true;
+      try { return sessionStorage.getItem(UPDATE_OFF) === sig; } catch (error) { return false; }
+    };
+    /** Kas leht avaneb pärast laadimist ilma paroolita: true / false; extend korral ka null (lukk.json ei laadinud – ei tea). */
+    const keepsUnlocked = extend => {
+      if (typeof Lukk === 'undefined' || typeof Lukk.taastub !== 'function') return Promise.resolve(false);
+      return withTimeout(Lukk.taastub(extend ? { pikenda: true } : undefined), UPDATE_CHECK.lockMs, null).catch(() => null);
+    };
+    const modeFor = async sig => {
+      if (!storage || recordLost) return 'manual';
+      if (!rescue && isOff(sig)) return 'manual';
+      const rec = readUpdateRecord();
+      if (rec && rec.vana === localSignature() && rec.katseid >= UPDATE_CHECK.maxAttempts
+          && Date.now() - rec.aeg < UPDATE_CHECK.slowRetryMs) return 'manual';
+      if (rescue) return 'auto';                                         // tühi leht: lukk ega jõudeolek ei loe
+      return (await keepsUnlocked(false)) === true ? 'auto' : 'lock';   // ainult loeb
+    };
+    const setMode = next => {
+      if (next === 'auto' && mode !== 'auto') autoSince = Date.now();
+      mode = next;
+      renderUpdateBar(next, { onReload: () => reloadPage(false), onOff: turnOff });
+    };
+    const refreshMode = async () => {
+      const sig = target;
+      const wasRescue = rescue;
+      let next = sig ? await modeFor(sig) : null;
+      if (target !== sig || rescue !== wasRescue) return;   // varurežiim lülitus ootamise ajal sisse: selle enda arvutus kehtib
+      if (next === 'auto' && !rescue && isOff(sig)) next = 'manual';   // „Ära uuenda ise“ vajutati ootamise ajal
+      setMode(next);
+    };
+    const turnOff = () => {
+      offTarget = target;
+      try { sessionStorage.setItem(UPDATE_OFF, target); } catch (error) { /* kehtib selle lehe eluajal */ }
+      setMode('manual');
+    };
+
+    /** Tühi leht: js/lukk.js hoiab .app-i peidus (html.lukk-ootel), aga avamisvaadet (#lukk: parool, lukk.json-i viga) pole
+     *  näha. Töötaval lehel kestab see ainult lukk.json-i ja võtme lugemise aja (lukk.json-i ajapiir 15 s, siis veateade). */
+    const isBlank = () => {
+      const lock = byId('lukk');
+      return document.documentElement.classList.contains('lukk-ootel') && (!lock || lock.hidden);
+    };
+    /** Varurežiim pärast käivitust: lehe avamine ebaõnnestus või ripub. Kehtiv siht saab kohe režiimi 'auto'. */
+    const enterRescue = why => {
+      if (rescue) return;
+      rescue = true;
+      blankSince = 0;
+      console.info(`Lehe versiooni kontroll: varurežiim (${why}) – uus versioon laaditakse kohe pärast kinnitust`);
+      (target ? refreshMode() : Promise.resolve()).catch(() => {}).then(kick);
+    };
+    /** Igal sammul (tavarežiimis): kas leht on olnud blankMs järjest tühi? Vahepeal nähtud avamisvaade või avatud leht nullib. */
+    const watchBlank = now => {
+      if (rescue) return;
+      if (!isBlank()) blankSince = 0;
+      else if (!blankSince) blankSince = now;
+      else if (now - blankSince >= UPDATE_CHECK.blankMs) enterRescue(`leht on ${Math.round((now - blankSince) / 1000)} s tühi`);
+    };
+
+    /** true = server andis kehtiva lehe HTML-i (ükskõik mis allkirjaga); false = viga või võrguta. */
+    const check = async () => {
+      if (navigator.onLine === false) return false;
+      lastAttemptAt = Date.now();
+      let sig;
+      try {
+        sig = await fetchServerSignature(local.pageScript);
+      } catch (error) {
+        console.info('Lehe versiooni kontroll ebaõnnestus (proovin hiljem uuesti):', error.message);
+        return false;
+      }
+      const dep = updateDependency;
+      if (dep) {
+        // lisasõltuvuse viga (võrk, vigane CONFIG) ei peata lehe enda kontrolli: kehtib viimati loetud (või avatud lehe) allkiri
+        try { serverDep = await fetchDependencySignature(dep.file, dep.timeoutMs); }
+        catch (error) { console.info(`${dep.file}-i CONFIG-i kontroll ebaõnnestus (jääb eelmine):`, error.message); }
+        sig = `${sig}+${serverDep || dep.signature}`;
+      }
+      const now = Date.now();
+      lastCheckAt = now;
+      if (sig === localSignature()) {
+        // sama versioon või tagasivõtmine; tsüklikaitse kirjet ei kustutata (pärast ebaõnnestunud laadimist annab sama
+        // CDN-i sõlm sageli ka siia vana HTML-i)
+        candidate = null;
+        target = null;
+        setMode(null);
+      } else if (target) {
+        target = sig;   // sama või uuem: leht on niikuinii vana, uuem siht kinnitust ei vaja
+        candidate = null;
+        await refreshMode();
+      } else if (candidate && candidate.signature === sig) {
+        if (now - candidate.at >= UPDATE_CHECK.confirmMs) { target = sig; candidate = null; await refreshMode(); }
+      } else {
+        candidate = { signature: sig, at: now };
+      }
+      return true;
+    };
+    const nextRegular = () => Date.now() + UPDATE_CHECK.everyMs + Math.random() * UPDATE_CHECK.jitterMs;
+
+    const attemptReload = async () => {
+      const kept = rescue ? true : await keepsUnlocked(true);   // värske lukk.json + olemasoleva vahelehe kirje pikendus
+      if (!manualWanted) {
+        if (kept !== true) {
+          if (kept === false) setMode('lock');
+          else pauseUntil = Date.now() + UPDATE_CHECK.freshRetryMs;   // lukk.json ei laadinud: hiljem uuesti
+          return false;
+        }
+        if (!target || mode !== 'auto' || (!rescue && !unused(Date.now()))) return false;
+      }
+      const vana = localSignature();
+      const rec = readUpdateRecord();
+      const next = { vana, katseid: (rec && rec.vana === vana ? rec.katseid : 0) + 1, aeg: Date.now(),
+        tegevus: lastActivity, valikud: collectChoices(chosenGroups), kerimine: Math.round(window.scrollY) };
+      writeUpdateRecord(next);
+      const saved = readUpdateRecord();
+      if (!manualWanted && !(saved && saved.vana === next.vana && saved.katseid === next.katseid && saved.aeg === next.aeg)) {
+        recordLost = true;   // tsüklikaitse kirje ei püsinud: ise ei laadi (ka järgmised kontrollid jätavad riba 'manual' peale)
+        setMode('manual');
+        return false;
+      }
+      try { sessionStorage.setItem(UPDATE_COUNT_SKIP, String(Date.now())); } catch (error) { /* loendus pole kriitiline */ }
+      // #toggle-goatcounter (README „Külastuste statistika“) jääks reload'iga aadressi: loendus lülituks ümber ja alert peataks lehe
+      if (location.hash === '#toggle-goatcounter') {
+        try { history.replaceState(history.state, '', location.pathname + location.search); } catch (error) { /* loendusskript jätab lüliti vahele */ }
+      }
+      navigating = true;
+      clearTimeout(timer);
+      location.reload();
+      return true;
+    };
+    /** auto = false: „Laadi kohe“ – ka käimasolev automaatne katse laadib siis igal juhul. Promise<boolean>: kas laadimine toimus. */
+    const reloadPage = auto => {
+      if (!auto) manualWanted = true;
+      if (navigating) return Promise.resolve(true);
+      if (!reloadRun) {
+        reloadRun = attemptReload()
+          .catch(error => { console.info('Lehe uuesti laadimine ebaõnnestus:', error.message); return false; })
+          .then(done => { reloadRun = null; if (!done) manualWanted = false; return done; });
+      }
+      return reloadRun;
+    };
+
+    const tryReload = async () => {
+      if (!target || mode !== 'auto' || reloadRun || navigating) return;
+      const now = Date.now();
+      if (now < pauseUntil || (!rescue && !unused(now))) return;
+      const rec = readUpdateRecord();
+      if (rec && rec.vana === localSignature() && rec.katseid < UPDATE_CHECK.maxAttempts
+          && now < rec.aeg + UPDATE_CHECK.retryWaitMs[rec.katseid - 1]) return;
+      if (now - lastCheckAt > UPDATE_CHECK.freshMs) {
+        // vahetult enne laadimist veel üks kontroll: server annab kehtiva lehe ja versioon on endiselt uus
+        if (lastAttemptAt > lastCheckAt && now - lastAttemptAt < UPDATE_CHECK.freshRetryMs) return;   // ebaõnnestus hiljuti
+        const ok = await check();
+        nextCheckAt = candidate ? Date.now() + UPDATE_CHECK.confirmMs : nextRegular();
+        if (!ok || !target || mode !== 'auto') return;
+      }
+      if (rescue || unused(Date.now())) await reloadPage(true);
+    };
+
+    const schedule = ms => { clearTimeout(timer); timer = setTimeout(step, ms); };
+    const kick = () => { if (running) rerun = true; else schedule(0); };
+    const step = async () => {
+      if (navigating) return;
+      if (running) { rerun = true; return; }
+      running = true;
+      try {
+        watchBlank(Date.now());
+        if (Date.now() >= nextCheckAt) {
+          await check();
+          nextCheckAt = candidate ? Date.now() + UPDATE_CHECK.confirmMs : nextRegular();
+        }
+        await tryReload();
+      } catch (error) {
+        console.info('Lehe versiooni kontroll ebaõnnestus:', error.message);
+      } finally {
+        running = false;
+        if (navigating) clearTimeout(timer);
+        else if (rerun) { rerun = false; schedule(0); }
+        else {
+          // järgmine samm: kontroll, automaatse režiimi tingimused (tickMs) või tühja lehe otsus (blankMs pärast esimest nägemist)
+          const now = Date.now();
+          const due = Math.min(nextCheckAt, target && mode === 'auto' ? now + UPDATE_CHECK.tickMs : Infinity,
+            blankSince && !rescue ? blankSince + UPDATE_CHECK.blankMs : Infinity);
+          schedule(Math.max(1000, due - now));
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', () => {
+      const now = Date.now();
+      if (document.hidden) { hiddenSince = now; return; }
+      hiddenSince = 0;
+      activity();
+      if (now - lastAttemptAt >= UPDATE_CHECK.everyMs) { nextCheckAt = now; kick(); }
+    });
+    window.addEventListener('pageshow', event => {
+      if (!event.persisted) return;
+      activity();
+      nextCheckAt = Date.now();
+      kick();
+    });
+    window.addEventListener('online', () => {
+      const now = Date.now();
+      if (now - lastCheckAt < UPDATE_CHECK.everyMs || now - lastAttemptAt < UPDATE_CHECK.onlineGapMs) return;
+      nextCheckAt = now;
+      kick();
+    });
+
+    /** Kerimiskoht pärast taastatud valikuid. Andmed laadivad init-i järel: kui leht on veel liiga lühike (koht jäi
+     *  lühemaks), proovitakse uuesti iga kord, kui leht kasvab – kuni koht on käes, kasutaja teeb midagi või restoreMs möödub. */
+    const restoreScrollTo = y => {
+      window.scrollTo(0, y);
+      if (Math.abs(window.scrollY - y) <= 1 || typeof ResizeObserver !== 'function' || !document.body) return;
+      const until = Date.now() + UPDATE_CHECK.restoreMs;
+      const observer = new ResizeObserver(() => {
+        if (userInput || Date.now() > until) { observer.disconnect(); return; }
+        window.scrollTo(0, y);
+        if (Math.abs(window.scrollY - y) <= 1) observer.disconnect();
+      });
+      observer.observe(document.body);
+    };
+    const afterInit = () => {
+      const applied = restoreChoices(restoreIds);
+      // Taastatud valik muutis paigutust (nt indexi vaatefilter) pärast brauseri kerimiskoha taastamist: sama koht uuesti,
+      // kui kasutaja pole vahepeal ise midagi teinud
+      if (applied && restoreScroll > 0 && !userInput) restoreScrollTo(restoreScroll);
+      if (target) refreshMode().catch(() => {});
+    };
+    schedule(UPDATE_CHECK.firstMs);
+    return {
+      ready(promise) { Promise.resolve(promise).then(afterInit, error => { afterInit(); throw error; }); },   // init-i viga jääb konsooli
+      rescue() { enterRescue('lehe avamine ebaõnnestus'); }   // start(): Lukk.valmis() lükati tagasi
+    };
+  } catch (error) {
+    console.info('Lehe versiooni kontroll ei käivitunud:', error.message);
+    return NO_UPDATE;
+  }
+}
+
+// Varukäivitus: lehe skript ei jõudnud start()-ini (tipptaseme viga, nt vigane CONFIG; faili ei laaditud). Leht on tühi
+// (html.lukk-ootel), aga parandatud väljalase peab ka selle uuendama. load tuleb alati pärast DOMContentLoaded-i (start).
+window.addEventListener('load', () => { if (!updateStarted) startUpdateCheck(true); }, { once: true });

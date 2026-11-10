@@ -4,6 +4,90 @@ See fail kirjeldab rakenduse `index.html` versioonimuudatusi, arhitektuurilisi k
 
 ---
 
+## [3.12.0], energy-dashboard.html [2.12.0] ja graafikud.html [1.6.0] — 2026-11-09 · lehe automaatne uuendus, väikesed märkused M1–M9
+
+Kõik kolm lehte uuendavad lahti olles ka oma koodi (kasutaja soov: „leht uuendab end ise kui keegi ei kasuta ja igal
+kolmel lehel“) ning ülevaate üheksa väikest märkust on parandatud.
+
+- **Lehe automaatne uuendus** (`js/common.js` jaotis 10, README „Lehe automaatne uuendus“).
+  - **Probleem:** lahti seisev leht (seinaekraan) laeb andmeid fetch'iga, aga koodi mitte – see näitas vana versiooni
+    lõputult, kuni keegi lehe käsitsi uuesti laadis.
+  - **Tuvastus:** leht loeb oma HTML-i samalt aadressilt, mille `location.reload()` hiljem saab (`cache: 'no-cache'`,
+    muutmata leht = 304), ja võrdleb sama saidi `js/`/`css/` aadresside `?v=` märke ning `lehe-config` plokki avatud
+    lehe omadega (FNV-1a allkiri, regex – CSP/Trusted Types ei luba DOMParserit; laienduste ja tõlkija lisatud välised
+    `<script>`/`<link>` ei loe). Süntaksiveaga CONFIG on viga, mitte uus versioon: haldaja trükiviga ei levi lahti
+    olevatele lehtedele. Vastus kehtib ainult `ok`, sama päritolu, `text/html`, `lehe-config` ja lehe skriptidega.
+  - **Energialeht** jälgib ka `index.html`-i CONFIG-it (tariifid loetakse ainult avamisel, `loadTariffs` →
+    `noteUpdateDependency`) ja laadib end selle muutumisel uuesti – ka siis, kui avamisel kasutati varukoopiat ja
+    `index.html` on hiljem loetav. `index.html`-i lugemise viga kontrolli ajal ei sega lehe enda kontrolli. Kontroll
+    loeb `index.html`-i avamisega sama ajapiiriga (`TARIFF_TIMEOUT_MS`, 5 s): aeglane vastus on viga, mitte uus versioon.
+  - **Ajastus:** 1 min pärast avamist, siis iga 30 min + 0–2 min (ka peidetud vahelehel); vahelehele naastes, võrgu
+    taastudes (> 30 min, ≥ 1 min vahe) ja lehe vahemälust naastes. Uus versioon kinnitatakse teise kontrolliga ≥ 2 min
+    hiljem; vahetult (≤ 30 s) enne laadimist veel üks värskuskontroll (server annab kehtiva lehe).
+  - **„Keegi ei kasuta“:** nähtaval lehel 30 min ilma kasutaja tegevuseta (`isTrusted` puudutus, klahv, kerimisratas,
+    sisestus, `pointermove` ≥ 2 px; `scroll` ei loe) ja riba on olnud ≥ 2 min näha (WCAG 2.2.1), või vaheleht ≥ 1 min
+    peidus. Mitte parooliakna, tekstivälja fookuse ega printimise ajal.
+  - **Riba** `#uuendus` (`role="status"`, tühjana 0 px ja ligipääsupuus): „Uus versioon on saadaval – leht uueneb ise,
+    kui seda mõnda aega ei kasutata.“ / „… laadi leht uuesti, kui sobib.“ / „… uuesti laadimisel küsib leht parooli.“;
+    nupud „Laadi kohe“ (ootamise ajal „Laadin…“ ja `aria-disabled`, fookus jääb nupule) ja „Ära uuenda ise“ (selles
+    vahelehes kuni järgmise uue versioonini). Stiil `.banner--info` (fookuse toon), printimisel peidetud.
+  - **Tsüklikaitse** (sessionStorage `kauge32_uuendus:<leht>`): 3 katset sama vana versiooni pealt (2 ja 10 min vahega),
+    siis riba „laadi … kui sobib“ ja uus katse 6 h pärast. Kirje loetakse enne laadimist tagasi; kui see ei püsi, ise ei
+    laadita ja riba jääb lehe eluajaks „laadi … kui sobib“ peale. Ilma sessionStorage'ita ainult riba.
+  - **Varukäivitus tühjal lehel:** kui lehe skript ei jõua `start()`-ini (tipptaseme viga, vigane CONFIG, puuduv fail),
+    käivitab kontrolli `load`-sündmus; ilma `js/lukk.js`-ita käivitab selle `start()` samas varurežiimis. Tavarežiimis
+    kontroll läheb varurežiimi, kui `Lukk.valmis()` lükatakse tagasi (`start()` → `rescue()`) või leht on ≥ 2 min järjest
+    tühi (`html.lukk-ootel`, `#lukk` peidus: avamine ripub). Parandatud väljalase laaditakse kohe pärast kinnitust.
+    Parooliakna ajal ei laadita kunagi (README „Reeglid muutjale“).
+  - **Valikud ja kerimiskoht:** päevade vahelehed, muudetud raadionupud, elektriinfo vaatefilter (nupud said id-d
+    `view-all` … `view-building`) ja id-ga tabelivaated taastatakse lehe enda sündmuste kaudu; kui taastatud valik muutis
+    paigutust, seatakse kerimiskoht uuesti (andmete laadimise ajal veel lühema lehe korral lehe kasvades, kuni 2 min või
+    kasutaja esimese tegevuseni).
+  - `file://`, iframe ja CSP: kontrolli pole / ei vaja muudatusi (`connect-src 'self'`). Võrguvead on vaiksed
+    (`console.info`).
+- **Lukk** (`js/lukk.js`, README „Parooliga kaitse“).
+  - Uus `Lukk.taastub()`: ainult loeb (riba režiim) või `{ pikenda: true }` vahetult enne laadimist – kontrollib värsket
+    `lukk.json`-i (15 s ajapiir; parooli vahetus → ei laadi, viga → 5 min pärast uuesti) ja pikendab selle vahelehe
+    **olemasolevat** kirjet 12 h peale. Puuduvat kirjet ei looda („Lukusta leht“ teises vahelehes jääb kehtima), „Jäta
+    meelde“ ei pikene (peab kehtima veel ≥ 10 min).
+  - `lukk.json` avamisel: ajapiir 15 s (eestikeelne teade igas brauseris, „lukk.json ei vastanud 15 s jooksul“) ja
+    automaatne kordus iga 30 s (nupp „Proovi uuesti“ kohe); korduse ajal fookust ei liigutata ja sama teadet ei
+    kuulutata uuesti.
+  - Taastumisel on fookus paroolil (`kysiParool`: `tooOlek(false)` enne `naitaVaadet`-i; varem jäi fookus nupule või
+    body-le, sest väli oli veel keelatud).
+- **Külastuste loendus** (`js/vendor/goatcounter-count.js`): uue versiooni tõttu uuesti laadimist ei loendata
+  (sessionStorage märk `kauge32_uuendus_loendus`, 60 s, üks kord → `no_onload`); `#toggle-goatcounter` eemaldatakse enne
+  laadimist aadressist ja märgi korral jäetakse lüliti vahele (loendus ei lülitu ise ümber ja `alert` ei peata
+  seinaekraani). `?v=c031008-k32c`.
+- **M1 – töövoo andmeleping** (`uuenda-hinnad.yml`, ainult kommentaar): eurOo + eurPaev = eur − kuutasu; energialeht
+  (`normalizeMaja`) tuletab kuutasud = eur − eurOo − eurPaev – jaotusesse kuutasu lisamisel muuda ka seda ja suurenda
+  `CALC_VERSION`-it.
+- **M2 – „ilma kuutasudeta“ ka päevade/kuude graafikul ja elektriinfo päikesekaardil:** legend „keskmine ostuhind ilma
+  kuutasudeta (kui kõik osta võrgust)“ ja „maja maksis ilma kuutasudeta“, inspektor „… keskmine ostuhind 15,38 s/kWh ·
+  maja maksis 15,38 s/kWh (ilma kuutasudeta)“, graafiku nimi samuti; elektriinfo „Eile (inverter, ilma kuutasudeta): …“.
+- **M3 – graafikute lehe kuude kaart:** vihje „ost võrgust (arvesti); € koos kuutasudega (hinnang)“ (mõlemas vaates
+  sama, nii et kWh/€ nupud ei nihku), graafiku nimi €-vaates „(eurodes, koos kuutasudega)“, jalus „… võrguarvesti
+  (Elering Estfeed), eurod koos fikseeritud kuutasudega (hinnang)“.
+- **M4 – „Maja energiahind“ kuutasude loetelu perioodi järgi** (`networkFeeNames`, sama loogika mis plokil „Ost võrgust
+  AAAA“): 2025 „võrgu kuutasu ja läbilaskevõime tasu“, 2026 „… ja alates 05/2026 kasutusvõimsuse tasu“.
+- **M5 – energialehe tunnitabel:** veerg „Börs s/kWh koos KM-ga“, pealdis „Börsihind (koos KM-ga), lõpphind ja
+  müügihind … tunni kaupa“.
+- **M6 – elektriinfo planeerija ei kutsu „Väga soodne“ ajal praegust akent vältima:** „Väldi võimalusel“ peidetakse ainult
+  siis, kui hero ütleb „Väga soodne aeg tarbimiseks“, halvim aken algab praegu ja pole koos tasudega praegusest hinnast
+  üle 0,1 s/kWh kallim (`AVOID_NOW_MARGIN_CENTS`); tõeline tipp kohe praeguse odava hetke järel jääb näha.
+- **M7 – elektriinfo jalus:** „Lõpphind = börsihind ilma KM-ta + müüja marginaal, tasakaalustamisvõimsuse kulu,
+  võrgutasu, taastuvenergia- ja varustuskindluse tasu ning aktsiis, kogu summale käibemaks. Fikseeritud kuutasud (võrgu
+  kuutasu, läbilaskevõime- ja kasutusvõimsuse tasu ning võimalik muu kuutasu) on kaardil „Hind koos tasudega praegu“ ja
+  sisalduvad „Maja üldelektri“ eurodes. Tegelik arve võib erineda.“
+- **M8 – „N% odavam kui praegu“ ainult positiivse akna lõpphinnaga** ka harudes „Võimalusel oota homseni“ (best3h) ja
+  „Võimalusel oota“ (best2h); varem nt „… −6,33 s/kWh, 155% odavam kui praegu“.
+- **M9 – „võimalik muu kuutasu“** kuutasude loeteludes (energialehel plokk „Ost võrgust AAAA“, „Maja energiahind“,
+  trendide selgitus; elektriinfo „Maja üldelektri“ kaardi märkus, kus on lisaks „kasutusvõimsuse tasu alates
+  05/2026“), sest töövoo kuu summas on ka `CONFIG.hinnad.kuutasu`.
+
+Andmeskeem, arvutused ja `CALC_VERSION` (6) ei muutunud; töövoos muutus ainult kommentaar. `?v=` = `20261109j`
+(`css/common.css`, `js/lukk.js`, `js/common.js` ja lehe skript kõigil kolmel lehel).
+
 ## [3.11.0] ja energy-dashboard.html [2.11.0] — 2026-11-09 · ülevaate parandused F1–F7
 
 Kontrollijate leiud F1–F5 (kriitikuga kokku lepitud kava), teise ülevaate leiud (F6) ja kolmanda ülevaate leiud (F7).

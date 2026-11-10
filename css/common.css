@@ -749,6 +749,10 @@ a { color: var(--focus); text-underline-offset: 2px; }
 .banner > .icon { width: 20px; height: 20px; }
 .banner__text { flex: 1 1 200px; margin: 0; font-weight: 600; }
 .banner__text span { display: block; }
+/* Uus versioon (js/common.js jaotis 10): rahulik teade, mitte viga – fookuse toon nagu „uus“. Tühja #uuendus-t ei peideta:
+   role="status" peab olema ligipääsupuus enne esimest teadet; tühjana on see 0 px (marginaal on .banner-il). */
+.banner--info { border-color: var(--focus); background: var(--focus-bg); color: var(--text); }
+.banner--info > .icon { color: var(--focus); }
 
 /* ---------- 14. HTML-legend ja joonevõtmed (legend peegeldab märki: ruut tulbale/alale, joon joonele) ---------- */
 .legend {
@@ -1164,7 +1168,7 @@ a { color: var(--focus); text-underline-offset: 2px; }
           border-color: var(--border); break-inside: avoid; }
   .card--hero { border-top-color: var(--hero-accent, var(--border)); }
   .site-nav, .view-filter, .tabs, .segmented, .icon-btn, .btn,
-  .tooltip, .chart-stack__cross, .skeleton { display: none !important; }
+  .tooltip, .chart-stack__cross, .skeleton, .uuendus { display: none !important; }
   .link-btn { min-height: 0; color: inherit; text-decoration: none; }
   .legend__swatch, .line-key, .mode-strip__run, .meter, .meter__fill, .card--hero, .verdict, .status-dot,
   .state-pill, .badge, .live-pill, .tab__badge { -webkit-print-color-adjust: exact; print-color-adjust: exact; }

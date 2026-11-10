@@ -1,6 +1,6 @@
 // GoatCounter: https://www.goatcounter.com
 // This file is released under the ISC license: https://opensource.org/licenses/ISC
-// Kauge 32 muudatused (README „Külastuste statistika“): päringustringi (location.search) ei saadeta (q: ''); localStorage try/catch-iga.
+// Kauge 32 muudatused (README „Külastuste statistika“): päringustringi (location.search) ei saadeta (q: ''); localStorage try/catch-iga; uuesti laadimise märk (sessionStorage kauge32_uuendus_loendus, js/common.js) jätab lehe avamise loendamata ja #toggle-goatcounter lüliti täitmata.
 ;(function() {
 	'use strict';
 
@@ -237,8 +237,20 @@
 		})
 	}
 
+	// Kauge 32: lehe uuesti laadimine uue versiooni tõttu (js/common.js jaotis 10) pole uus avamine ega lüliti
+	// #toggle-goatcounter vajutus – märk kehtib 60 s ja ühe korra
+	var k32uuendus = false
+	try {
+		var k32mark = sessionStorage.getItem('kauge32_uuendus_loendus')
+		if (k32mark !== null) {
+			sessionStorage.removeItem('kauge32_uuendus_loendus')
+			k32uuendus = Date.now() - Number(k32mark) < 60000
+		}
+	} catch (err) {}
+	if (k32uuendus) goatcounter.no_onload = true
+
 	// Make it easy to skip your own views.
-	if (location.hash === '#toggle-goatcounter') try {  // Kauge 32: try (vt filter)
+	if (location.hash === '#toggle-goatcounter' && !k32uuendus) try {  // Kauge 32: try (vt filter); uuenduse märgiga vahele
 		if (localStorage.getItem('skipgc') === 't') {
 			localStorage.removeItem('skipgc', 't')
 			alert('GoatCounter tracking is now ENABLED in this browser.')

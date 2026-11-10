@@ -13,6 +13,10 @@
  *                              mööda dekrüpteerijast. Lukustatud lehel ei võeta samalt saidilt krüpteerimata JSON-i
  *                              vastu (viga), lukuta lehel tagastatakse tavaline fail muutmata kujul
  *   Lukk.lukusta()           – unustab kõik selle brauseri salvestatud võtmed ja laeb lehe uuesti (jaluse nupp „Lukusta leht“)
+ *   Lukk.taastub(valikud)    – kas leht avaneb pärast uuesti laadimist ilma paroolita (js/common.js, uus versioon). Ilma
+ *                              valikuta ainult loeb (true/false); { pikenda: true } (vahetult enne laadimist) kontrollib värsket
+ *                              lukk.json-i (15 s ajapiir; viga -> null) ja lükkab selle vahelehe OLEMASOLEVA kirje aegumise
+ *                              12 h edasi. Puuduvat kirjet ei looda („Lukusta leht“ jääb kehtima); „Jäta meelde“ ei pikene
  *
  * Failid: lukk.json {lukk, kdf, iter, salt, kontroll:{iv, ct}} – sool ja parooli kontrollväärtus
  *         (kontroll = AES-GCM(võti, "kauge32-lukk")); puudumine (404) tähendab, et lehel pole lukku.
@@ -21,7 +25,8 @@
  * (andmebaas kauge32-lukk, hoidla votmed): „Jäta meelde“ korral kirje „pysiv“ (kehtib 30 päeva salvestamisest, siis
  * küsitakse parooli uuesti), muidu selle vahelehe kirje
  * „sessioon:<id>“, mille id on vahelehe sessionStorage'is (kauge32_lukk_sessioon). Vahelehe sulgemisel kaob id ja
- * kirjet ei saa enam kasutada; aegunud sessioonikirjed (12 h viimasest kasutusest) kustutatakse järgmisel avamisel.
+ * kirjet ei saa enam kasutada; aegunud sessioonikirjed (12 h viimasest laadimisest; lahti olev vaheleht pikendab olemasolevat
+ * kirjet vahetult enne automaatset uuesti laadimist) kustutatakse järgmisel avamisel.
  * Mitte-eksporditavat võtit ei saa ka sama saidi (*.github.io) skript välja lugeda ega teise seadmesse viia, ainult
  * selles brauseris kasutada. Varasem eksporditud võti (localStorage/sessionStorage kauge32_lukk) kolitakse üle ja
  * kustutatakse. Parooli ennast ei salvestata ega hoita mälus: sellest tuletatakse võti ja vormi väli tühjendatakse.
@@ -38,7 +43,8 @@
   const IDB_POOD = 'votmed';
   const PYSIV = 'pysiv';
   const SESSIOON = 'kauge32_lukk_sessioon';         // sessionStorage: selle vahelehe IndexedDB kirje id (mitte võti)
-  const SESSIOONI_AEG_MS = 12 * 3600 * 1000;      // vahelehe kirje: 12 h viimasest kasutusest
+  const SESSIOONI_AEG_MS = 12 * 3600 * 1000;      // vahelehe kirje: 12 h viimasest laadimisest; lahti olev vaheleht pikendab
+                                                  // olemasolevat kirjet vahetult enne automaatset uuesti laadimist
   const PYSIVA_AEG_MS = 30 * 24 * 3600 * 1000;      // „Jäta meelde“: 30 päeva salvestamisest, ei pikene (NIST SP 800-63B §7.2)
   const MAX_PAROOL = 256;
   const KONTROLL = 'kauge32-lukk';
@@ -48,6 +54,9 @@
   const SOOL_B = 16;
   const IV_B = 12;
   const VANAD_VOTMED = 'kauge32.energia.';         // varasema Solarmani otseühenduse võtmed (local-/sessionStorage): kustutatakse
+  const TAASTUMISE_VARU_MS = 10 * 60 * 1000;   // „Jäta meelde“ kirje peab kehtima veel vähemalt nii kaua (laadimine + avamine)
+  const LUKU_KORDUS_MS = 30 * 1000;            // lukk.json-i viga avamisel: automaatne kordus (seinaekraan ei jää ootama)
+  const LUKU_AJAPIIR_MS = 15 * 1000;           // lukk.json-i päring avamisel ja taastub({ pikenda }): rippuv ühendus = viga
 
   const subtle = global.crypto && global.crypto.subtle;
   const utf8 = new TextEncoder();
@@ -275,8 +284,8 @@
   }
 
   /* ---------- lukk.json ---------- */
-  async function laeLukuFail() {
-    const response = await fetch(`${LUKU_FAIL}?v=${Date.now()}`, { cache: 'no-store' });
+  async function laeLukuFail(signal) {
+    const response = await fetch(`${LUKU_FAIL}?v=${Date.now()}`, { cache: 'no-store', signal });
     if (response.status === 404) return null;
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const json = await response.json();
@@ -285,6 +294,16 @@
       throw new Error('lukk.json on vigane');
     }
     return json;
+  }
+
+  /** laeLukuFail ajapiiriga: rippuv päring lõpeb eestikeelse veaga (abort() põhjus ei jõua igas brauseris veateatesse);
+   *  avamise 30-s kordus ja uue versiooni kontroll jätkavad. */
+  function laeLukuFailAjaga() {
+    const ohjur = new AbortController();
+    const taimer = setTimeout(() => ohjur.abort(), LUKU_AJAPIIR_MS);
+    return laeLukuFail(ohjur.signal)
+      .catch(error => { throw ohjur.signal.aborted ? new Error(`lukk.json ei vastanud ${LUKU_AJAPIIR_MS / 1000} s jooksul`) : error; })
+      .finally(() => clearTimeout(taimer));
   }
 
   /* ---------- avamisvaade ---------- */
@@ -347,10 +366,10 @@
     let resolve;
     const promise = new Promise(r => { resolve = r; });
     avamine = { promise, resolve };
+    tooOlek(false);      // enne naitaVaadet-i: keelatud välja (lukk.json-i korduse järel) ei saa fokuseerida
     naitaVaadet(true);
     teata('kysitud');
     naitaViga(teade || '');
-    tooOlek(false);
     return promise;
   }
 
@@ -407,6 +426,39 @@
     unustaVanadVotmed();
     await unustaSalvestatud(true);
     location.reload();
+  }
+
+  /** Kas see vaheleht avaneb pärast uuesti laadimist ilma paroolita (js/common.js jaotis 10)? Lukuta lehel true, avamisvaate
+   *  ajal false; { pikenda: true } korral null, kui lukk.json ei laadinud (viga või ajapiir – praegu ei saa öelda). Püsiv kirje
+   *  peab kehtima veel TAASTUMISE_VARU_MS (30 päeva ei pikene); vahelehe kirje peab olemas olema – { pikenda: true } lükkab selle
+   *  aegumise (ka aegunud kirje oma) ühes tehingus edasi, puuduvat ei looda kunagi. */
+  async function taastub({ pikenda = false } = {}) {
+    if (pikenda) {
+      const info = await laeLukuFailAjaga().catch(() => undefined);
+      if (info === undefined) return null;    // lukk.json ei laadi: ei tea (uus leht jääks ootama)
+      if (info === null) return true;         // lukku pole (enam)
+      if (!lukuInfo || info.salt !== lukuInfo.salt || info.iter !== lukuInfo.iter) return false;   // lukk lisati või parool vahetati
+    } else if (!lukuInfo) {
+      return true;
+    }
+    if (avamine || (ui.root && !ui.root.hidden)) return false;
+    if (!votmed.has(votmeId(lukuInfo.salt, lukuInfo.iter))) return false;
+    const sobib = (k, nyyd) => kehtivKirje(k, nyyd) && k.salt === lukuInfo.salt && k.iter === lukuInfo.iter;
+    if (sobib(await idb('readonly', store => store.get(PYSIV)), Date.now() + TAASTUMISE_VARU_MS)) return true;
+    const id = sessiooniId(false);
+    if (!id) return false;
+    const voti = `sessioon:${id}`;
+    if (!pikenda) return sobib(await idb('readonly', store => store.get(voti)), 0);
+    let pikendatud = false;
+    const kirje = await idb('readwrite', store => {
+      const req = store.get(voti);
+      req.onsuccess = () => {
+        if (!sobib(req.result, 0)) return;
+        store.put({ ...req.result, aegub: Date.now() + SESSIOONI_AEG_MS }, voti).onsuccess = () => { pikendatud = true; };
+      };
+      return req;
+    });
+    return Boolean(kirje) && pikendatud;
   }
 
   /* ---------- võtme hankimine ja ümbriku avamine ---------- */
@@ -483,24 +535,34 @@
       ui.form.dataset.lukkReady = '1';
       ui.form.addEventListener('submit', esitaParool);
     }
+    let fookusNupul = false;   // automaatne kordus ei vii fookust ära (klaviatuuri- ja ekraanilugeja kasutaja)
     for (;;) {
       try {
-        lukuInfo = await laeLukuFail();
+        lukuInfo = await laeLukuFailAjaga();
         break;
       } catch (error) {
         console.error('Lukk: lukk.json laadimine ebaõnnestus', error);
-        // Ilma lukufailita ei tea leht, kas ta on lukus: näita vaadet veateatega, nupp proovib uuesti
+        // Ilma lukufailita ei tea leht, kas ta on lukus: vaade veateatega; nupp proovib kohe, leht ise iga LUKU_KORDUS_MS järel
         const uuesti = new Promise(r => {
           const form = ui.form;
-          const handler = e => { e.preventDefault(); form.removeEventListener('submit', handler, true); r(); };
+          let taimer = null;
+          const handler = e => { e.preventDefault(); jatka(); };
+          const jatka = () => { clearTimeout(taimer); if (form) form.removeEventListener('submit', handler, true); r(); };
           if (form) form.addEventListener('submit', handler, true);
-          else setTimeout(r, 5000);
+          taimer = setTimeout(jatka, form ? LUKU_KORDUS_MS : 5000);
         });
-        naitaVaadet(true);
+        const esimest = !ui.root || ui.root.hidden;
+        if (esimest) naitaVaadet(true);   // korduse ajal on vaade juba nähtav: fookust ei liigutata
         tooOlek(false, 'Proovi uuesti');
         if (ui.input) ui.input.disabled = true;
-        naitaViga(`Lehe oleku kontroll ebaõnnestus (${error.message}). Kontrolli internetiühendust.`);
+        if ((esimest || fookusNupul) && ui.button) {
+          try { ui.button.focus({ preventScroll: true }); } catch (e) { /* fookus pole kriitiline */ }
+        }
+        const tekst = `Lehe oleku kontroll ebaõnnestus (${error.message}). Kontrolli internetiühendust – leht proovib iga ${LUKU_KORDUS_MS / 1000} sekundi järel ise uuesti.`;
+        // role="alert": sama teadet ei kuulutata iga korduse järel uuesti
+        if (!ui.error || ui.error.hidden || ui.error.textContent !== tekst) naitaViga(tekst);
         await uuesti;
+        fookusNupul = Boolean(ui.button) && document.activeElement === ui.button;
         tooOlek(true, 'Kontrollin…');
       }
     }
@@ -513,7 +575,8 @@
     if (salvestatud && salvestatud.salt === lukuInfo.salt && salvestatud.iter === lukuInfo.iter) {
       if (await kontrolliVoti(salvestatud.key, lukuInfo)) {
         votmed.set(votmeId(lukuInfo.salt, lukuInfo.iter), salvestatud.key);
-        // Ülekolimine või sessioonikirje aegumise edasilükkamine (12 h viimasest kasutusest)
+        // Ülekolimine või sessioonikirje aegumise edasilükkamine (12 h viimasest laadimisest; lahti olev vaheleht pikendab
+        // olemasolevat kirjet vahetult enne automaatset uuesti laadimist)
         if (salvestatud === vana || !salvestatud.pysiv) await kirjutaKirje(salvestatud.key, lukuInfo, salvestatud.pysiv);
         lopetaAvamine();
         return true;
@@ -561,5 +624,5 @@
     return new Response(tavatekst, { status: 200, headers: { 'Content-Type': 'application/json' } });
   }
 
-  global.Lukk = { valmis, fetch: lukkFetch, lukusta, get lukus() { return Boolean(lukuInfo); } };
+  global.Lukk = { valmis, fetch: lukkFetch, lukusta, taastub, get lukus() { return Boolean(lukuInfo); } };
 })(window);

@@ -15,12 +15,12 @@
 <meta name="robots" content="noindex, nofollow, noarchive">
 <title>Kauge 32 · Elektri ja päikese dashboard</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="css/common.css?v=20261109i">
+<link rel="stylesheet" href="css/common.css?v=20261109j">
 <!-- Lukk (parooliga kaitse, README „Parooliga kaitse“): ilma defer'ita, et globaal Lukk oleks lehe skriptile olemas ja .app peituks enne esimest joonistamist -->
-<script src="js/lukk.js?v=20261103b"></script>
+<script src="js/lukk.js?v=20261109j"></script>
 <!-- Külastuste loendus (GoatCounter, küpsisteta; README „Külastuste statistika“). Skript on repo sees, sest CSP lubab ainult
      sama saidi skripte; loendus läheb sendBeacon-iga (connect-src). Saadetakse lehe nimi, ekraani laius ja tulek, mitte andmeid. -->
-<script data-goatcounter="https://kauge32.goatcounter.com/count" data-goatcounter-settings='{"no_events":true,"path":"/","title":"Elektriinfo"}' async src="js/vendor/goatcounter-count.js?v=c031008-k32b"></script>
+<script data-goatcounter="https://kauge32.goatcounter.com/count" data-goatcounter-settings='{"no_events":true,"path":"/","title":"Elektriinfo"}' async src="js/vendor/goatcounter-count.js?v=c031008-k32c"></script>
 <link rel="stylesheet" href="css/index.css?v=20261109g">
 <!-- Raamimise kaitse ja teema enne esimest joonistamist (ilma defer'ita) -->
 <script src="js/teema.js?v=20261103b"></script>
@@ -72,11 +72,11 @@
   </header>
 
   <nav class="view-filter" id="view-filter" aria-label="Dashboardi vaated">
-    <button type="button" class="view-pill is-active" data-view="all" aria-pressed="true">Kõik vaated</button>
-    <button type="button" class="view-pill" data-view="electricity" aria-pressed="false"><svg class="icon" aria-hidden="true" focusable="false"><use href="img/icons.svg?v=20261023#i-bolt"></use></svg>Elekter</button>
-    <button type="button" class="view-pill" data-view="solar" aria-pressed="false"><svg class="icon" aria-hidden="true" focusable="false"><use href="img/icons.svg?v=20261023#i-sun"></use></svg>Päike</button>
-    <button type="button" class="view-pill" data-view="planner" aria-pressed="false"><svg class="icon" aria-hidden="true" focusable="false"><use href="img/icons.svg?v=20261023#i-clock"></use></svg>Planeerija &amp; EV</button>
-    <button type="button" class="view-pill" data-view="building" aria-pressed="false" title="Maja üldelekter viimased 12 kuud"><svg class="icon" aria-hidden="true" focusable="false"><use href="img/icons.svg?v=20261023#i-house"></use></svg>Maja üldelekter</button>
+    <button type="button" class="view-pill is-active" id="view-all" data-view="all" aria-pressed="true">Kõik vaated</button>
+    <button type="button" class="view-pill" id="view-electricity" data-view="electricity" aria-pressed="false"><svg class="icon" aria-hidden="true" focusable="false"><use href="img/icons.svg?v=20261023#i-bolt"></use></svg>Elekter</button>
+    <button type="button" class="view-pill" id="view-solar" data-view="solar" aria-pressed="false"><svg class="icon" aria-hidden="true" focusable="false"><use href="img/icons.svg?v=20261023#i-sun"></use></svg>Päike</button>
+    <button type="button" class="view-pill" id="view-planner" data-view="planner" aria-pressed="false"><svg class="icon" aria-hidden="true" focusable="false"><use href="img/icons.svg?v=20261023#i-clock"></use></svg>Planeerija &amp; EV</button>
+    <button type="button" class="view-pill" id="view-building" data-view="building" aria-pressed="false" title="Maja üldelekter viimased 12 kuud"><svg class="icon" aria-hidden="true" focusable="false"><use href="img/icons.svg?v=20261023#i-house"></use></svg>Maja üldelekter</button>
   </nav>
 
   <p id="status" class="status" role="status" aria-live="polite" data-testid="status"></p>
@@ -88,6 +88,9 @@
     <p id="error-message" class="banner__text"></p>
     <button type="button" class="btn" id="retry-button">Proovi uuesti</button>
   </div>
+
+  <!-- Uus versioon (js/common.js jaotis 10, README „Lehe automaatne uuendus“): tühi elav ala, riba luuakse skriptist -->
+  <div id="uuendus" class="uuendus" role="status" aria-live="polite"></div>
 
   <!-- Bento-ruudustik (p 4.2): DOM-järjekord = telefoni ja fookuse järjekord -->
   <main class="layout" id="layout" data-view="all">
@@ -244,7 +247,7 @@
 
   <!-- Jalus: allikad, andmete seis, versioon -->
   <footer class="app-footer">
-    <p><strong>Andmeallikad:</strong> börsihind — Elering Live (Nord Pooli Eesti hinnapiirkonna elektrienergia hind); ost võrgust — võrguarvesti (Elering Estfeed, liitumispunkti arvesti); päike, aku ja maja tarbimine — inverter (Solarman). Tegelik elektriarve sisaldab lisaks müüja marginaali, võrgutasusid, riiklikke tasusid, makse ja võimalikke fikseeritud kuutasusid.</p>
+    <p><strong>Andmeallikad:</strong> börsihind — Elering Live (Nord Pooli Eesti hinnapiirkonna elektrienergia hind); ost võrgust — võrguarvesti (Elering Estfeed, liitumispunkti arvesti); päike, aku ja maja tarbimine — inverter (Solarman). Lõpphind = börsihind ilma KM-ta + müüja marginaal, tasakaalustamisvõimsuse kulu, võrgutasu, taastuvenergia- ja varustuskindluse tasu ning aktsiis, kogu summale käibemaks. Fikseeritud kuutasud (võrgu kuutasu, läbilaskevõime- ja kasutusvõimsuse tasu ning võimalik muu kuutasu) on kaardil „Hind koos tasudega praegu“ ja sisalduvad „Maja üldelektri“ eurodes. Tegelik arve võib erineda.</p>
     <p id="footer-data" class="app-footer__data" hidden></p>
     <div class="app-footer__meta">
       <p id="footer-updated">Andmeid pole veel uuendatud</p>
@@ -440,7 +443,7 @@ const CONFIG = {
 };
 </script>
 <!-- Mõlema lehe ühine skriptikood (aeg, vormindamine, DOM-abi, graafikute ühisosa); peab laadima enne põhiskripti -->
-<script src="js/common.js?v=20261109i"></script>
-<script src="js/index.js?v=20261109i"></script>
+<script src="js/common.js?v=20261109j"></script>
+<script src="js/index.js?v=20261109j"></script>
 </body>
 </html>
