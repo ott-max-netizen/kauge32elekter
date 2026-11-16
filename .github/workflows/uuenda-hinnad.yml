@@ -710,6 +710,108 @@ jobs:
               step = ts[1] - ts[0]  # 900 (15 min) või 3600 (1 h)
               return all(b - a == step for a, b in zip(ts, ts[1:])) and ts[-1] + step == t1
 
+          # --- Nord Pooli varuallikas homsetele hindadele ---
+          # Eleringi dashboard laeb Nord Pooli day-ahead tulemused mõnikord tunde hiljem, kui need on mujal avalikud
+          # (16.11.2026: Nord Poolis 14:25, Eleringis alles ~17:40 Eesti aja järgi). Kui homne päev on Eleringis puudu või
+          # poolik, täidetakse puuduv osa Nord Pooli avaliku andmeportaali samadest day-ahead hindadest (EE, EUR/MWh; võtit
+          # pole vaja). Eleringi read on alati eelistatud; Nord Pooli ridu kasutatakse ainult siis, kui nendega on kogu homne
+          # päev kaetud. Iga käivitus pärib Eleringi uuesti, nii et Eleringi hinnad asendavad Nord Pooli omad, kui need sinna jõuavad.
+          NORDPOOL_API = os.environ.get("NORDPOOL_URL", "https://dataportal-api.nordpoolgroup.com/api/DayAheadPrices")
+          NORDPOOL_ALATES = (14, 0)     # varem homseid hindu pole (Nord Pool avaldab ~13:45 Eesti aja järgi)
+          NORDPOOL_SAMM_S = 5 * 60      # ootamise ajal pärib Nord Pooli iga 5 min järel (Eleringi iga minuti järel)
+          CET = ZoneInfo("Europe/Berlin")  # Nord Pooli päev (deliveryDateCET) on Kesk-Euroopa aja järgi
+          require_https(NORDPOOL_API, "NORDPOOL_URL")
+          nordpool_tried_at = None   # time.monotonic() viimasel Nord Pooli päringul
+
+          def parse_iso_utc(s):
+              """Nord Pooli aeg (nt 2026-11-16T23:00:00Z) -> Unix sekundid; ainult UTC (Z) aeg."""
+              if not isinstance(s, str) or not s.endswith("Z"):
+                  raise ValueError(f"vigane aeg {s!r}")
+              return int(datetime.fromisoformat(s[:-1] + "+00:00").timestamp())
+
+          def parse_nordpool_day(data):
+              """Nord Pooli DayAheadPrices vastus (üks CET päev) -> {timestamp: hind €/MWh} 15-min sammuga. Pikem samm
+              (tunnine) jagatakse veeranditeks sama hinnaga. Ainult lõplikud (Final) EUR hinnad."""
+              if not isinstance(data, dict) or data.get("market") != "DayAhead" or data.get("currency") != "EUR":
+                  raise ValueError("ootamatu vastus (market/currency)")
+              states = {a: s.get("state") for s in data.get("areaStates") or [] if isinstance(s, dict) for a in s.get("areas") or []}
+              if states.get("EE") != "Final":
+                  raise LookupError(f"EE hinnad pole veel lõplikud ({states.get('EE')})")
+              out = {}
+              for e in data.get("multiAreaEntries") or []:
+                  t0, t1 = parse_iso_utc(e.get("deliveryStart")), parse_iso_utc(e.get("deliveryEnd"))
+                  price = (e.get("entryPerArea") or {}).get("EE")
+                  if isinstance(price, bool) or not isinstance(price, (int, float)) or not math.isfinite(price) or not -1000 <= price <= 10000:
+                      raise ValueError(f"vigane hind {price!r}")
+                  if t1 <= t0 or t0 % 900 or (t1 - t0) % 900 or t1 - t0 > 3600:
+                      raise ValueError(f"vigane periood {e.get('deliveryStart')}–{e.get('deliveryEnd')}")
+                  for t in range(t0, t1, 900):
+                      out[t] = round(float(price), 4)
+              return out
+
+          def fetch_nordpool_prices(start_dt, end_dt):
+              """Nord Pooli day-ahead hinnad Eesti piirkonnas vahemikus [start_dt, end_dt) -> [{timestamp, price}, ...].
+              Varuallikas: iga viga (võrk, andmeid veel pole, vigane vastus) -> [] ja jätkatakse Eleringi andmetega."""
+              d0, d1 = start_dt.astimezone(CET).date(), (end_dt - timedelta(seconds=1)).astimezone(CET).date()
+              prices = {}
+              day = d0
+              while day <= d1:
+                  url = NORDPOOL_API + "?" + urllib.parse.urlencode({
+                      "date": day.isoformat(), "market": "DayAhead", "deliveryArea": "EE", "currency": "EUR"})
+                  raw = None
+                  for attempt in range(1, 3):
+                      try:
+                          req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "application/json"})
+                          with OPENER.open(req, timeout=30) as r:
+                              raw = read_limited(r) if r.status != 204 else b""
+                          break
+                      except urllib.error.HTTPError as e:
+                          print(f"Nord Pool {day} katse {attempt} ebaõnnestus: HTTP {e.code}")
+                      except Exception as e:
+                          print(f"Nord Pool {day} katse {attempt} ebaõnnestus: {one_line(e)}")
+                      time.sleep(5 * attempt)
+                  if raw is None:
+                      return []
+                  if not raw.strip():   # 204: selle päeva hindu pole (veel)
+                      print(f"Nord Pool: {day} hindu veel pole.")
+                      return []
+                  try:
+                      prices.update(parse_nordpool_day(json.loads(raw, parse_constant=reject_constant)))
+                  except LookupError as e:
+                      print(f"Nord Pool {day}: {one_line(e)}")
+                      return []
+                  except Exception as e:
+                      print(f"Nord Pooli vastus ({day}) on vigane: {one_line(e)}")
+                      return []
+                  day += timedelta(days=1)
+              t0, t1 = int(start_dt.timestamp()), int(end_dt.timestamp())
+              return [{"timestamp": t, "price": p} for t, p in sorted(prices.items()) if t0 <= t < t1]
+
+          def with_nordpool_tomorrow(ee, now):
+              """Kui homne päev on Eleringi vastuses puudu või poolik, täidab puuduvad perioodid Nord Poolist. Tagastab
+              täiendatud loendi ainult siis, kui sellega on kogu homne päev kaetud; muidu muutmata Eleringi loendi."""
+              global nordpool_tried_at
+              cur = tallinn_now()
+              if tomorrow_complete(ee, now) or (cur.hour, cur.minute) < NORDPOOL_ALATES:
+                  return ee
+              if nordpool_tried_at is not None and time.monotonic() - nordpool_tried_at < NORDPOOL_SAMM_S:
+                  return ee
+              nordpool_tried_at = time.monotonic()
+              t0, t1 = midnight(now, 1), midnight(now, 2)
+              have = {r["timestamp"] for r in ee}
+              # Pärib ainult puuduva osa: tavaliselt on Eleringis homne 00:00–01:00 (eelmine CET päev) juba olemas
+              first_missing = next((t for t in range(int(t0.timestamp()), int(t1.timestamp()), 900) if t not in have), None)
+              if first_missing is None:
+                  return ee
+              rows = fetch_nordpool_prices(datetime.fromtimestamp(first_missing, TZ), t1)
+              extra = [r for r in rows if r["timestamp"] not in have]
+              merged = sorted(ee + extra, key=lambda r: r["timestamp"])
+              if not extra or not tomorrow_complete(merged, now):
+                  print(f"Nord Poolis pole veel kogu homset päeva ({len(rows)} perioodi).")
+                  return ee
+              print(f"Homsed hinnad Nord Poolist: {len(extra)} perioodi (Eleringis neid veel pole).")
+              return merged
+
           def row_steps(rows):
               """Iga hinnarea kestus sekundites: 900 (15 min) või 3600 (tunnine rida). Puuduva rea korral eelmist
               rida ei pikendata (augu ees olev rida saab oma sammu naaberridade järgi, tunnine rida algab täistunnil)."""
@@ -1007,11 +1109,12 @@ jobs:
           wait_from = publish + timedelta(minutes=OOTA_ALATES_MIN)
           wait_until = min(publish + timedelta(minutes=OOTA_KUNI_MIN), now + timedelta(seconds=MAX_OOTUS_S))
 
-          ee = fetch_nps_prices(start, end, strict=True)
+          # Homne päev Eleringist; kui seal veel puudub, siis Nord Poolist (with_nordpool_tomorrow, ootamise ajal iga 5 min järel)
+          ee = with_nordpool_tomorrow(fetch_nps_prices(start, end, strict=True), now)
           while not tomorrow_complete(ee, now) and wait_from <= tallinn_now() < wait_until:
               print(f"{tallinn_now():%H:%M} homseid hindu veel pole, kontrollin {SAMM_S} s pärast uuesti")
               time.sleep(SAMM_S)
-              ee = fetch_nps_prices(start, end, strict=True)
+              ee = with_nordpool_tomorrow(fetch_nps_prices(start, end, strict=True), now)
           print("Homsed hinnad olemas." if tomorrow_complete(ee, now) else "Homseid hindu veel pole.")
 
           now = tallinn_now()

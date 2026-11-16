@@ -4,6 +4,24 @@ See fail kirjeldab rakenduse `index.html` versioonimuudatusi, arhitektuurilisi k
 
 ---
 
+## Töövoog: homsed hinnad Nord Poolist, kui Eleringis neid veel pole — 2026-11-16
+
+- **Probleem:** 16.11.2026 oli Eleringi dashboardi API-s (`/api/nps/price`, ka `/EE/latest`) kuni ~17:40 hindu ainult kuni
+  17.11 kell 01:00 (kõik tsoonid EE/FI/LV/LT), kuigi Nord Pool avaldas homsed hinnad juba 14:25 Eesti aja järgi.
+  Töövoo kood polnud muutunud (15.11 sai sama kood homsed hinnad 15:01); viivitus oli Eleringi poolel.
+- **Lahendus** (`uuenda-hinnad.yml`, `with_nordpool_tomorrow`): kui homne päev on Eleringi vastuses alates 14:00 puudu
+  või poolik, päritakse Nord Pooli avalikust andmeportaalist (`/api/DayAheadPrices`, EE, EUR) puuduv osa (CET päeva
+  kaupa, ainult `Final` hinnad; võtit pole vaja). Puuduvad perioodid täidetakse ainult siis, kui nendega on kogu homne
+  päev kaetud; Eleringi read on alati eelistatud. Ootamise ajal (14:50–16:30) pärib Nord Pooli iga 5 min järel. Iga
+  käivitus pärib Eleringi uuesti, nii et Eleringi hinnad asendavad Nord Pooli omad kohe, kui need sinna jõuavad.
+  Kontroll 16.–17.11: Nord Pooli ja Eleringi hinnad olid kõigil 192 perioodil identsed.
+- Tunnine samm jagatakse veeranditeks sama hinnaga. Iga viga (võrk, 204 = andmeid veel pole, mitte-lõplikud hinnad,
+  vigane vastus või hind) on ainult logirida, töövoog jätkab Eleringi andmetega nagu varem.
+- Esialgu proovitud ENTSO-E varuallikas (vajab käsitsi kinnitatavat API tokenit) asendati Nord Pooliga.
+- Lehtedel muudatust pole; `hinnad.json`-i vorming sama. README „Kuidas see töötab“ ja „Kui hinnad ei uuene“.
+
+---
+
 ## [3.12.0], energy-dashboard.html [2.12.0] ja graafikud.html [1.6.0] — 2026-11-09 · lehe automaatne uuendus, väikesed märkused M1–M9
 
 Kõik kolm lehte uuendavad lahti olles ka oma koodi (kasutaja soov: „leht uuendab end ise kui keegi ei kasuta ja igal
