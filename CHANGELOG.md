@@ -4,20 +4,20 @@ See fail kirjeldab rakenduse `index.html` versioonimuudatusi, arhitektuurilisi k
 
 ---
 
-## Töövoog: homsed hinnad ENTSO-E-st, kui Eleringis neid veel pole — 2026-11-16
+## Töövoog: homsed hinnad Nord Poolist, kui Eleringis neid veel pole — 2026-11-16
 
-- **Probleem:** 16.11.2026 kell 17:15 oli Eleringi dashboardi API-s (`/api/nps/price`, ka `/EE/latest`) hindu ainult kuni
-  17.11 kell 01:00 (kõik tsoonid EE/FI/LV/LT), kuigi Nord Pool oli homsed hinnad avaldanud ja need olid mujal näha.
+- **Probleem:** 16.11.2026 oli Eleringi dashboardi API-s (`/api/nps/price`, ka `/EE/latest`) kuni ~17:40 hindu ainult kuni
+  17.11 kell 01:00 (kõik tsoonid EE/FI/LV/LT), kuigi Nord Pool avaldas homsed hinnad juba 14:25 Eesti aja järgi.
   Töövoo kood polnud muutunud (15.11 sai sama kood homsed hinnad 15:01); viivitus oli Eleringi poolel.
-- **Lahendus** (`uuenda-hinnad.yml`, `with_entsoe_tomorrow`): kui homne päev on Eleringi vastuses alates 14:00 puudu või
-  poolik ja Secret `ENTSOE_TOKEN` on olemas, päritakse ENTSO-E Transparency Platformist day-ahead hinnad (A44, Eesti
-  pakkumispiirkond `10Y1001A1001A39I`). Puuduvad perioodid täidetakse ainult siis, kui nendega on kogu homne päev
-  (ka 23/25 h päev) kaetud; Eleringi read on alati eelistatud. Ootamise ajal (14:50–16:30) pärib ENTSO-E-d iga 5 min
-  järel. Iga käivitus pärib Eleringi uuesti, nii et Eleringi hinnad asendavad ENTSO-E omad kohe, kui need sinna jõuavad.
-- **XML:** nimeruumi versioonist sõltumatu, curveType A03 (puuduv positsioon = eelmine hind), PT60M/PT30M jagatakse
-  veeranditeks, mitme aegrea korral eelistatakse 15-min rida; DOCTYPE/ENTITY keelatud, vastuse suuruse piir nagu Eleringil.
-  Iga viga (võrk, 401 vale token, „No matching data found“, vigane XML või hind) on ainult logirida, töövoog jätkab
-  Eleringi andmetega nagu varem.
+- **Lahendus** (`uuenda-hinnad.yml`, `with_nordpool_tomorrow`): kui homne päev on Eleringi vastuses alates 14:00 puudu
+  või poolik, päritakse Nord Pooli avalikust andmeportaalist (`/api/DayAheadPrices`, EE, EUR) puuduv osa (CET päeva
+  kaupa, ainult `Final` hinnad; võtit pole vaja). Puuduvad perioodid täidetakse ainult siis, kui nendega on kogu homne
+  päev kaetud; Eleringi read on alati eelistatud. Ootamise ajal (14:50–16:30) pärib Nord Pooli iga 5 min järel. Iga
+  käivitus pärib Eleringi uuesti, nii et Eleringi hinnad asendavad Nord Pooli omad kohe, kui need sinna jõuavad.
+  Kontroll 16.–17.11: Nord Pooli ja Eleringi hinnad olid kõigil 192 perioodil identsed.
+- Tunnine samm jagatakse veeranditeks sama hinnaga. Iga viga (võrk, 204 = andmeid veel pole, mitte-lõplikud hinnad,
+  vigane vastus või hind) on ainult logirida, töövoog jätkab Eleringi andmetega nagu varem.
+- Esialgu proovitud ENTSO-E varuallikas (vajab käsitsi kinnitatavat API tokenit) asendati Nord Pooliga.
 - Lehtedel muudatust pole; `hinnad.json`-i vorming sama. README „Kuidas see töötab“ ja „Kui hinnad ei uuene“.
 
 ---
