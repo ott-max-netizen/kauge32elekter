@@ -12,6 +12,8 @@
 #   SOLARMAN_*            - samad mis uuenda-paike.yml-is (paevad.json-i varasemate päevade laadimiseks;
 #                           puudumisel arvutatakse ainult eilne päev paike.json-ist)
 # Valikuline:
+#   ENTSOE_TOKEN          - ENTSO-E Transparency Platformi API token (varuallikas: homsed hinnad ENTSO-E-st, kui
+#                           Eleringis neid veel pole; puudumisel kasutatakse ainult Eleringi)
 #   LEHE_PAROOL           - lehe parool: hinnad.json ja paevad.json avaldatakse krüpteeritult (.github/scripts/lukk.py),
 #                           brauser dekrüpteerib pärast parooli sisestamist (README „Parooliga kaitse“)
 #   LEHE_PAROOL_VANA      - ainult parooli vahetuse või kaitse mahavõtmise ajaks (eelmine parool)
@@ -122,6 +124,7 @@ jobs:
           ELERING_CLIENT_ID: ${{ secrets.ELERING_CLIENT_ID }}
           ELERING_CLIENT_SECRET: ${{ secrets.ELERING_CLIENT_SECRET }}
           ELERING_EIC: ${{ secrets.ELERING_EIC }}
+          ENTSOE_TOKEN: ${{ secrets.ENTSOE_TOKEN }}
           # Päevakokkuvõtete (paevad.json) varasemad päevad laaditakse Solarmani history-päringuga
           SOLARMAN_APP_ID: ${{ secrets.SOLARMAN_APP_ID }}
           SOLARMAN_APP_SECRET: ${{ secrets.SOLARMAN_APP_SECRET }}
@@ -710,6 +713,160 @@ jobs:
               step = ts[1] - ts[0]  # 900 (15 min) või 3600 (1 h)
               return all(b - a == step for a, b in zip(ts, ts[1:])) and ts[-1] + step == t1
 
+          # --- ENTSO-E varuallikas homsetele hindadele ---
+          # Eleringi dashboard laeb Nord Pooli day-ahead tulemused mõnikord tunde hiljem, kui need on mujal avalikud
+          # (16.11.2026: kell 17:15 oli Eleringis hinnad ainult kuni homme 01:00). Kui homne päev on Eleringis puudu või
+          # poolik, täidetakse puuduv osa ENTSO-E Transparency Platformi samadest day-ahead hindadest (A44, EE pakkumispiirkond).
+          # Eleringi read on alati eelistatud; ENTSO-E ridu kasutatakse ainult siis, kui nendega on kogu homne päev kaetud.
+          # Iga käivitus pärib Eleringi uuesti, nii et Eleringi hinnad asendavad ENTSO-E omad kohe, kui need sinna jõuavad.
+          ENTSOE_API = os.environ.get("ENTSOE_URL", "https://web-api.tp.entsoe.eu/api")
+          ENTSOE_EE = "10Y1001A1001A39I"   # Eesti pakkumispiirkonna EIC-kood
+          ENTSOE_ALATES = (14, 0)           # varem pole homseid hindu kusagil (Nord Pool avaldab ~13:45 Eesti aja järgi)
+          ENTSOE_SAMM_S = 5 * 60            # ootamise ajal pärib ENTSO-E-d iga 5 min järel (Eleringi iga minuti järel)
+          ENTSOE_RES = {"PT15M": 900, "PT30M": 1800, "PT60M": 3600}
+          ENTSOE_TOKEN = os.environ.get("ENTSOE_TOKEN", "").strip().strip('"').strip("'")
+          mask(ENTSOE_TOKEN)
+          require_https(ENTSOE_API, "ENTSOE_URL")
+          entsoe_tried_at = None   # time.monotonic() viimasel ENTSO-E päringul
+
+          def xml_local(tag):
+              return tag.rsplit("}", 1)[-1]   # nimeruumita nimi: dokumendi skeemi versioon (7:0, 7:3, …) võib muutuda
+
+          def xml_child(el, name):
+              return next((c for c in el if xml_local(c.tag) == name), None)
+
+          def xml_text(el, name):
+              c = xml_child(el, name)
+              return (c.text or "").strip() if c is not None else ""
+
+          def parse_entsoe_time(s):
+              for fmt in ("%Y-%m-%dT%H:%MZ", "%Y-%m-%dT%H:%M:%SZ"):
+                  try:
+                      return int(datetime.strptime(s, fmt).replace(tzinfo=timezone.utc).timestamp())
+                  except ValueError:
+                      pass
+              raise ValueError(f"vigane aeg {s!r}")
+
+          def parse_entsoe_prices(raw):
+              """ENTSO-E Publication_MarketDocument (A44) -> {timestamp: hind €/MWh} 15-min sammuga. Pikem samm (PT60M)
+              jagatakse veeranditeks sama hinnaga. Puuduv positsioon (curveType A03) tähendab eelmise positsiooni hinda.
+              Mitme aegrea korral eelistatakse peenemat sammu ja väiksemat classificationSequence positsiooni."""
+              import xml.etree.ElementTree as ET
+              if b"<!DOCTYPE" in raw or b"<!ENTITY" in raw:
+                  raise ValueError("DOCTYPE/ENTITY pole lubatud")
+              root = ET.fromstring(raw)
+              if xml_local(root.tag) != "Publication_MarketDocument":
+                  reason = next((xml_text(r, "text") for r in root.iter() if xml_local(r.tag) == "Reason"), "")
+                  raise LookupError(f"{xml_local(root.tag)}: {reason[:200] or 'andmeid pole'}")
+              series = []
+              for ts_el in root:
+                  if xml_local(ts_el.tag) != "TimeSeries":
+                      continue
+                  if xml_text(ts_el, "contract_MarketAgreement.type") not in ("", "A01"):   # A01 = day-ahead
+                      continue
+                  if xml_text(ts_el, "currency_Unit.name") not in ("", "EUR") or xml_text(ts_el, "price_Measure_Unit.name") not in ("", "MWH"):
+                      continue
+                  seq_el = xml_child(ts_el, "classificationSequence_AttributeInstanceComponent.position")
+                  seq = int(seq_el.text) if seq_el is not None and (seq_el.text or "").strip().isdigit() else 1
+                  for per in ts_el:
+                      if xml_local(per.tag) != "Period":
+                          continue
+                      ti = xml_child(per, "timeInterval")
+                      step = ENTSOE_RES.get(xml_text(per, "resolution"))
+                      if ti is None or not step:
+                          continue
+                      p0, p1 = parse_entsoe_time(xml_text(ti, "start")), parse_entsoe_time(xml_text(ti, "end"))
+                      n = (p1 - p0) // step
+                      if n <= 0 or (p1 - p0) % step or p0 % 900:
+                          continue
+                      pts = {}
+                      for pt in per:
+                          if xml_local(pt.tag) != "Point":
+                              continue
+                          pos, price = int(xml_text(pt, "position")), float(xml_text(pt, "price.amount"))
+                          if not 1 <= pos <= n or not math.isfinite(price) or not -1000 <= price <= 10000:
+                              raise ValueError(f"vigane punkt position={pos} price={price}")
+                          pts[pos] = price
+                      if 1 not in pts:
+                          continue
+                      rows, last = {}, None
+                      for i in range(1, n + 1):
+                          last = pts.get(i, last)
+                          for q in range(0, step, 900):
+                              rows[p0 + (i - 1) * step + q] = last
+                      series.append((step, seq, rows))
+              out = {}
+              for _, _, rows in sorted(series, key=lambda s: (s[0], s[1])):
+                  for t, p in rows.items():
+                      out.setdefault(t, round(p, 4))
+              return out
+
+          def fetch_entsoe_prices(start_dt, end_dt):
+              """ENTSO-E day-ahead hinnad Eesti pakkumispiirkonnas vahemikus [start_dt, end_dt) -> [{timestamp, price}, ...].
+              Varuallikas: iga viga (võrk, token, andmeid veel pole, vigane XML) -> [] ja jätkatakse Eleringi andmetega."""
+              utc = lambda dt: dt.astimezone(timezone.utc).strftime("%Y%m%d%H%M")
+              url = ENTSOE_API + "?" + urllib.parse.urlencode({
+                  "securityToken": ENTSOE_TOKEN, "documentType": "A44",
+                  "in_Domain": ENTSOE_EE, "out_Domain": ENTSOE_EE,
+                  "periodStart": utc(start_dt), "periodEnd": utc(end_dt),
+              })
+              raw = None
+              for attempt in range(1, 3):
+                  try:
+                      req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "application/xml"})
+                      with OPENER.open(req, timeout=30) as r:
+                          raw = read_limited(r)
+                      break
+                  except urllib.error.HTTPError as e:
+                      # 400 koos Acknowledgement-dokumendiga = andmeid pole (veel); 401/403 = vale või puuduv token
+                      body = b""
+                      try:
+                          body = read_limited(e, 100_000)
+                      except Exception:
+                          pass
+                      if e.code in (400, 401, 403, 404):
+                          raw = body if e.code == 400 else None
+                          if raw is None:
+                              print(f"ENTSO-E: HTTP {e.code} (kontrolli ENTSOE_TOKEN-it)")
+                          break
+                      print(f"ENTSO-E katse {attempt} ebaõnnestus: HTTP {e.code}")
+                  except Exception as e:
+                      print(f"ENTSO-E katse {attempt} ebaõnnestus: {one_line(e)}")
+                  time.sleep(5 * attempt)
+              if not raw:
+                  return []
+              try:
+                  prices = parse_entsoe_prices(raw)
+              except LookupError as e:
+                  print(f"ENTSO-E: {one_line(e)}")
+                  return []
+              except Exception as e:
+                  print(f"ENTSO-E vastus on vigane: {one_line(e)}")
+                  return []
+              t0, t1 = int(start_dt.timestamp()), int(end_dt.timestamp())
+              return [{"timestamp": t, "price": p} for t, p in sorted(prices.items()) if t0 <= t < t1]
+
+          def with_entsoe_tomorrow(ee, now):
+              """Kui homne päev on Eleringi vastuses puudu või poolik, täidab puuduvad perioodid ENTSO-E-st. Tagastab
+              täiendatud loendi ainult siis, kui sellega on kogu homne päev kaetud; muidu muutmata Eleringi loendi."""
+              global entsoe_tried_at
+              cur = tallinn_now()
+              if not ENTSOE_TOKEN or tomorrow_complete(ee, now) or (cur.hour, cur.minute) < ENTSOE_ALATES:
+                  return ee
+              if entsoe_tried_at is not None and time.monotonic() - entsoe_tried_at < ENTSOE_SAMM_S:
+                  return ee
+              entsoe_tried_at = time.monotonic()
+              t0, t1 = midnight(now, 1), midnight(now, 2)
+              rows = fetch_entsoe_prices(t0, t1)
+              have = {r["timestamp"] for r in ee}
+              extra = [r for r in rows if r["timestamp"] not in have]
+              merged = sorted(ee + extra, key=lambda r: r["timestamp"])
+              if not extra or not tomorrow_complete(merged, now):
+                  print(f"ENTSO-E-s pole veel kogu homset päeva ({len(rows)} perioodi).")
+                  return ee
+              print(f"Homsed hinnad ENTSO-E-st: {len(extra)} perioodi (Eleringis neid veel pole).")
+              return merged
+
           def row_steps(rows):
               """Iga hinnarea kestus sekundites: 900 (15 min) või 3600 (tunnine rida). Puuduva rea korral eelmist
               rida ei pikendata (augu ees olev rida saab oma sammu naaberridade järgi, tunnine rida algab täistunnil)."""
@@ -1007,12 +1164,15 @@ jobs:
           wait_from = publish + timedelta(minutes=OOTA_ALATES_MIN)
           wait_until = min(publish + timedelta(minutes=OOTA_KUNI_MIN), now + timedelta(seconds=MAX_OOTUS_S))
 
-          ee = fetch_nps_prices(start, end, strict=True)
+          # Homne päev Eleringist; kui seal veel puudub, siis ENTSO-E-st (with_entsoe_tomorrow, ootamise ajal iga 5 min järel)
+          ee = with_entsoe_tomorrow(fetch_nps_prices(start, end, strict=True), now)
           while not tomorrow_complete(ee, now) and wait_from <= tallinn_now() < wait_until:
               print(f"{tallinn_now():%H:%M} homseid hindu veel pole, kontrollin {SAMM_S} s pärast uuesti")
               time.sleep(SAMM_S)
-              ee = fetch_nps_prices(start, end, strict=True)
+              ee = with_entsoe_tomorrow(fetch_nps_prices(start, end, strict=True), now)
           print("Homsed hinnad olemas." if tomorrow_complete(ee, now) else "Homseid hindu veel pole.")
+          if not ENTSOE_TOKEN and not tomorrow_complete(ee, now) and (now.hour, now.minute) >= (16, 30):
+              print("ENTSOE_TOKEN puudub: ENTSO-E varuallikat ei kasutata.")
 
           now = tallinn_now()
           now_ts = int(now.timestamp())

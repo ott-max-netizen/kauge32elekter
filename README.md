@@ -13,6 +13,13 @@ Elering API → GitHub Actions → hinnad.json → GitHub Pages → index.html b
 - `.github/workflows/uuenda-hinnad.yml` laeb hinnad, kontrollib neid ja teeb commit'i
   ainult siis, kui need muutusid. Käivitus, mis algab 14:50–16:30, jääb ise ootama,
   kuni homsed hinnad ilmuvad (kuni 40 min).
+- **Varuallikas ENTSO-E:** Eleringi dashboard laeb Nord Pooli tulemused mõnikord tunde hiljem, kui need on mujal
+  avalikud. Kui homne päev on Eleringis alates 14:00 puudu või poolik, võtab töövoog puuduvad perioodid ENTSO-E
+  Transparency Platformist (samad day-ahead hinnad, Eesti pakkumispiirkond; ootamise ajal iga 5 min järel). Eleringi
+  read on alati eelistatud ja asendavad ENTSO-E omad järgmisel käivitusel, kui Elering need lisab. Lehel seda eraldi ei
+  näidata. Vajab GitHub Actions Secretit `ENTSOE_TOKEN` (tasuta: registreeru transparency.entsoe.eu-s, kirjuta
+  transparency@entsoe.eu-le pealkirjaga „Restful API access“ ja loo seejärel konto seadetes *Web API Security Token*);
+  ilma selleta kasutatakse ainult Eleringi.
 - Töövood käivitab **väline ajastaja iga 30 minuti järel** (:00 ja :30): see käivitab
   `uuenda-hinnad.yml`-i ja too omakorda `uuenda-paike.yml`-i. GitHubi enda `schedule` on ainult
   lisavaru – GitHub lükkab ajastatud käivitusi edasi või jätab vahele (tegelikult ~5–6 korda ööpäevas).
@@ -172,6 +179,9 @@ vanale. Pärast parandust jõuab see neile tavapäraselt.
    kohe ka töövoo **Uuenda päikeseandmed**, nii et mõlemad andmefailid uuenevad korraga.
 3. Punane käivitus tähendab, et Elering ei vastanud või vastus oli vigane.
    Vana `hinnad.json` jääb sel juhul alles.
+4. Kui homseid hindu pole, aga need on mujal avalikud: logis „Homseid hindu veel pole.“ tähendab, et ka ENTSO-E-s
+   polnud veel kogu homset päeva või `ENTSOE_TOKEN` puudub/on vale (logirida „ENTSO-E: HTTP 401“). Homsete hindade
+   olemasolu Eleringis näeb aadressilt `https://dashboard.elering.ee/api/nps/price/EE/latest`.
 
 GitHub lükkab ajastatud käivitusi edasi või jätab need vahele, seega käivitab töövoo väline
 ajastaja (nt cron-job.org) **iga 30 minuti järel** (:00 ja :30, ajavöönd Europe/Tallinn). Kui
@@ -892,7 +902,7 @@ tegemisega.
 
 ## Turvalisus
 
-- API võtmed (Elering, Solarman) on ainult GitHub Actions Secretsis; töövood annavad secret'id
+- API võtmed (Elering, ENTSO-E, Solarman) on ainult GitHub Actions Secretsis; töövood annavad secret'id
   edasi keskkonnamuutujatena ja kirjutavad andmefailidesse ainult mõõteväärtused.
 - Lehe parool (`LEHE_PAROOL`) on samuti ainult Secretsis; andmefailid avaldatakse krüpteeritult ja
   avatakse brauseris (vt „Parooliga kaitse“). `js/lukk.js` laaditakse samalt saidilt (CSP lubab).

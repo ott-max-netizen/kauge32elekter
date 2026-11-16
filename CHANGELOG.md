@@ -4,6 +4,24 @@ See fail kirjeldab rakenduse `index.html` versioonimuudatusi, arhitektuurilisi k
 
 ---
 
+## Töövoog: homsed hinnad ENTSO-E-st, kui Eleringis neid veel pole — 2026-11-16
+
+- **Probleem:** 16.11.2026 kell 17:15 oli Eleringi dashboardi API-s (`/api/nps/price`, ka `/EE/latest`) hindu ainult kuni
+  17.11 kell 01:00 (kõik tsoonid EE/FI/LV/LT), kuigi Nord Pool oli homsed hinnad avaldanud ja need olid mujal näha.
+  Töövoo kood polnud muutunud (15.11 sai sama kood homsed hinnad 15:01); viivitus oli Eleringi poolel.
+- **Lahendus** (`uuenda-hinnad.yml`, `with_entsoe_tomorrow`): kui homne päev on Eleringi vastuses alates 14:00 puudu või
+  poolik ja Secret `ENTSOE_TOKEN` on olemas, päritakse ENTSO-E Transparency Platformist day-ahead hinnad (A44, Eesti
+  pakkumispiirkond `10Y1001A1001A39I`). Puuduvad perioodid täidetakse ainult siis, kui nendega on kogu homne päev
+  (ka 23/25 h päev) kaetud; Eleringi read on alati eelistatud. Ootamise ajal (14:50–16:30) pärib ENTSO-E-d iga 5 min
+  järel. Iga käivitus pärib Eleringi uuesti, nii et Eleringi hinnad asendavad ENTSO-E omad kohe, kui need sinna jõuavad.
+- **XML:** nimeruumi versioonist sõltumatu, curveType A03 (puuduv positsioon = eelmine hind), PT60M/PT30M jagatakse
+  veeranditeks, mitme aegrea korral eelistatakse 15-min rida; DOCTYPE/ENTITY keelatud, vastuse suuruse piir nagu Eleringil.
+  Iga viga (võrk, 401 vale token, „No matching data found“, vigane XML või hind) on ainult logirida, töövoog jätkab
+  Eleringi andmetega nagu varem.
+- Lehtedel muudatust pole; `hinnad.json`-i vorming sama. README „Kuidas see töötab“ ja „Kui hinnad ei uuene“.
+
+---
+
 ## [3.12.0], energy-dashboard.html [2.12.0] ja graafikud.html [1.6.0] — 2026-11-09 · lehe automaatne uuendus, väikesed märkused M1–M9
 
 Kõik kolm lehte uuendavad lahti olles ka oma koodi (kasutaja soov: „leht uuendab end ise kui keegi ei kasuta ja igal
