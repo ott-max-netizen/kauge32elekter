@@ -4,6 +4,29 @@ See fail kirjeldab rakenduse `index.html` versioonimuudatusi, arhitektuurilisi k
 
 ---
 
+## energy-dashboard.html [2.13.0] ja töövoog — 2026-11-21 · aku tulu laoarvestusega
+
+- **Probleem:** aku tulu laetuse muutuse osa hinnati iga päev eraldi: akku lisandunud energia laadimispäeva keskmise
+  laadimishinnaga, akust võetud energia tühjenduspäeva laadimishinnaga või (laadimiseta päeval) maja keskmise
+  ostuhinnaga. Hinnad ei kattunud, nii et päevade summa ei klappinud rahavoogudega: 31.08–30.10.2026 oli päevade summa
+  419 €, rahavoogudest 406 € ja aku laetus kasvas perioodiga vaid 48 % → 65 %. Laupäeval laetud ja teisipäeval
+  tühjendatud energia tulu läks valesti (24.10 −0,61 €, 27.10 +2,85 €; laoarvestusega −0,66 € ja +5,04 €).
+- **Lahendus – laoarvestus (kaalutud keskmine soetushind):** akus oleval energial on soetusmaksumus. Laadimine lisab
+  energiat ja maksumust, päeva lõpus on alles osa „laetus lõpus / (laetus alguses + laetud kWh)“ sellest maksumusest.
+  Päeva tulu = tühjendamise väärtus − laadimise kulu + laovaru muutus. Perioodi summa = rahavood + laovaru muutus.
+  - Töövoog (`uuenda-hinnad.yml`, `battery_inventory`, asendab `battery_gain`-i): `paevad.json` kirjetes uued tuletatud
+    väljad `storedStartEur` ja `storedEndEur`, `batteryGainEur` laoarvestusega. Ahel jätkub eilse kirje laovaruga, kui
+    laetus jätkub (≤ 10 %-punkti), muidu algab päeva laetusest päeva keskmise laadimishinnaga.
+  - Energialeht (`js/energy-dashboard.js`, `inventoryDay`, `finishTotals`, `sumTotals`): täna algab eilse kirje
+    `storedEndEur`-ist; perioodi tulu on päevade tulude summa; rida „Laetus x → y“ näitab laovaru muutust €.
+    Vanas failis ilma laovaruta jääb varasem hinnang.
+  - Elektriinfo lehe „Eile“ rida ja graafikute leht loevad `batteryGainEur`-i nagu enne – koodimuutust pole.
+- **Kontroll** (01.06–30.10.2026 krüpteerimata `paevad.json`): lehe ja töövoo päevatulud on samad (vahe 0,0000 €),
+  laovaru vahe ≤ 0,0005 €; 31.08–30.10 tulu 407,78 € = rahavood 406,05 € + laovaru muutus 1,72 €. Kuude kaupa
+  juuni–oktoober 68,8 / 47,4 / 203,7 / 202,3 / 191,1 € (varem 70,6 / 49,2 / 206,3 / 208,8 / 195,4 €; tasakaalustamistasuta
+  arvutatud kirjetega). Ahel algab uuesti ainult andmeaukude järel (08.06, 11.07, 25.07).
+- README `paevad.json` (`batteryGainEur`, `storedStartEur`, `storedEndEur`) ja „Täna kokku“ → Aku.
+
 ## Töövoog: homsed hinnad Nord Poolist, kui Eleringis neid veel pole — 2026-11-16
 
 - **Probleem:** 16.11.2026 oli Eleringi dashboardi API-s (`/api/nps/price`, ka `/EE/latest`) kuni ~17:40 hindu ainult kuni

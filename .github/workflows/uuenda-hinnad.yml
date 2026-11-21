@@ -1353,25 +1353,62 @@ jobs:
                   PAEVAD_HOIATUSED.append(msg)
 
           def read_battery_capacity():
-              """Aku kasutatav mahutavus kWh energy-dashboard.html CONFIG.aku.mahtKwh-st (aku tulu laetuse muutuse jaoks); None, kui puudub."""
+              """Aku kasutatav mahutavus kWh energy-dashboard.html CONFIG.aku.mahtKwh-st (aku tulu laoarvestuse jaoks); None, kui puudub."""
               capacity = config_number(read_page_config("energy-dashboard.html"), "aku", "mahtKwh")
               return capacity if capacity is not None and capacity > 0 else None
 
-          def battery_gain(rec, capacity):
-              """Päeva aku tulu € – sama valem mis energialehe finishTotals-is: tühjendamise väärtus − laadimise kulu + laetuse
-              muutus × mahutavus päeva keskmise laadimishinnaga (laadimiseta päeval maja keskmise ostuhinnaga)."""
+          SOC_JATK_PP = 10.0          # laoarvestuse ahel jätkub, kui päeva algne laetus erineb eelmise päeva lõpust ≤ 10 %-punkti
+                                      # (päeva esimene kaader võib olla juba südaööl alanud laadimise sees)
+
+          def battery_start_price(rec):
+              """Akus oleva energia hind ahela alguses €/kWh: päeva keskmine laadimishind, laadimiseta päeval maja keskmine ostuhind."""
+              if (rec.get("chargeKwh") or 0) > 1 and rec.get("chargeEur") is not None:
+                  return rec["chargeEur"] / rec["chargeKwh"]
+              if (rec.get("loadKwh") or 0) > 0 and rec.get("loadEur") is not None:
+                  return rec["loadEur"] / rec["loadKwh"]
+              return None
+
+          def battery_inventory_day(rec, prev, capacity):
+              """Ühe päeva laoarvestus (kaalutud keskmine soetushind) – sama valem mis energialehe inventoryDay-s.
+              Tagastab (storedStartEur, storedEndEur, batteryGainEur) või None, kui eurosid, laetust või mahutavust pole.
+              Akus olev energia (laetus × mahutavus) kannab oma soetusmaksumust. Laadimine lisab energiat ja maksumust; päeva
+              lõpus on alles osa (laetus lõpus / (laetus alguses + laetud kWh), kuni 1) sellest maksumusest – ülejäänu läks
+              tühjendamisega majja või kadudeks. Päeva tulu = tühjendamise väärtus − laadimise kulu + laovaru muutus: akust võetud
+              energia läheb arvesse selle laadimise hinnaga, ka siis, kui see laeti mitu päeva varem."""
               charge_eur, discharge_eur = rec.get("chargeEur"), rec.get("dischargeEur")
-              if charge_eur is None or discharge_eur is None:
+              s0, s1 = rec.get("socStart"), rec.get("socEnd")
+              if charge_eur is None or discharge_eur is None or not capacity or s0 is None or s1 is None:
                   return None
-              stored = None
-              if capacity and rec.get("socStart") is not None and rec.get("socEnd") is not None:
-                  stored = (rec["socEnd"] - rec["socStart"]) / 100.0 * capacity
-              price = None
-              if (rec.get("chargeKwh") or 0) > 1:
-                  price = charge_eur / rec["chargeKwh"]
-              elif (rec.get("loadKwh") or 0) > 0 and rec.get("loadEur") is not None:
-                  price = rec["loadEur"] / rec["loadKwh"]
-              return round(discharge_eur - charge_eur + (stored * price if stored is not None and price is not None else 0.0), 3)
+              v0 = None
+              if (prev is not None and prev.get("storedEndEur") is not None and prev.get("socEnd") is not None
+                      and (datetime.fromisoformat(prev["paev"]) + timedelta(days=1)).date().isoformat() == rec["paev"]
+                      and abs(s0 - prev["socEnd"]) <= SOC_JATK_PP):
+                  # Ahel jätkub eilse laovaruga täpselt: päevade piiril laetud energia kulu on ühe päeva laadimiskulus, nii et
+                  # perioodi tulude summa = rahavood + laovaru muutus ilma vaheta
+                  v0 = prev["storedEndEur"]
+              if v0 is None:
+                  price = battery_start_price(rec)
+                  if price is None:
+                      return None
+                  v0 = s0 / 100.0 * capacity * price
+              inflow = s0 / 100.0 * capacity + (rec.get("chargeKwh") or 0.0)
+              kept = min(1.0, max(0.0, s1 / 100.0 * capacity / inflow)) if inflow > 0 else 0.0
+              v0, v1 = round(v0, 3), round((v0 + charge_eur) * kept, 3)
+              return v0, v1, round(discharge_eur - charge_eur + v1 - v0, 3)
+
+          def battery_inventory(out_days, capacity):
+              """Aku tulu laoarvestusega kõigile kirjetele kuupäevade järjekorras (tuletatud väljad, arvutatakse igal käivitusel):
+              batteryGainEur, storedStartEur, storedEndEur. Ahel algab uuesti päeva laetusest battery_start_price-iga, kui eelmine
+              päev puudub, on andmeteta või laetus ei jätku. Perioodi tulude summa = rahavood (tühjendamine − laadimine) + laovaru
+              muutus; varasem valem hindas laetuse muutust iga päev eraldi ja selle päevade summa ei klappinud rahavoogudega."""
+              prev = None
+              for rec in out_days:
+                  for key in ("batteryGainEur", "storedStartEur", "storedEndEur"):
+                      rec.pop(key, None)
+                  res = None if rec.get("noData") else battery_inventory_day(rec, prev, capacity)
+                  if res is not None:
+                      rec["storedStartEur"], rec["storedEndEur"], rec["batteryGainEur"] = res
+                  prev = rec if res is not None else None
 
           def read_solar_start():
               """Päikesepargi kasutuselevõtu kuu esimene päev index.html CONFIG.paike.kasutuselAlates-ist ("AAAA-KK") või None."""
@@ -1602,8 +1639,9 @@ jobs:
 
               def store(rec):
                   prev = old_days.get(rec["paev"]) or {}
-                  # batteryGainEur on tuletatud väli (lisatakse väljundile allpool): see ei tähenda kirje muutust
-                  same = {k: v for k, v in prev.items() if k not in ("updatedAt", "batteryGainEur")} == rec
+                  # batteryGainEur, storedStartEur ja storedEndEur on tuletatud väljad (lisatakse väljundile allpool): need ei
+                  # tähenda kirje muutust
+                  same = {k: v for k, v in prev.items() if k not in ("updatedAt", "batteryGainEur", "storedStartEur", "storedEndEur")} == rec
                   rec["updatedAt"] = prev["updatedAt"] if same and prev.get("updatedAt") else utc_now_iso()
                   days[rec["paev"]] = rec
 
@@ -1669,14 +1707,10 @@ jobs:
                       print(f"Päevakokkuvõtted: Solarmanist laaditi {len(batch)} päeva, ootel veel {max(0, len(todo) - len(batch))}.")
 
               out_days = [days[k] for k in sorted(days) if k < today.isoformat()][-MAX_PAEVAD:]
-              # Tuletatud väli (elektriinfo lehe „Eile“ rida): arvutatakse igal käivitusel kirje väljadest, mitte Solarmanist
+              # Tuletatud väljad (aku tulu laoarvestusega, elektriinfo lehe „Eile“ rida, energialeht, graafikud): arvutatakse igal
+              # käivitusel kirjete väljadest kuupäevade järjekorras, mitte Solarmanist
               capacity = read_battery_capacity()
-              for rec in out_days:
-                  gain = None if rec.get("noData") else battery_gain(rec, capacity)
-                  if gain is None:
-                      rec.pop("batteryGainEur", None)
-                  else:
-                      rec["batteryGainEur"] = gain
+              battery_inventory(out_days, capacity)
               missing = sum(1 for d in todo if d.isoformat() not in days or not is_current(days[d.isoformat()]))
               meta = {"from": first.isoformat(), "pending": missing, "sellFee": sell_fee, "batteryKwh": capacity, "warnings": PAEVAD_HOIATUSED}
               old_out = (old_file or {}).get("data") if isinstance(old_file, dict) else None

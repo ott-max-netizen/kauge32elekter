@@ -9,7 +9,7 @@ const CONFIG = readPageConfig();
 
 /* Tehnilised konstandid — neid ei ole tavakasutuses vaja muuta. Mõlema lehe ühised (TIME_ZONE, API_URL,
    MINUTE_MS, HOUR_MS, DAY_MS) on failis js/common.js. */
-const APP_VERSION = '2.12.0';
+const APP_VERSION = '2.13.0';
 const PRICE_TIMEOUT_MS = 20000;
 const SOLAR_TIMEOUT_MS = 30000;
 const TARIFF_TIMEOUT_MS = 5000;
@@ -957,14 +957,61 @@ function computeDayTotals(series, periods, now, frameSeconds = FRAME_SECONDS, me
   const socs = series.filter(s => s.soc != null);
   totals.socStart = socs.length ? socs[0].soc : null;
   totals.socEnd = socs.length ? socs[socs.length - 1].soc : null;
+  // Aku laovaru: eilse päevakirje storedEndEur-ist (laoarvestuse ahel, README „Aku tulu“)
+  const yesterdayKey = tallinnDateKey(getTallinnDayStart(now, -1));
+  const prev = state.days && Array.isArray(state.days.list) ? state.days.list.find(r => r.paev === yesterdayKey) || null : null;
+  const stock = inventoryDay({ ...totals, paev: tallinnDateKey(now) }, prev, Number(CONFIG.aku.mahtKwh));
+  if (stock) { totals.storedStartEur = stock.startEur; totals.storedEndEur = stock.endEur; }
   return finishTotals(totals);
+}
+
+const SOC_JATK_PP = 10;   // laoarvestuse ahel jätkub, kui päeva algne laetus erineb eelmise päeva lõpust ≤ 10 %-punkti
+
+/** Akus oleva energia hind ahela alguses €/kWh: päeva keskmine laadimishind, laadimiseta päeval maja keskmine ostuhind. */
+function batteryStartPrice(rec) {
+  if (rec.chargeKwh > 1 && rec.chargeEur != null) return rec.chargeEur / rec.chargeKwh;
+  if (rec.loadKwh > 0 && rec.loadEur != null) return rec.loadEur / rec.loadKwh;
+  return null;
+}
+
+/**
+ * Aku laoarvestus ühe päeva kohta (kaalutud keskmine soetushind; sama valem mis töövoo battery_inventory_day-s):
+ * { startEur, endEur } = akus oleva energia soetusmaksumus päeva alguses ja lõpus või null. Laadimine lisab energiat ja
+ * maksumust; päeva lõpus on alles osa (laetus lõpus / (laetus alguses + laetud kWh), kuni 1) sellest maksumusest.
+ * Alguse väärtus on eilse kirje storedEndEur, kui eile on olemas ja laetus jätkub (≤ SOC_JATK_PP), muidu päeva laetus
+ * batteryStartPrice-iga. Aku tulu = tühjendamise väärtus − laadimise kulu + (endEur − startEur), vt finishTotals.
+ */
+function inventoryDay(rec, prev, capacity) {
+  const s0 = rec.socStart;
+  const s1 = rec.socEnd;
+  if (rec.chargeEur == null || rec.dischargeEur == null || !(capacity > 0) || s0 == null || s1 == null) return null;
+  let v0 = null;
+  if (prev && !prev.noData && prev.storedEndEur != null && prev.socEnd != null && Math.abs(s0 - prev.socEnd) <= SOC_JATK_PP) {
+    v0 = prev.storedEndEur;
+  }
+  if (v0 == null) {
+    const price = batteryStartPrice(rec);
+    if (price == null) return null;
+    v0 = s0 / 100 * capacity * price;
+  }
+  const inflow = s0 / 100 * capacity + (rec.chargeKwh || 0);
+  const kept = inflow > 0 ? clamp(s1 / 100 * capacity / inflow, 0, 1) : 0;
+  return { startEur: v0, endEur: (v0 + rec.chargeEur) * kept };
+}
+
+/** Päeva või perioodi laovaru muutus €: storedChangeEur või päevakirje storedEndEur − storedStartEur; muidu null. */
+function storedChangeOf(x) {
+  if (x.storedChangeEur != null) return x.storedChangeEur;
+  return x.storedStartEur != null && x.storedEndEur != null ? x.storedEndEur - x.storedStartEur : null;
 }
 
 /**
  * Kogustest tuletatud näitajad (päeva ja perioodi kokkuvõttel samad): võrgu netokulu, aku tulu, päikesest kaetud.
- * Aku tulu = tühjendamise väärtus − laadimise kulu + akus oleva energia muutus. Muutus (laetuse vahe × mahutavus)
- * hinnatakse perioodi keskmise laadimishinnaga (laadimiseta perioodil maja keskmise ostuhinnaga): muidu oleks varem
- * laetud energia tühjendamine „tasuta“ ja aku täitmine perioodi lõpuks kahjum.
+ * Aku tulu = tühjendamise väärtus − laadimise kulu + akus oleva energia soetusmaksumuse muutus (laoarvestus,
+ * storedChangeEur: päevakirjes töövoo storedStartEur/storedEndEur, täna inventoryDay, perioodil päevade summa – sumTotals).
+ * Nii läheb varem laetud energia tühjendamine arvesse selle laadimise hinnaga ja perioodi tulu = rahavood + laovaru
+ * muutus. Kui laovaru pole (vana fail, puuduv mahutavus), hinnatakse muutust nagu varem: laetuse vahe × mahutavus
+ * perioodi keskmise laadimishinnaga (laadimiseta perioodil maja keskmise ostuhinnaga).
  */
 function finishTotals(totals) {
   totals.netGridEur = totals.importEur != null ? totals.importEur - (totals.exportEur ?? 0) : null;
@@ -972,8 +1019,12 @@ function finishTotals(totals) {
   totals.storedChangeKwh = capacity > 0 && totals.socStart != null && totals.socEnd != null ? (totals.socEnd - totals.socStart) / 100 * capacity : null;
   totals.storedPriceEur = totals.chargeKwh > 1 && totals.chargeEur != null ? totals.chargeEur / totals.chargeKwh
     : totals.loadKwh > 0 && totals.loadEur != null ? totals.loadEur / totals.loadKwh : null;
+  totals.storedChangeEur = storedChangeOf(totals);
+  if (totals.storedChangeEur == null && totals.storedChangeKwh != null && totals.storedPriceEur != null) {
+    totals.storedChangeEur = totals.storedChangeKwh * totals.storedPriceEur;
+  }
   totals.batteryGainEur = totals.chargeEur != null && totals.dischargeEur != null
-    ? totals.dischargeEur - totals.chargeEur + (totals.storedChangeKwh != null && totals.storedPriceEur != null ? totals.storedChangeKwh * totals.storedPriceEur : 0)
+    ? totals.dischargeEur - totals.chargeEur + (totals.storedChangeEur ?? 0)
     : null;
   // Päikesest kaetud (sama mõõdik mõlemal lehel): ise kasutatud päikeseenergia (toodang − müük) / maja tarbimine
   totals.selfPvKwh = totals.pvKwh != null && totals.exportKwh != null ? Math.max(0, totals.pvKwh - totals.exportKwh) : null;
@@ -999,6 +1050,12 @@ function sumTotals(list) {
   const withSoc = list.filter(x => x.socStart != null && x.socEnd != null);
   t.socStart = withSoc.length ? withSoc[0].socStart : null;
   t.socEnd = withSoc.length ? withSoc[withSoc.length - 1].socEnd : null;
+  // Laovaru muutus = päevade muutuste summa (laoarvestus): perioodi aku tulu on päevade tulude summa. Ühe päevakirje
+  // korral storedEndEur − storedStartEur. Päevad ilma akuta (võrguarvesti kuud) ei loe; kui mõnel akuga päeval laovaru
+  // pole, hinnatakse muutust finishTotals-is nagu varem.
+  const withBattery = list.filter(x => x.socStart != null || x.chargeKwh > 0 || x.dischargeKwh > 0);
+  const changes = withBattery.map(storedChangeOf);
+  t.storedChangeEur = withBattery.length && changes.every(v => v != null) ? changes.reduce((a, v) => a + v, 0) : null;
   return finishTotals(t);
 }
 
@@ -2370,11 +2427,11 @@ function renderResults(d) {
   hint.textContent = view.hint;
   const kwh = v => (v != null ? formatKwh(v) : '—');
   const blocks = [
-    resultBlock('battery', 'Aku', approxEur(t.batteryGainEur, true), 'tulu: tühjendamise väärtus − laadimise kulu ± laetuse muutus', [
+    resultBlock('battery', 'Aku', approxEur(t.batteryGainEur, true), 'tulu: tühjendamise väärtus − laadimise kulu ± akus oleva energia maksumuse muutus', [
       ['Laetud', kwh(t.chargeKwh), approxEur(t.chargeEur)],
       ['Tühjendatud', kwh(t.dischargeKwh), approxEur(t.dischargeEur)],
-      t.storedChangeKwh != null && Math.abs(t.storedChangeKwh) >= 0.5 && t.storedPriceEur != null
-        ? [`Laetus ${numberFormat.pct.format(t.socStart)}→${formatPct(t.socEnd)}`, `${t.storedChangeKwh > 0 ? '+' : '−'}${formatKwh(Math.abs(t.storedChangeKwh))}`, approxEur(t.storedChangeKwh * t.storedPriceEur, true)]
+      t.storedChangeKwh != null && t.storedChangeEur != null && (Math.abs(t.storedChangeKwh) >= 0.5 || Math.abs(t.storedChangeEur) >= 0.005)
+        ? [`Laetus ${numberFormat.pct.format(t.socStart)}→${formatPct(t.socEnd)}`, `${t.storedChangeKwh >= 0 ? '+' : '−'}${formatKwh(Math.abs(t.storedChangeKwh))}`, approxEur(t.storedChangeEur, true)]
         : null
     ]),
     resultBlock('grid', 'Võrk', approxEur(t.netGridEur), 'netokulu: ost − müük', [
