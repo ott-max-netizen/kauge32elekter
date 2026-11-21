@@ -1706,7 +1706,10 @@ jobs:
                           store(rec or {"paev": day.isoformat(), "noData": True, "src": "solarman", "v": PAEVAD_VERSION, "cfg": day_hash})
                       print(f"Päevakokkuvõtted: Solarmanist laaditi {len(batch)} päeva, ootel veel {max(0, len(todo) - len(batch))}.")
 
-              out_days = [days[k] for k in sorted(days) if k < today.isoformat()][-MAX_PAEVAD:]
+              # Koopiad: battery_inventory kirjutab tuletatud väljad kirjetesse, aga vana faili kirjed (old_days) on samad
+              # objektid mis old_file-is. Ilma koopiata muutuks ka old_out ja võrdlus allpool ei näeks muutust (fail jääks
+              # kirjutamata, nagu 21.11.2026 pärast laoarvestuse lisamist).
+              out_days = [dict(days[k]) for k in sorted(days) if k < today.isoformat()][-MAX_PAEVAD:]
               # Tuletatud väljad (aku tulu laoarvestusega, elektriinfo lehe „Eile“ rida, energialeht, graafikud): arvutatakse igal
               # käivitusel kirjete väljadest kuupäevade järjekorras, mitte Solarmanist
               capacity = read_battery_capacity()
