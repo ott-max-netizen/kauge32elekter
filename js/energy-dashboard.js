@@ -9,7 +9,7 @@ const CONFIG = readPageConfig();
 
 /* Tehnilised konstandid — neid ei ole tavakasutuses vaja muuta. Mõlema lehe ühised (TIME_ZONE, API_URL,
    MINUTE_MS, HOUR_MS, DAY_MS) on failis js/common.js. */
-const APP_VERSION = '2.13.0';
+const APP_VERSION = '2.13.1';
 const PRICE_TIMEOUT_MS = 20000;
 const SOLAR_TIMEOUT_MS = 30000;
 const TARIFF_TIMEOUT_MS = 5000;
@@ -635,7 +635,8 @@ async function fetchSolarFile(signal) {
 function normalizeDays(json) {
   const list = Array.isArray(json?.data?.days) ? json.data.days : [];
   const numeric = ['pvKwh', 'loadKwh', 'importKwh', 'exportKwh', 'chargeKwh', 'dischargeKwh',
-    'pvEur', 'loadEur', 'importEur', 'exportEur', 'chargeEur', 'dischargeEur', 'socStart', 'socEnd'];
+    'pvEur', 'loadEur', 'importEur', 'exportEur', 'chargeEur', 'dischargeEur', 'socStart', 'socEnd',
+    'storedStartEur', 'storedEndEur'];   // aku laovaru (laoarvestus, töövoo battery_inventory)
   const days = [];
   for (const raw of list) {
     if (!raw || typeof raw !== 'object' || !/^\d{4}-\d{2}-\d{2}$/.test(String(raw.paev))) continue;

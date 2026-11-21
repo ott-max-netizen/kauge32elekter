@@ -4,6 +4,13 @@ See fail kirjeldab rakenduse `index.html` versioonimuudatusi, arhitektuurilisi k
 
 ---
 
+## energy-dashboard.html [2.13.1] — 2026-11-21 · laovaru väljad päevakirjetes
+
+- **Viga 2.13.0-s:** `normalizeDays` jättis `paevad.json` kirjetest alles ainult loetletud arvulised väljad, nii et
+  `storedStartEur` ja `storedEndEur` kadusid. Energialeht arvutas aku tulu seetõttu vana valemiga (laetuse muutus iga päev
+  eraldi; september ≈ 212 € laoarvestuse ≈ 204 € asemel) ja tänane päev alustas laovaru alati hinnast.
+- **Parandus:** väljad on loetelus. Elektriinfo leht ja graafikute leht loevad `batteryGainEur`-i ega olnud mõjutatud.
+
 ## energy-dashboard.html [2.13.0] ja töövoog — 2026-11-21 · aku tulu laoarvestusega
 
 - **Probleem:** aku tulu laetuse muutuse osa hinnati iga päev eraldi: akku lisandunud energia laadimispäeva keskmise
