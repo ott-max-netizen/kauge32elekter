@@ -311,9 +311,24 @@ Energialehe kokkuvõtte perioodivaliku (eile, 7 päeva, kuud, aastad) andmed. Fa
   `index.html` `CONFIG.paike.kasutuselAlates` kuust laaditakse Solarmani history-päringuga järk-järgult
   (10 päeva käivituse kohta, uuemad enne; vajab samu `SOLARMAN_*` Secrets'eid mis `uuenda-paike.yml`).
   `meta.pending` = veel laadimata päevi; päev, mille kohta Solarman mõõtmisi ei andnud, on `"noData": true`.
-- `batteryGainEur` = päeva aku tulu (tuletatud: arvutatakse igal käivitusel kirje väljadest sama valemiga mis energialehe
-  `finishTotals`, mahutavus `energy-dashboard.html` `CONFIG.aku.mahtKwh`-st, `meta.batteryKwh`); seda kasutab elektriinfo
-  lehe päikesekaardi „Eile“ rida. `meta.sellFee` = kasutatud müügitasu.
+- `batteryGainEur`, `storedStartEur`, `storedEndEur` = päeva aku tulu ja akus oleva energia soetusmaksumus (€) päeva
+  alguses ja lõpus – **laoarvestus** (kaalutud keskmine soetushind, `battery_inventory`; sama valem mis energialehe
+  `inventoryDay`, mahutavus `energy-dashboard.html` `CONFIG.aku.mahtKwh`-st, `meta.batteryKwh`). Tuletatud väljad:
+  arvutatakse igal käivitusel kõigile kirjetele kuupäevade järjekorras ega tähenda kirje muutust (`updatedAt`).
+  - Akus olev energia (laetus × mahutavus) kannab oma soetusmaksumust. Laadimine lisab energiat ja maksumust (päikesest
+    laetud osa müügihinnaga, ülejäänu lõpphinnaga); päeva lõpus on alles osa „laetus lõpus / (laetus alguses + laetud
+    kWh)“ (kuni 1) sellest maksumusest, ülejäänu läks tühjendamisega majja või kadudeks.
+  - Päeva tulu = tühjendamise väärtus (lõpphinnaga) − laadimise kulu + (`storedEndEur` − `storedStartEur`). Akust võetud
+    energia läheb arvesse selle laadimise hinnaga, ka siis, kui see laeti mitu päeva varem; laadimispäev näitab ainult
+    kadusid. Perioodi tulude summa = rahavood (tühjendamine − laadimine) + laovaru muutus.
+  - `storedStartEur` = eilse kirje `storedEndEur`, kui eilne kirje on olemas ja laetus jätkub (päeva alguse laetus erineb
+    eile lõpust ≤ 10 %-punkti); muidu algab ahel uuesti: päeva alguse laetus × mahutavus × päeva keskmine laadimishind
+    (laadimiseta päeval maja keskmine ostuhind).
+  - Varem (kuni 21.11.2026) hinnati laetuse muutust iga päev eraldi: lisandumine laadimispäeva keskmise laadimishinnaga,
+    vähenemine tühjenduspäeva laadimishinnaga või maja keskmise ostuhinnaga. Päevade summa ei klappinud rahavoogudega
+    (31.08–30.10.2026: 419 € vs 406 €).
+  `batteryGainEur`-i kasutavad elektriinfo lehe päikesekaardi „Eile“ rida, energialeht ja graafikute leht. `meta.sellFee` =
+  kasutatud müügitasu.
 - `loadH` = maja tarbimise tunniprofiil (24 Tallinna kellatundi, kWh tunnis = keskmine kW; alla poole tunni
   mõõtmisi → `null`, kellakeeramise päeval korduv tund on kahe tunni keskmine). Väli on viimase 14 päeva kirjetel
   (vanemad kirjed ilma selleta arvutatakse üks kord uuesti) ja sellest arvutab energialeht tarbimise prognoosi.
@@ -608,7 +623,7 @@ Elering API      → GitHub Actions (uuenda-hinnad.yml) → hinnad.json ┴→ G
   siiski valepidi, määra `energy-dashboard.html` `CONFIG`-is `solarman.akuMark` käsitsi. Hoidevool
   (alla 0,2 kW muutumatu laetusega) on „Ootel · hoiab +0,1 kW“ (ka graafiku tooltipis „aku ootel · hoiab
   +0,1 kW“), mitte „Laeb“. Aku kasutatav mahutavus on `aku.mahtKwh` (100 kWh): sellest tulevad laadimis- ja
-  tühjenemisaja hinnang, „Salvestatud“ plaat ja aku tulu laetuse muutus.
+  tühjenemisaja hinnang, „Salvestatud“ plaat ja aku tulu laoarvestus.
 - **Müügihind** = börsihind ilma KM-ta − `index.html` `CONFIG.hinnad.muugitasu` (müügilepingu marginaal koos KM-ga,
   1,05 s/kWh; energialeht loeb selle koos teiste tasudega, varukoopia on energialehe `CONFIG.hinnad`-is); müügihinnale
   käibemaksu ei lisata.
@@ -667,7 +682,7 @@ Elering API      → GitHub Actions (uuenda-hinnad.yml) → hinnad.json ┴→ G
   **eelmine ja see aasta** (1. jaanuarist; see aasta koos tänase poolelioleva päevaga). Sildid on kuu nimed ja aastad
   (nt 1.11.2026: *August*, *September*, *Oktoober*, *November*, *2025*, *2026*); eelmise aasta kuu pealkirjas on aasta
   („Detsember 2026 kokku“). Perioodi summad on päevade summad; eurod ainult siis, kui igal päeval on eurod olemas. Aku
-  laetuse muutus on perioodi esimese ja viimase päeva järgi. Puuduvad või aukudega päevad on kaardil märkusena; nupp on
+  laetus on perioodi esimese ja viimase päeva järgi, aku tulu on päevade tulude summa (laoarvestus). Puuduvad või aukudega päevad on kaardil märkusena; nupp on
   peidetud, kui perioodil andmeid pole. Mitme päeva perioodil on all **päevade graafik** (Chart.js; näitajad *Päike*,
   *Tarbimine*, *Võrk* – ost alla, müük üles, *Aku* – laetud üles, tühjendatud alla, *Energiahind* – keskmine
   ostuhind ja maja maksis s/kWh), valitud päeva rida graafiku kohal (hiir, puudutus, nooleklahvid) ja tabelivaade.
@@ -689,8 +704,10 @@ Elering API      → GitHub Actions (uuenda-hinnad.yml) → hinnad.json ┴→ G
   Võrguarvesti ja inverteri numbreid ei liideta (vt „Mõõtmiste loogika“).
 - **Täna kokku** (inverter, kuni viimase mõõtmiseni; eurod on hinnang perioodi hinnaga):
   - **Aku:** tulu = tühjendamise väärtus (lõpphinnaga) − laadimise kulu (päikesest laetud osa müügihinnaga, ülejäänu
-    lõpphinnaga) ± laetuse muutus (laetuse vahe × mahutavus tänase keskmise laadimishinnaga; laadimiseta päeval maja
-    keskmise ostuhinnaga). Ilma laetuse muutuseta oleks eile laetud energia tühjendamine „tasuta“.
+    lõpphinnaga) ± akus oleva energia soetusmaksumuse muutus (laoarvestus, vt `paevad.json` `storedStartEur`/`storedEndEur`):
+    täna algab eilse kirje `storedEndEur`-ist (`inventoryDay`), rida „Laetus x → y“ näitab laetuse ja maksumuse muutust.
+    Ilma selleta oleks eile laetud energia tühjendamine „tasuta“; tühjendatud energia läheb arvesse selle laadimise
+    hinnaga. Kui laovaru pole (vana fail), hinnatakse muutust laetuse vahe × mahutavus × keskmine laadimishind.
   - **Võrk:** ost ja müük kWh ja €, netokulu = ost − müük.
   - **Päike:** toodang ja väärtus: otse majja läinud osa lõpphinnaga, akusse ja võrku läinud osa müügihinnaga
     (akusse läinud päikese hilisem väärtus on aku tulus, nii et sama kWh-d ei loeta kaks korda); „Päikesest kaetud“.
