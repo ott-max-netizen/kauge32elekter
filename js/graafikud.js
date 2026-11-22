@@ -7,7 +7,7 @@
 
 const CONFIG = readPageConfig();
 
-const APP_VERSION = '1.7.0';
+const APP_VERSION = '1.7.1';
 const BATTERY_IDLE_KW = 0.2;     // väiksem aku võimsus = „ootel“ (hoidevool), nagu energialehel
 const TARIFF_KEYS = ['marginaal', 'vorgutasuPaev', 'vorgutasuOo', 'taastuvenergiaTasu', 'aktsiis', 'kaibemaks', 'algus', 'lopp'];
 const MAX_PERIOD_MINUTES = 60;   // common.js nõue (pikim hinnaperiood)
@@ -944,7 +944,7 @@ function drawProfile() {
 }
 
 /** Maja üldelekter: viimased 12 kuud (arvesti, hinnad.json majaElekter) ja aasta varasem sama kuu; kWh või € tulpadena ning
- *  nende kuude keskmine hind joonena eraldi graafikul all (drawMonthPrice). Mõlema graafiku y-telg on sama laiusega, et
+ *  nende kuude ostetud kWh keskmine hind joonena eraldi graafikul all (drawMonthPrice). Mõlema graafiku y-telg on sama laiusega, et
  *  kuud oleksid üksteise all. */
 function drawMonths() {
   if (!state.months.length) { cardNotice('section-months', state.errors.prices || 'Kuude andmeid pole.'); return; }
@@ -1013,10 +1013,13 @@ function drawMonths() {
 
 const MONTHS_Y_W = 48;   // kuude kahe graafiku y-telje laius (mahub „12 000“): plot-alad ja kuud on üksteise all
 
-/** Kuu keskmine hind s/kWh = kuu eurod / kWh (koos tasude, fikseeritud kuutasude ja KM-ga; sama alus mis €-tulpadel ja
- *  energialehe aasta vaate „Keskmine hind“), samad 12 kuud mis tulpadel; aasta varasem sama kuu heledama joonena. Pooleli
- *  kuu: katkendlik lõik ja õõnes punkt (kuutasu on arvestatud möödunud osa kaupa). Kuutasude osa kWh kohta on tooltipis
- *  (eur − eurOo − eurPaev, nagu energialehe normalizeMaja). Sama andmestikuga graafikut üle ei joonistata (kWh/€ vahetus). */
+/** Ostetud kWh keskmine hind s/kWh = kuu eurod / võrgust ostetud kWh (koos tasude, fikseeritud kuutasude ja KM-ga; sama alus
+ *  mis €-tulpadel ja energialehe aasta vaate „Ost võrgust“ ploki „Keskmine hind“), samad 12 kuud mis tulpadel; aasta varasem
+ *  sama kuu heledama joonena. Pooleli kuu: katkendlik lõik ja õõnes punkt (kuutasu on arvestatud möödunud osa kaupa).
+ *  Tooltipis ka hind ilma kuutasudeta ja kuutasude osa kWh kohta (kuutasud = eur − eurOo − eurPaev, nagu energialehe
+ *  normalizeMaja). NB! See pole energialehe „Keskmine ostuhind“ (maja kogu tarbimine selle aja lõpphinnaga, jagatud
+ *  tarbitud kWh-ga, ilma kuutasudeta) ega „Maja maksis“ (võrgu netokulu ilma kuutasudeta / tarbitud kWh).
+ *  Sama andmestikuga graafikut üle ei joonistata (kWh/€ vahetus). */
 function drawMonthPrice(months, labels, partial) {
   const cents = rec => (rec && num(rec.kwh) != null && rec.kwh > 0 && num(rec.eur) != null ? rec.eur / rec.kwh * 100 : null);
   const fixedCents = rec => {
@@ -1036,7 +1039,7 @@ function drawMonthPrice(months, labels, partial) {
   state.monthPriceKey = key;
   const last = cur.reduce((acc, v, i) => (v != null ? i : acc), -1);
   const shown = cur.filter(v => v != null);
-  byId('c-monthprice').setAttribute('aria-label', `Maja keskmine elektrihind kuude kaupa (koos tasude, kuutasude ja KM-ga): ${labels[last]} ${fmtCents(cur[last])}${partial[last] ? ' (pooleli)' : ''}${prev[last] != null ? `, aasta varem ${fmtCents(prev[last])}` : ''}; ${shown.length} kuu vahemik ${NF.d2.format(Math.min(...shown))}–${fmtCents(Math.max(...shown))}.`);
+  byId('c-monthprice').setAttribute('aria-label', `Võrgust ostetud kWh keskmine hind kuude kaupa (koos tasude, kuutasude ja KM-ga): ${labels[last]} ${fmtCents(cur[last])}${partial[last] ? ' (pooleli)' : ''}${prev[last] != null ? `, aasta varem ${fmtCents(prev[last])}` : ''}; ${shown.length} kuu vahemik ${NF.d2.format(Math.min(...shown))}–${fmtCents(Math.max(...shown))}.`);
   const point = (color, data, extra = {}) => Object.assign({
     data, borderColor: color, backgroundColor: color, borderWidth: LINE_W, cubicInterpolationMode: 'monotone', spanGaps: false,
     pointRadius: 3, pointHoverRadius: 5, pointBorderWidth: 0, pointHoverBorderColor: C.plot, pointHoverBorderWidth: 2
@@ -1049,7 +1052,7 @@ function drawMonthPrice(months, labels, partial) {
       labels,
       datasets: [
         point(prevColor, prev, { label: 'Aasta varem', borderWidth: 1.5, pointRadius: 2, order: 2 }),
-        point(C.grid, cur, { label: 'Keskmine hind', order: 1,
+        point(C.grid, cur, { label: 'Kuu', order: 1,
           // pooleli kuu: lõik sinna katkendlik ja punkt õõnes (plot-ala värvi täide, joone värvi serv)
           segment: { borderDash: ctx => (partial[ctx.p1DataIndex] ? [5, 4] : undefined) },
           pointBackgroundColor: months.map((m, i) => (partial[i] ? C.plot : C.grid)),
@@ -1078,10 +1081,13 @@ function drawMonthPrice(months, labels, partial) {
             title: items => { const m = months[items[0].dataIndex]; return `${monthShort.format(m.date).replace('.', '')} ${m.date.getUTCFullYear()}${partial[items[0].dataIndex] ? ' (pooleli)' : ''}`; },
             label: item => {
               const v = item.parsed.y;
-              const main = ` ${item.dataset.label}: ${v == null ? '—' : fmtCents(v)}`;
               const rec = item.datasetIndex === 1 ? months[item.dataIndex].cur : months[item.dataIndex].prev;
               const fixed = v != null ? fixedCents(rec) : null;
-              return fixed != null ? [main, `   sellest kuutasud ${fmtCents(fixed)}`] : main;
+              if (fixed == null) return ` ${item.dataset.label}: ${v == null ? '—' : fmtCents(v)}`;
+              // hind ilma kuutasudeta = (eurOo + eurPaev) / kWh (võrreldav lehe hinnagraafikuga) + kuutasud = hind; kuvatud
+              // kuutasud on ümardatud hinna ja ümardatud hinna ilma kuutasudeta vahe, et read liituksid sendi täpsusega
+              const s = priceSplitShown(v - fixed, v);
+              return [` ${item.dataset.label}: ${fmtCents(s.total)}`, `   ilma kuutasudeta ${fmtCents(s.spot)}`, `   kuutasud ${fmtCents(s.fees)}`];
             },
             footer: items => {
               const i = items[0].dataIndex;

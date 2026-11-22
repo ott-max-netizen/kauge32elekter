@@ -4,6 +4,21 @@ See fail kirjeldab rakenduse `index.html` versioonimuudatusi, arhitektuurilisi k
 
 ---
 
+## graafikud.html [1.7.1] — 2026-11-22 · „Ostetud kWh keskmine hind“
+
+- Kuude kaardi joongraafiku pealkiri „Keskmine hind“ → **„Ostetud kWh keskmine hind“**: nimi oli liiga sarnane energialehe
+  „Keskmisele ostuhinnale“, mis on teine näitaja (oktoober 2026: graafikutel 18,20, energialehel „Keskmine ostuhind“ 17,77
+  ja „Maja maksis“ 13,26 s/kWh). Graafikute arv = kuu eurod koos kuutasudega / **ostetud** kWh (arvesti); energialehe arvud
+  = maja tarbimine selle aja lõpphinnaga ning võrgu netokulu, mõlemad / **tarbitud** kWh, ilma kuutasudeta (inverter). Päike
+  ja aku (laeb odavalt) teevad ostetud kWh-d tarbitust vähemaks ja odavamaks, kuutasud jaotuvad ainult ostetud kWh-le.
+- Tooltipis lisaks **hind ilma kuutasudeta** ((`eurOo` + `eurPaev`) / `kwh`, võrreldav lehe hinnagraafikuga) ja kuutasude osa
+  (rida „sellest kuutasud“ → „kuutasud“; kuvatud kuutasud = ümardatud hind − ümardatud hind ilma kuutasudeta, `priceSplitShown`,
+  et read liituksid sendi täpsusega). Joone seeria nimi tooltipis ja legendis „kuu“ (nagu tulpadel), aria-label ja jaluse
+  andmerida täpsustatud. README tabelis on kolme näitaja seos. `?v=20261122c`: `js/graafikud.js`.
+- **Kontroll:** Chrome, näidisandmed, kõik 24 kuud (kuu ja aasta varem): read liituvad sendi täpsusega (nt „Kuu 22,96 ·
+  ilma kuutasudeta 17,75 · kuutasud 5,21“; Pythoniga `eur`/`kwh` = 22,96 ja (`eurOo`+`eurPaev`)/`kwh` = 17,75); kuutasude
+  jaotuseta vana kirje näitab ainult hinda, puuduv kuu „—“. Skriptivigu pole.
+
 ## graafikud.html [1.7.0] ja töövoog — 2026-11-22 · tarbimine 15 min kaupa ja kuu keskmine hind
 
 - **Tarbimine kellaaja järgi:** lüliti **1 h / 15 min** (vaikimisi nagu hinnagraafikul: telefonis 1 h, arvutis 15 min).

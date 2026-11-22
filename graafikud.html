@@ -236,21 +236,22 @@
         <span class="legend__item"><span class="legend__swatch swatch--grid"></span>kuu</span>
         <span class="legend__item"><span class="legend__swatch legend__swatch--past swatch--grid"></span>aasta varem</span>
       </div>
-      <!-- 7b. Sama 12 kuu keskmine hind (kuu € / kWh): eraldi graafik, kuud tulpadega samas veerus (ühelgi graafikul pole kahte y-telge) -->
+      <!-- 7b. Sama 12 kuu ostetud kWh keskmine hind (kuu € / kWh): eraldi graafik, kuud tulpadega samas veerus (ühelgi graafikul
+           pole kahte y-telge). Mitte segi ajada energialehe „Keskmine ostuhinnaga“ (maja tarbimise kWh kohta, ilma kuutasudeta). -->
       <div class="card__subhead">
-        <h3 id="h-monthprice" class="card__subtitle">Keskmine hind</h3>
+        <h3 id="h-monthprice" class="card__subtitle">Ostetud kWh keskmine hind</h3>
         <span class="card__hint">s/kWh koos tasude, kuutasude ja KM-ga (hinnang)</span>
       </div>
       <div class="chart-box chart-box--monthprice"><canvas id="c-monthprice" role="img" aria-label="Kuu keskmise hinna graafik"></canvas></div>
       <div class="legend" aria-hidden="true">
-        <span class="legend__item"><span class="legend__swatch swatch--grid legend__swatch--line"></span>keskmine hind</span>
+        <span class="legend__item"><span class="legend__swatch swatch--grid legend__swatch--line"></span>kuu</span>
         <span class="legend__item"><span class="legend__swatch swatch--grid legend__swatch--line legend__swatch--past"></span>aasta varem</span>
       </div>
     </section>
   </main>
 
   <footer class="app-footer">
-    <p><strong>Andmed:</strong> elektri hind — Elering (Nord Pool, Eesti hinnapiirkond) börsihind ilma KM-ta + müüja marginaal + võrgutasu (päeva- või öötariif) + taastuvenergia- ja varustuskindluse tasu + aktsiis + tasakaalustamisvõimsuse kulu, kogu summale käibemaks (kuutasud pole sees); tasud on hinnad.json-is töövoo kasutatud elektriinfo lehe seaded; päike, aku, maja tarbimine ja ost võrgust päevade lõikes — inverter (Solarman); tarbimine kellaaja järgi — inverteri päevakokkuvõtted (viimased 14 päeva, tunni või 15 min keskmine võimsus); maja üldelekter kuude kaupa — võrguarvesti (Elering Estfeed), eurod koos fikseeritud kuutasudega (hinnang), keskmine hind = kuu eurod / kWh. Värvid hinnagraafikul on päeva sees suhtelised (odavaim → kalleim), mitte elektriinfo lehe hinnaklassid.</p>
+    <p><strong>Andmed:</strong> elektri hind — Elering (Nord Pool, Eesti hinnapiirkond) börsihind ilma KM-ta + müüja marginaal + võrgutasu (päeva- või öötariif) + taastuvenergia- ja varustuskindluse tasu + aktsiis + tasakaalustamisvõimsuse kulu, kogu summale käibemaks (kuutasud pole sees); tasud on hinnad.json-is töövoo kasutatud elektriinfo lehe seaded; päike, aku, maja tarbimine ja ost võrgust päevade lõikes — inverter (Solarman); tarbimine kellaaja järgi — inverteri päevakokkuvõtted (viimased 14 päeva, tunni või 15 min keskmine võimsus); maja üldelekter kuude kaupa — võrguarvesti (Elering Estfeed), eurod koos fikseeritud kuutasudega (hinnang), ostetud kWh keskmine hind = kuu eurod / ostetud kWh (tooltipis ka ilma kuutasudeta). Värvid hinnagraafikul on päeva sees suhtelised (odavaim → kalleim), mitte elektriinfo lehe hinnaklassid.</p>
     <div class="app-footer__meta">
       <p id="footer-version"></p>
       <p>Külastusi loendatakse anonüümselt (GoatCounter), küpsiseid ei kasutata.</p>
@@ -277,6 +278,6 @@ const CONFIG = {
 </script>
 <!-- Mõlema lehe ühine skriptikood (aeg, vormindamine, DOM-abi, graafikute ühisosa); peab laadima enne põhiskripti -->
 <script src="js/common.js?v=20261122a"></script>
-<script src="js/graafikud.js?v=20261122b"></script>
+<script src="js/graafikud.js?v=20261122c"></script>
 </body>
 </html>
