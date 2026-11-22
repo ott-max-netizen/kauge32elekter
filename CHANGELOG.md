@@ -4,6 +4,39 @@ See fail kirjeldab rakenduse `index.html` versioonimuudatusi, arhitektuurilisi k
 
 ---
 
+## graafikud.html [1.7.0] ja töövoog — 2026-11-22 · tarbimine 15 min kaupa ja kuu keskmine hind
+
+- **Tarbimine kellaaja järgi:** lüliti **1 h / 15 min** (vaikimisi nagu hinnagraafikul: telefonis 1 h, arvutis 15 min).
+  15 min profiil näitab lühikesi tippe (nt hommikune 15-min tipp), mida tunni keskmine silub; kasutusvõimsuse tasu
+  arvestatakse just 15-min suurimast võimsusest. Tooltip „kell 07:15–07:30“, ajatelg täistundidel (iga 2 h, kitsal iga 3 h),
+  jooned monotoonse interpolatsiooniga (ka 1 h vaates; varem `tension: 0.4`). Päises päevade arv valitud täpsusega päevadest.
+  Kui `loadQ`-d pole veel ühelgi päeval, on 15 min nupp keelatud ja märkus „15 min andmed lisanduvad järgmise
+  andmeuuendusega“. Arvutis (≥ 1024 px, profiil ja kuud kõrvuti) täidab profiili graafik rea kõrguse (kuude kaart on
+  nüüd kahe graafikuga kõrgem).
+- **Töövoog `uuenda-hinnad.yml`:** päevakirjel uus väli `loadQ` (96 veerandtundi, keskmine kW; reeglid nagu `loadH`-il,
+  lävi pool veerandtundi). Ainult viimase `PROFIIL_PAEVI` (14) päeva kirjetel: `store` ja väljund eemaldavad selle
+  vanematelt (800 päeva × ~0,6 kB oleks `paevad.json`-i mitmekordistanud). `needs_profile` arvutab 14 päeva kirjed ilma
+  `loadQ`-ta üks kord uuesti (eilne `paike.json`-ist, varasemad Solarmanist 10 päeva käivituse kohta: kõik 14 päeva on
+  olemas ~1 h jooksul). `PAEVAD_VERSION` jääb 1 (väli lisandub, olemasolevad väärtused ei muutu; Solarmanist uuesti
+  laaditud endine `paike`-kirje võib veidi erineda, sest Solarmani kaadrid on 5-min mõõtmiste keskmised – nagu `loadH` lisamisel).
+- **Maja üldelekter kuude kaupa:** teine graafik samal kaardil – **keskmine hind** s/kWh = kuu `eur` / `kwh` (maja makstud
+  hind koos tasude, fikseeritud kuutasude ja KM-ga; sama alus mis €-tulpadel ja energialehe aasta vaate „Keskmine hind“),
+  samad 12 kuud, aasta varasem sama kuu heledama joonena, pooleli kuu katkendliku lõigu ja õõnsa punktiga, viimase kuu
+  väärtus punkti kohal. Eraldi graafik, mitte teine y-telg tulpadel (lehe reegel: ühelgi graafikul pole kahte y-telge);
+  mõlema graafiku y-telg on 48 px ja joongraafikul `autoPadding: false`, nii et kuud on täpselt üksteise all. Tooltip:
+  hind, sellest kuutasud s/kWh (`eur` − `eurOo` − `eurPaev`, nagu `normalizeMaja`), muutus aasta varasemaga. kWh/€
+  lüliti seda graafikut üle ei joonista (`state.monthPriceKey`).
+- `cardNotice` peidab ka kaardi alampealkirja (`.card__subhead`, uus `css/graafikud.css`-is). Uus plugin `LAST_LABEL`
+  (joone viimase punkti väärtus). Jaluse andmerida täiendatud. `?v=20261122b`: `css/graafikud.css`, `js/graafikud.js`.
+- **Kontroll:**
+  - Töövoo `compute_day_record` sünteetiliste kaadritega: tavaline päev (`loadH` = `loadQ` nelja veerandtunni keskmine),
+    puuduv kaader → `null`, sügisene kellakeeramine (100 kaadrit, korduv 03:00–03:59 = kahe keskmine), kevadine (92
+    kaadrit, 03:00–03:59 `null`), tarbimiseta kaadrid → välja pole. Põimitud Python parsib.
+  - Chrome, näidisandmed (Lukk välja), 1280 ja 390 px, hele ja tume: 15 min / 1 h vahetus, kolm andmeolukorda (kõigil
+    14 päeval `loadQ`, ainult 3 päeval, mitte ühelgi → nupp keelatud ja märkus), kuude graafikute plot-alad 48…516 px
+    mõlemal, tooltipi arvud = `eur` / `kwh` (kontrollitud Pythoniga), kWh/€ vahetusel sama joongraafik, teemavahetusel
+    joonistub uuesti. Skriptivigu pole.
+
 ## index.html [3.12.1], energy-dashboard.html [2.13.2], graafikud.html [1.6.1] — 2026-11-22 · hinnad klapivad sendi täpsusega
 
 Koodiülevaatuse (21.11.2026, `8d226d28`) punktid R1–R5; veebianalüütiku hinnangu järel laiendatud.

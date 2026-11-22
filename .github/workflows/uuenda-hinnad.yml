@@ -1342,7 +1342,8 @@ jobs:
           PAEVAD_VERSION = 1          # päevakirje arvutusreeglite versioon; suurenda reeglite muutumisel (päevad arvutatakse uuesti)
           MAX_PAEVAD_PARING = 10      # mitu päeva ühe käivitusega Solarmanist laetakse
           MAX_PAEVAD = 800            # kirjeid failis (vanemad jäetakse välja)
-          PROFIIL_PAEVI = 14          # viimaste päevade kirjetel on maja tarbimise tunniprofiil loadH (energialehe prognoos)
+          PROFIIL_PAEVI = 14          # viimaste päevade kirjetel on maja tarbimise tunniprofiil loadH (energialehe prognoos, graafikud)
+                                      # ja 15-min profiil loadQ (graafikute leht; vanematelt kirjetelt eemaldatakse, faili suuruse pärast)
           SOLAR_FRAME_S = 900
           SOLARMAN_URL = require_https(os.environ.get("SOLARMAN_URL", "https://globalapi.solarmanpv.com").rstrip("/"), "SOLARMAN_URL")
           PAEVAD_HOIATUSED = []       # paevad.json meta.warnings (lehele nähtav, tavakeeles)
@@ -1473,6 +1474,7 @@ jobs:
               hours = 0.0
               socs = []
               load_h = {}  # Tallinna kellatund -> (kWh, mõõdetud tunde); kellakeeramise päeval on tund 23 või 25
+              load_q = {}  # Tallinna veerandtund 0–95 (kell × 4 + minut // 15) -> (kWh, mõõdetud tunde); kaadrid algavad veerandtunni algusest
               for i, f in enumerate(rows):
                   ts = f["dateTime"]
                   nxt = rows[i + 1]["dateTime"] if i + 1 < len(rows) else t1
@@ -1504,6 +1506,9 @@ jobs:
                       hour = datetime.fromtimestamp(ts, TZ).hour
                       e_, c_ = load_h.get(hour, (0.0, 0.0))
                       load_h[hour] = (e_ + s["load"] * h, c_ + h)
+                      q = dt_tl.hour * 4 + dt_tl.minute // 15
+                      e_, c_ = load_q.get(q, (0.0, 0.0))
+                      load_q[q] = (e_ + s["load"] * h, c_ + h)
                   if s["imp"] is not None:
                       add("imp", s["imp"] * h, s["imp"] * h * buy if buy is not None else None)
                   if s["exp"] is not None:
@@ -1533,6 +1538,10 @@ jobs:
               # Kellakeeramise päeval korduv tund on kahe tunni keskmine, puuduv tund null.
               if has["load"]:
                   rec["loadH"] = [round(load_h[hr][0] / load_h[hr][1], 2) if hr in load_h and load_h[hr][1] >= 0.5 else None for hr in range(24)]
+                  # Sama 15 min kaupa (graafikute lehe „Tarbimine kellaaja järgi“, 15 min): keskmine kW veerandtunnis; alla poole
+                  # veerandtunni mõõtmisi -> null, kellakeeramise päeval korduv veerandtund on kahe keskmine. Jääb ainult viimase
+                  # PROFIIL_PAEVI päeva kirjetele (update_daily_summaries eemaldab selle vanematelt).
+                  rec["loadQ"] = [round(load_q[q][0] / load_q[q][1], 2) if q in load_q and load_q[q][1] >= 0.125 else None for q in range(96)]
               rec["kaadrid"] = len(rows)
               # Lõpetatud: kaadrid katavad ≥ 97 % päevast JA päeva viimane 15-min kaader on olemas. Viimase tingimuseta loeti
               # lõpetatuks ka päev, millest puudus viimane pool tundi (keskööle eelnev paike.json näeb mõõtmisi ~23:25-ni),
@@ -1636,8 +1645,11 @@ jobs:
               yesterday = today - timedelta(days=1)
               first = read_solar_start() or yesterday
               days = dict(old_days)
+              profile_from = (yesterday - timedelta(days=PROFIIL_PAEVI)).isoformat()   # profiiliga kirjed: sellest hilisemad päevad
 
               def store(rec):
+                  if rec["paev"] <= profile_from:
+                      rec.pop("loadQ", None)   # 15-min profiil ainult viimastel PROFIIL_PAEVI päevadel (iga päev ~0,6 kB)
                   prev = old_days.get(rec["paev"]) or {}
                   # batteryGainEur, storedStartEur ja storedEndEur on tuletatud väljad (lisatakse väljundile allpool): need ei
                   # tähenda kirje muutust
@@ -1658,8 +1670,9 @@ jobs:
                   return not rec.get("complete") or (rec.get("kaadrid") or 0) < slots
 
               def needs_profile(day, rec):
-                  """Viimaste PROFIIL_PAEVI päeva kirje ilma tunniprofiilita (vanem kirje) arvutatakse üks kord uuesti."""
-                  return day > yesterday - timedelta(days=PROFIIL_PAEVI) and rec.get("loadKwh") is not None and "loadH" not in rec
+                  """Viimaste PROFIIL_PAEVI päeva kirje ilma tunni- või 15-min profiilita (vanem kirje) arvutatakse üks kord uuesti."""
+                  return (day.isoformat() > profile_from and rec.get("loadKwh") is not None
+                          and ("loadH" not in rec or "loadQ" not in rec))
 
               # Eilne päev paike.json-i kaadritest (hinnad: ee algab eilsest 00:00-st)
               try:
@@ -1710,6 +1723,9 @@ jobs:
               # objektid mis old_file-is. Ilma koopiata muutuks ka old_out ja võrdlus allpool ei näeks muutust (fail jääks
               # kirjutamata, nagu 21.11.2026 pärast laoarvestuse lisamist).
               out_days = [dict(days[k]) for k in sorted(days) if k < today.isoformat()][-MAX_PAEVAD:]
+              for r in out_days:   # profiiliaknast välja jäänud päev (eile oli see 14. päev): 15-min profiil eemaldatakse
+                  if r["paev"] <= profile_from:
+                      r.pop("loadQ", None)
               # Tuletatud väljad (aku tulu laoarvestusega, elektriinfo lehe „Eile“ rida, energialeht, graafikud): arvutatakse igal
               # käivitusel kirjete väljadest kuupäevade järjekorras, mitte Solarmanist
               capacity = read_battery_capacity()

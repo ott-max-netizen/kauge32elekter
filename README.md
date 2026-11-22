@@ -32,7 +32,7 @@ Elering API → GitHub Actions → hinnad.json → GitHub Pages → index.html b
 |---|---|
 | `index.html` | **Elektriinfo**: börsihind, odavaim aeg, päikesekaart, maja lõpphind ja üldelekter (HTML ja JS) |
 | `energy-dashboard.html` | **Energia**: päikesepark, akupank, energiavoog, soovitus, „Täna kokku“ (kWh ja €; perioodid päevast aastani), päeva graafik (eile, täna, homme), päevade/kuude graafik ja „Trendid“ (kuud ja 12 kuu libisev keskmine) |
-| `graafikud.html` | **Graafikud**: animeeritud ülevaateleht (elektri hind koos tasude ja KM-ga, kust energia tuli, päike/maja/võrk päeva jooksul, aku, päevad, tarbimine kellaaja järgi, maja üldelekter kuude kaupa), vt „Graafikud“ |
+| `graafikud.html` | **Graafikud**: animeeritud ülevaateleht (elektri hind koos tasude ja KM-ga, kust energia tuli, päike/maja/võrk päeva jooksul, aku, päevad, tarbimine kellaaja järgi 1 h või 15 min kaupa, maja üldelekter ja keskmine hind kuude kaupa), vt „Graafikud“ |
 | `css/common.css` | **ühine disainisüsteem** mõlemale lehele: tokenid (hele ja tume), klaaskaardid ja mesh-taust, bento-ruudustiku alus, komponendid, graafikuraam, olekud, print ja eelistuste varuvariandid |
 | `css/index.css`, `css/energy-dashboard.css`, `css/graafikud.css` | ainult lehe paigutus (`grid-template-areas`) ja lehepõhised komponendid |
 | `img/icons.svg` | piktogrammide sprite (`<symbol id="i-…">`), mida kasutavad mõlemad lehed |
@@ -293,7 +293,8 @@ Energialehe kokkuvõtte perioodivaliku (eile, 7 päeva, kuud, aastad) andmed. Fa
  "data":{
    "days":[{"paev":"2026-10-21","pvKwh":46.11,"pvEur":5.351,"loadKwh":235.08,"loadEur":36.455,"importKwh":148.18,
      "importEur":18.919,"exportKwh":0.0,"exportEur":0.0,"chargeKwh":17.43,"chargeEur":1.322,"dischargeKwh":59.59,
-     "dischargeEur":13.722,"socStart":70.0,"socEnd":28.0,"loadH":[8.02,7.08,"… 24 väärtust …",12.67],"kaadrid":96,"complete":true,"src":"paike","v":1,
+     "dischargeEur":13.722,"socStart":70.0,"socEnd":28.0,"loadH":[8.02,7.08,"… 24 väärtust …",12.67],
+     "loadQ":[8.11,7.96,"… 96 väärtust …",12.40],"kaadrid":96,"complete":true,"src":"paike","v":1,
      "cfg":"aeacd889b482","updatedAt":"2026-10-22T00:31:00Z"}],
    "meta":{"from":"2026-06-01","pending":0,"sellFee":1.05,"batteryKwh":100.0,"warnings":[]}
  }}
@@ -332,6 +333,11 @@ Energialehe kokkuvõtte perioodivaliku (eile, 7 päeva, kuud, aastad) andmed. Fa
 - `loadH` = maja tarbimise tunniprofiil (24 Tallinna kellatundi, kWh tunnis = keskmine kW; alla poole tunni
   mõõtmisi → `null`, kellakeeramise päeval korduv tund on kahe tunni keskmine). Väli on viimase 14 päeva kirjetel
   (vanemad kirjed ilma selleta arvutatakse üks kord uuesti) ja sellest arvutab energialeht tarbimise prognoosi.
+- `loadQ` = sama 15 min kaupa (96 Tallinna veerandtundi, keskmine kW; alla poole veerandtunni mõõtmisi → `null`,
+  kellakeeramise päeval korduv veerandtund on kahe keskmine; 92 või 100 kaadriga päeval on ikka 96 väärtust). Ainult
+  viimase 14 päeva kirjetel: töövoog eemaldab selle vanematelt (iga päev ~0,6 kB) ning arvutab 14 päeva kirjed ilma
+  `loadQ`-ta üks kord uuesti (eilne `paike.json`-ist, varasemad Solarmanist, 10 päeva käivituse kohta). Graafikute lehe
+  „Tarbimine kellaaja järgi“ 15 min valik. Lisandus 22.11.2026; `PAEVAD_VERSION` jäi 1.
 - `complete: false` = kaadrid katavad alla 97 % päevast või päeva viimane 15-min kaader puudub (kogused on mõõdetud
   osa summa; leht märgib selle). `src` = `"paike"` või `"solarman"`; poolik `paike`-kirje ja `paike`-kirje, milles on
   päeva perioodidest vähem kaadreid (`kaadrid`), laaditakse hiljem üks kord Solarmanist uuesti.
@@ -769,15 +775,16 @@ väärtustele. **Vähendatud liikumise** eelistusega (`prefers-reduced-motion`) 
 | Päike, maja, võrk ja aku | `paike.json` `frames` | 15-min keskmised võimsused täna või eile (kW): päike alana, maja tarbimine, ost võrgust ja aku joontena; aku märk nagu energialehel (+ laeb, − tühjeneb majja), nulljoon telje toonis; märkuses akust kasutatud kWh. Jooned monotoonse interpolatsiooniga (astmete juures ei viska üle, nt aku ei näi hetkeks negatiivsena) |
 | Aku | `paike.json` `frames`, `realTime`; `paevad.json` | plaadid: laetus praegu (ja laeb / tühjeneb / ootel, < 0,2 kW = ootel), laetud ja tühjendatud kWh valitud päeval (täna või eile; laetuse algus → lõpp, suurim võimsus), aku tulu eile ja 30 päeva; graafikud: laetus % ja laadimine (üles) / tühjenemine (alla) kW 15 min kaupa – kaks eraldi graafikut, et ühelgi poleks kahte y-telge |
 | Päevad | `paevad.json` | päike + ost võrgust virnas (sisse tulnud energia) ja maja tarbimine joonena, 30 või 90 päeva; tooltipis aku tulu |
-| Tarbimine kellaaja järgi | `paevad.json` `loadH` | viimase 14 päeva keskmine kW kellatunni järgi, tööpäev vs puhkepäev (nädalavahetus ja riigipühad) |
-| Maja üldelekter kuude kaupa | `hinnad.json` `data.majaElekter` | viimased 12 kuud arvesti järgi (kWh või €; € koos fikseeritud kuutasudega, hinnang) ja aasta varasem sama kuu; pooleli kuu on heledam |
+| Tarbimine kellaaja järgi | `paevad.json` `loadH` (1 h) või `loadQ` (15 min) | viimase 14 päeva keskmine kW kellatunni või veerandtunni järgi, tööpäev vs puhkepäev (nädalavahetus ja riigipühad); **1 h või 15 min** (vaikimisi nagu hinnagraafikul: telefonis 1 h, arvutis 15 min). 15 min näitab lühikesi tippe, mida tunni keskmine silub. Kui ühelgi päeval `loadQ`-d pole (enne töövoo esimest käivitust), on 15 min nupp keelatud ja all on märkus; päevade arv päises on valitud täpsusega päevad |
+| Maja üldelekter kuude kaupa | `hinnad.json` `data.majaElekter` | viimased 12 kuud arvesti järgi (kWh või €; € koos fikseeritud kuutasudega, hinnang) ja aasta varasem sama kuu; pooleli kuu on heledam. **Keskmine hind** (teine graafik samal kaardil, kuud tulpadega samas veerus): kuu `eur` / `kwh` s/kWh – maja makstud hind kWh kohta koos tasude, fikseeritud kuutasude ja KM-ga (sama alus mis €-tulpadel ja energialehe aasta vaate „Keskmine hind“); aasta varasem sama kuu heledama joonena; pooleli kuu katkendliku lõigu ja õõnsa punktiga; viimase kuu väärtus punkti kohal. Tooltipis kuutasude osa kWh kohta (`eur` − `eurOo` − `eurPaev`, nagu energialehe `normalizeMaja`) ja muutus aasta varasemaga (s/kWh). kWh/€ lüliti seda graafikut ei muuda |
 
 - **Loetavus:** iga graafiku ühik on telje kohal (s/kWh, kW, %, kWh, €); hinnagraafikul on otsesildid (praegu, kalleim,
   odavaim ja keskmine joone otsas, kattuv madalama prioriteediga silt jääb ära); 15-min graafikute ajatelg ainult
-  täistundidel (iga 2 h, kitsal ekraanil iga 3 h); aku kahe graafiku plot-alad algavad samast kohast; virnastatud tulpade
+  täistundidel (iga 2 h, kitsal ekraanil iga 3 h); aku kahe graafiku ja kuude kahe graafiku plot-alad algavad samast kohast
+  (sama y-telje laius; kuude joongraafikul `autoPadding: false`, et ka parem serv klapiks); virnastatud tulpade
   osade vahel on 2 px pinnavahe; jooned 2 px; plaatide ühik on väiksem kui number. Seeriavärvid (päike, maja, võrk, aku)
   on kontrollitud värvipimeduse eristatavuse validaatoriga nii heledas kui tumedas teemas.
-- **Hõljutus:** iga graafik näitab tooltipi (kogu veerg korraga), hinnagraafik ka erinevust päeva keskmisest, kuude graafik
+- **Hõljutus:** iga graafik näitab tooltipi (kogu veerg korraga), hinnagraafik ka erinevust päeva keskmisest, kuude graafikud
   muutust aasta varasemaga. Puutel töötab sama toksamisega.
 - **Ligipääsetavus:** iga lõuend on `role="img"` ja selle `aria-label` on graafiku tekstikokkuvõte (nt odavaim ja kalleim
   tund); lülitid on raadionupud (klaviatuuriga kasutatavad).
@@ -1032,5 +1039,5 @@ tegemisega.
 ## Versioon ja muudatuste ajalugu
 
 - Praegune versioon: **v3.12.1** (`APP_VERSION` failis `js/index.js`), energialehel **v2.13.2**
-  (`js/energy-dashboard.js`), graafikute lehel **v1.6.1** (`js/graafikud.js`).
+  (`js/energy-dashboard.js`), graafikute lehel **v1.7.0** (`js/graafikud.js`).
 - Üksikasjalik ülevaade UI/UX muudatustest, komponentide klassidest ja arhitektuurireeglitest (sh juhised Claude AI-le) asub failis [CHANGELOG.md](CHANGELOG.md).

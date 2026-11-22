@@ -7,7 +7,7 @@
 
 const CONFIG = readPageConfig();
 
-const APP_VERSION = '1.6.1';
+const APP_VERSION = '1.7.0';
 const BATTERY_IDLE_KW = 0.2;     // väiksem aku võimsus = „ootel“ (hoidevool), nagu energialehel
 const TARIFF_KEYS = ['marginaal', 'vorgutasuPaev', 'vorgutasuOo', 'taastuvenergiaTasu', 'aktsiis', 'kaibemaks', 'algus', 'lopp'];
 const MAX_PERIOD_MINUTES = 60;   // common.js nõue (pikim hinnaperiood)
@@ -34,7 +34,9 @@ const state = {
   powerDay: 0,
   batteryDay: 0,
   daysRange: 30,
+  profileRes: window.matchMedia && window.matchMedia('(max-width: 767px)').matches ? 60 : 15,   // nagu hinnagraafikul
   monthsMetric: 'kwh',
+  monthPriceKey: '', // kuu keskmise hinna graafiku andmed: sama andmestikuga (kWh/€ vahetus, uuestilaadimine) seda üle ei joonistata
   theme: 'auto',
   instant: false     // true = joonista ilma animatsioonita (teema vahetus)
 };
@@ -425,6 +427,33 @@ const BAT_LABELS = {
   }
 };
 
+/** Joone viimase punkti väärtus otse punkti kohal (options.plugins.lastLabel: { dataset, text(v) }); paremas servas
+ *  joondatakse sisse, et silt ei jääks plot-alast välja. */
+const LAST_LABEL = {
+  id: 'lastLabel',
+  afterDatasetsDraw(chart, args, opts) {
+    if (!opts || opts.dataset == null || typeof opts.text !== 'function') return;
+    const ds = chart.data.datasets[opts.dataset];
+    const meta = chart.getDatasetMeta(opts.dataset);
+    if (!ds || meta.hidden) return;
+    let i = ds.data.length - 1;
+    while (i >= 0 && ds.data[i] == null) i--;
+    const point = i >= 0 ? meta.data[i] : null;
+    if (!point) return;
+    const { x, y } = point.getProps(['x', 'y'], true);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+    const { ctx, chartArea: a } = chart;
+    const text = opts.text(ds.data[i]);
+    ctx.save();
+    ctx.font = `700 12px ${C.font}`;
+    const w = ctx.measureText(text).width;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'bottom';
+    haloLabel(ctx, text, Math.min(Math.max(x - w / 2, a.left), a.right - w), Math.max(y - 8, a.top + 12), C.text, 700);
+    ctx.restore();
+  }
+};
+
 /** x-telje sildid 15-min andmetel ainult täistundidel: iga 2 h, kitsal graafikul (< 560 px) iga 3 h. */
 function hourTicks(times) {
   return {
@@ -489,12 +518,12 @@ function upsert(id, config, recreate = false) {
   return chart;
 }
 
-/** Kaardi teade (andmed puuduvad või laadimine ebaõnnestus); null eemaldab selle. */
+/** Kaardi teade (andmed puuduvad või laadimine ebaõnnestus); null eemaldab selle. Peidab kaardi kõik graafikud ja legendid. */
 function cardNotice(sectionId, text) {
   const section = byId(sectionId);
   const box = section.querySelector(':scope > .chart-box, :scope > .mix');
   let notice = section.querySelector(':scope > .notice');
-  for (const node of section.querySelectorAll(':scope > .chart-box, :scope > .legend, :scope > .mix')) node.hidden = Boolean(text);
+  for (const node of section.querySelectorAll(':scope > .chart-box, :scope > .legend, :scope > .mix, :scope > .card__subhead')) node.hidden = Boolean(text);
   if (!text) { if (notice) notice.remove(); return; }
   if (!notice) {
     notice = el('p', { class: 'notice' });
@@ -830,45 +859,63 @@ function drawDays() {
   });
 }
 
-/** Tunniprofiil: maja keskmine kW kellatunni järgi viimase 14 päeva kirjetest (loadH), tööpäev vs puhkepäev. */
+/** Tarbimise profiil: maja keskmine kW kellaaja järgi viimase 14 päeva kirjetest, tööpäev vs puhkepäev (nädalavahetus ja
+ *  riigipühad); 1 h (loadH, 24 väärtust) või 15 min (loadQ, 96 väärtust). loadQ on ainult viimase 14 päeva kirjetel ja
+ *  lisandus 22.11.2026: kuni ühegi päeva loadQ puudub, on 15 min valik keelatud ja näidatakse 1 h profiili. */
 function drawProfile() {
+  const PROFILE = { 60: { field: 'loadH', slots: 24 }, 15: { field: 'loadQ', slots: 96 } };
+  const days = lastDays(CONFIG.profiiliPaevi);
+  const has = (rec, res) => Boolean(rec && Array.isArray(rec[PROFILE[res].field]) && rec[PROFILE[res].field].length === PROFILE[res].slots);
+  const quarterAvailable = days.some(d => has(d.rec, 15));
+  byId('profile-15').disabled = !quarterAvailable;
+  byId('profile-res-note').textContent = quarterAvailable ? '' : '15 min andmed lisanduvad järgmise andmeuuendusega';
+  const res = state.profileRes === 15 && quarterAvailable ? 15 : 60;
+  byId(res === 15 ? 'profile-15' : 'profile-60').checked = true;
+  const { field, slots } = PROFILE[res];
+  const perHour = slots / 24;
   const groups = { work: [], rest: [] };
-  for (const d of lastDays(CONFIG.profiiliPaevi)) {
-    if (!d.rec || !Array.isArray(d.rec.loadH) || d.rec.loadH.length !== 24) continue;
+  for (const d of days) {
+    if (!has(d.rec, res)) continue;
     const [y, m, day] = d.key.split('-').map(Number);
     const weekday = new Date(Date.UTC(y, m - 1, day)).getUTCDay();
     const rest = weekday === 0 || weekday === 6 || isPublicHoliday(y, m, day);
-    groups[rest ? 'rest' : 'work'].push(d.rec.loadH);
+    groups[rest ? 'rest' : 'work'].push(d.rec[field]);
   }
-  const avgProfile = list => Array.from({ length: 24 }, (_, h) => {
-    const vals = list.map(p => num(p[h])).filter(v => v != null);
+  const avgProfile = list => Array.from({ length: slots }, (_, i) => {
+    const vals = list.map(p => num(p[i])).filter(v => v != null);
     return vals.length ? vals.reduce((s, v) => s + v, 0) / vals.length : null;
   });
-  if (!groups.work.length && !groups.rest.length) { cardNotice('section-profile', state.errors.days || 'Tunniprofiili andmeid pole veel.'); return; }
+  if (!groups.work.length && !groups.rest.length) { cardNotice('section-profile', state.errors.days || 'Tarbimise profiili andmeid pole veel.'); return; }
   cardNotice('section-profile', null);
   const work = avgProfile(groups.work);
   const rest = avgProfile(groups.rest);
   byId('profile-note').textContent = `keskmine võimsus · ${groups.work.length} tööpäeva ja ${groups.rest.length} puhkepäeva järgi`;
+  // Pesa algus ja lõpp kellaajana: 1 h „07:00–08:00“, 15 min „07:15–07:30“
+  const clock = i => { const min = (i % slots) * (60 / perHour); return `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`; };
   const peak = list => { let best = -1; list.forEach((v, i) => { if (v != null && (best < 0 || v > list[best])) best = i; }); return best; };
   const pw = peak(work);
   const pr = peak(rest);
-  byId('c-profile').setAttribute('aria-label', `Maja tarbimine kellaaja järgi: tööpäeviti suurim kell ${String(pw).padStart(2, '0')}${pw >= 0 ? ` (${NF.d1.format(work[pw])} kW)` : ''}, puhkepäeviti kell ${String(pr).padStart(2, '0')}${pr >= 0 ? ` (${NF.d1.format(rest[pr])} kW)` : ''}.`);
+  const peakText = (list, i) => (i >= 0 ? `kell ${res === 15 ? clock(i) : clock(i).slice(0, 2)} (${NF.d1.format(list[i])} kW)` : 'andmed puuduvad');
+  byId('c-profile').setAttribute('aria-label', `Maja tarbimine kellaaja järgi, ${res === 15 ? '15 min' : 'tunni'} keskmine: tööpäeviti suurim ${peakText(work, pw)}, puhkepäeviti ${peakText(rest, pr)}.`);
+  const line = (label, data, color, extra = {}) => Object.assign({
+    // monotone: kõver ei viska üle (15 min hüpped ei näi hetkeks suuremate ega väiksematena)
+    label, data, borderColor: color, borderWidth: LINE_W, cubicInterpolationMode: 'monotone',
+    pointRadius: 0, pointHoverRadius: 4, pointHoverBorderColor: C.plot, pointHoverBorderWidth: 2
+  }, extra);
   upsert('c-profile', {
     type: 'line',
     plugins: [UNIT_PLUGIN],
     data: {
-      labels: Array.from({ length: 24 }, (_, h) => String(h).padStart(2, '0')),
+      labels: Array.from({ length: slots }, (_, i) => clock(i)),
       datasets: [
-        { label: 'Tööpäev', data: work, borderColor: C.home, backgroundColor: areaGradient(C.home, 0.2), fill: 'origin', borderWidth: LINE_W,
-          tension: 0.4, pointRadius: 0, pointHoverRadius: 4, pointHoverBorderColor: C.plot, pointHoverBorderWidth: 2 },
-        { label: 'Puhkepäev', data: rest, borderColor: C.battery, backgroundColor: C.battery, borderWidth: LINE_W, borderDash: [], tension: 0.4,
-          pointRadius: 0, pointHoverRadius: 4, pointHoverBorderColor: C.plot, pointHoverBorderWidth: 2 }
+        line('Tööpäev', work, C.home, { backgroundColor: areaGradient(C.home, 0.2), fill: 'origin' }),
+        line('Puhkepäev', rest, C.battery, { backgroundColor: C.battery })
       ]
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      animations: lineAnimations(24, 1000),
+      animations: lineAnimations(slots, 1000),
       animation: motion() ? {} : false,
       layout: { padding: { top: PAD_TOP } },
       interaction: { mode: 'index', intersect: false },
@@ -877,20 +924,28 @@ function drawProfile() {
         unitLabel: { text: 'kW' },
         tooltip: tooltip({
           callbacks: {
-            title: items => `kell ${items[0].label}:00–${String((Number(items[0].label) + 1) % 24).padStart(2, '0')}:00`,
-            label: item => ` ${item.dataset.label}: ${item.parsed.y == null ? '—' : `${NF.d1.format(item.parsed.y)} kW`}`
+            title: items => `kell ${clock(items[0].dataIndex)}–${clock(items[0].dataIndex + 1)}`,
+            label: item => ` ${item.dataset.label}: ${item.parsed.y == null ? '—' : `${NF.d1.format(item.parsed.y)} kW`}`
           }
         })
       },
       scales: {
-        x: axis({ grid: { display: false }, ticks: { color: C.muted, maxRotation: 0, autoSkip: true, maxTicksLimit: 9 } }),
+        // Sildid täistundidel: iga 2 h, kitsal graafikul (< 560 px) iga 3 h (nagu 15-min võimsusgraafikul)
+        x: axis({ grid: { display: false }, ticks: { color: C.muted, maxRotation: 0, autoSkip: false, padding: 6,
+          callback(value, index) {
+            if (index % perHour) return null;
+            const hour = index / perHour;
+            return hour % (this.chart.width < 560 ? 3 : 2) === 0 ? String(hour).padStart(2, '0') : null;
+          } } }),
         y: axis({ beginAtZero: true, ticks: { color: C.muted, padding: 6, callback: v => NF.d0.format(v) } })
       }
     }
   }, true);
 }
 
-/** Maja üldelekter: viimased 12 kuud (arvesti, hinnad.json majaElekter) ja aasta varasem sama kuu; kWh või €. */
+/** Maja üldelekter: viimased 12 kuud (arvesti, hinnad.json majaElekter) ja aasta varasem sama kuu; kWh või € tulpadena ning
+ *  nende kuude keskmine hind joonena eraldi graafikul all (drawMonthPrice). Mõlema graafiku y-telg on sama laiusega, et
+ *  kuud oleksid üksteise all. */
 function drawMonths() {
   if (!state.months.length) { cardNotice('section-months', state.errors.prices || 'Kuude andmeid pole.'); return; }
   cardNotice('section-months', null);
@@ -913,6 +968,7 @@ function drawMonths() {
   byId('months-note').textContent = partial.some(Boolean) ? 'viimane kuu on pooleli' : '';
   const lastM = months[months.length - 1];
   byId('c-months').setAttribute('aria-label', `Maja üldelekter, viimased 12 kuud (${metric === 'eur' ? 'eurodes, koos kuutasudega' : 'kWh'}): ${labels[11]} ${value(lastM.cur) != null ? fmt(value(lastM.cur)) : '—'}${value(lastM.prev) != null ? `, aasta varem ${fmt(value(lastM.prev))}` : ''}.`);
+  drawMonthPrice(months, labels, partial);
   upsert('c-months', {
     type: 'bar',
     plugins: [UNIT_PLUGIN],
@@ -949,10 +1005,99 @@ function drawMonths() {
       },
       scales: {
         x: axis({ grid: { display: false }, ticks: { color: C.muted, maxRotation: 0, autoSkip: true, autoSkipPadding: 6 } }),
-        y: axis({ beginAtZero: true, ticks: { color: C.muted, padding: 6, callback: v => NF.d0.format(v) } })
+        y: axis({ beginAtZero: true, afterFit: fixedYWidth(MONTHS_Y_W), ticks: { color: C.muted, padding: 6, callback: v => NF.d0.format(v) } })
       }
     }
   });
+}
+
+const MONTHS_Y_W = 48;   // kuude kahe graafiku y-telje laius (mahub „12 000“): plot-alad ja kuud on üksteise all
+
+/** Kuu keskmine hind s/kWh = kuu eurod / kWh (koos tasude, fikseeritud kuutasude ja KM-ga; sama alus mis €-tulpadel ja
+ *  energialehe aasta vaate „Keskmine hind“), samad 12 kuud mis tulpadel; aasta varasem sama kuu heledama joonena. Pooleli
+ *  kuu: katkendlik lõik ja õõnes punkt (kuutasu on arvestatud möödunud osa kaupa). Kuutasude osa kWh kohta on tooltipis
+ *  (eur − eurOo − eurPaev, nagu energialehe normalizeMaja). Sama andmestikuga graafikut üle ei joonistata (kWh/€ vahetus). */
+function drawMonthPrice(months, labels, partial) {
+  const cents = rec => (rec && num(rec.kwh) != null && rec.kwh > 0 && num(rec.eur) != null ? rec.eur / rec.kwh * 100 : null);
+  const fixedCents = rec => {
+    if (!rec || !(rec.kwh > 0) || num(rec.eurOo) == null || num(rec.eurPaev) == null) return null;
+    const fixed = rec.eur - rec.eurOo - rec.eurPaev;
+    return fixed >= 0.02 ? fixed / rec.kwh * 100 : null;   // alla 0,02 € on kolme ümardatud välja ümardusviga
+  };
+  const cur = months.map(m => cents(m.cur));
+  const prev = months.map(m => cents(m.prev));
+  const canvas = byId('c-monthprice');
+  const box = canvas.parentElement;
+  const hasData = cur.some(v => v != null);
+  for (const node of [box, box.nextElementSibling, box.previousElementSibling]) node.hidden = !hasData;
+  if (!hasData) return;
+  const key = JSON.stringify([labels, cur, prev, partial]);
+  if (state.charts.has('c-monthprice') && state.monthPriceKey === key) return;
+  state.monthPriceKey = key;
+  const last = cur.reduce((acc, v, i) => (v != null ? i : acc), -1);
+  const shown = cur.filter(v => v != null);
+  byId('c-monthprice').setAttribute('aria-label', `Maja keskmine elektrihind kuude kaupa (koos tasude, kuutasude ja KM-ga): ${labels[last]} ${fmtCents(cur[last])}${partial[last] ? ' (pooleli)' : ''}${prev[last] != null ? `, aasta varem ${fmtCents(prev[last])}` : ''}; ${shown.length} kuu vahemik ${NF.d2.format(Math.min(...shown))}–${fmtCents(Math.max(...shown))}.`);
+  const point = (color, data, extra = {}) => Object.assign({
+    data, borderColor: color, backgroundColor: color, borderWidth: LINE_W, cubicInterpolationMode: 'monotone', spanGaps: false,
+    pointRadius: 3, pointHoverRadius: 5, pointBorderWidth: 0, pointHoverBorderColor: C.plot, pointHoverBorderWidth: 2
+  }, extra);
+  const prevColor = C.past(C.grid);
+  upsert('c-monthprice', {
+    type: 'line',
+    plugins: [UNIT_PLUGIN, LAST_LABEL],
+    data: {
+      labels,
+      datasets: [
+        point(prevColor, prev, { label: 'Aasta varem', borderWidth: 1.5, pointRadius: 2, order: 2 }),
+        point(C.grid, cur, { label: 'Keskmine hind', order: 1,
+          // pooleli kuu: lõik sinna katkendlik ja punkt õõnes (plot-ala värvi täide, joone värvi serv)
+          segment: { borderDash: ctx => (partial[ctx.p1DataIndex] ? [5, 4] : undefined) },
+          pointBackgroundColor: months.map((m, i) => (partial[i] ? C.plot : C.grid)),
+          pointBorderWidth: months.map((m, i) => (partial[i] ? 2 : 0)),
+          pointHoverBackgroundColor: months.map((m, i) => (partial[i] ? C.plot : C.grid)),
+          pointHoverBorderColor: months.map((m, i) => (partial[i] ? C.grid : C.plot)) })
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animations: lineAnimations(months.length, 900),
+      animation: motion() ? {} : false,
+      // autoPadding: false – punktide jaoks ei jäeta paremale lisaruumi, plot-ala on sama lai kui tulpadel (kuud üksteise all;
+      // offset: true hoiab äärmised punktid kuu veeru keskel, nii et need ei lõigu)
+      layout: { autoPadding: false, padding: { top: PAD_TOP } },
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        unitLabel: { text: 's/kWh' },
+        lastLabel: { dataset: 1, text: v => NF.d2.format(v) },
+        tooltip: tooltip({
+          callbacks: {
+            // joonevõti joone värvis (punkti värv oleks pooleli kuul plot-ala värv)
+            labelColor: item => ({ borderColor: item.dataset.borderColor, backgroundColor: item.dataset.borderColor }),
+            title: items => { const m = months[items[0].dataIndex]; return `${monthShort.format(m.date).replace('.', '')} ${m.date.getUTCFullYear()}${partial[items[0].dataIndex] ? ' (pooleli)' : ''}`; },
+            label: item => {
+              const v = item.parsed.y;
+              const main = ` ${item.dataset.label}: ${v == null ? '—' : fmtCents(v)}`;
+              const rec = item.datasetIndex === 1 ? months[item.dataIndex].cur : months[item.dataIndex].prev;
+              const fixed = v != null ? fixedCents(rec) : null;
+              return fixed != null ? [main, `   sellest kuutasud ${fmtCents(fixed)}`] : main;
+            },
+            footer: items => {
+              const i = items[0].dataIndex;
+              if (cur[i] == null || prev[i] == null || partial[i]) return '';
+              const d = cur[i] - prev[i];
+              return Math.abs(d) < 0.005 ? 'sama mis aasta varem' : `${d < 0 ? '−' : '+'}${fmtCents(Math.abs(d))} võrreldes aasta varasemaga`;
+            }
+          }
+        })
+      },
+      scales: {
+        x: axis({ offset: true, grid: { display: false }, ticks: { color: C.muted, maxRotation: 0, autoSkip: true, autoSkipPadding: 6 } }),
+        y: axis({ beginAtZero: true, grace: '12%', afterFit: fixedYWidth(MONTHS_Y_W), ticks: { color: C.muted, padding: 6, callback: v => NF.d0.format(v) } })
+      }
+    }
+  }, true);
 }
 
 /** Aku: plaadid (laetus praegu, laetud ja tühjendatud valitud päeval, eilne tulu), laetus % joonena ja
@@ -1143,6 +1288,7 @@ function setupControls() {
   onChange('power-day', v => { state.powerDay = Number(v); drawSection('power'); });
   onChange('days-range', v => { state.daysRange = Number(v); drawSection('days'); });
   onChange('months-metric', v => { state.monthsMetric = v; drawSection('months'); });
+  onChange('profile-res', v => { state.profileRes = Number(v); drawSection('profile'); });
   // Vahelehele naastes värsked andmed (graafikud uuenevad animatsiooniga uutele väärtustele)
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible' && Date.now() - state.loadedAt > CONFIG.uuendusMinutites * MINUTE_MS) loadAll();

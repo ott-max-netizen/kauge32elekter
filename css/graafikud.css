@@ -39,11 +39,16 @@
 .chart-box--tall { height: 280px; }
 .chart-box--soc { height: 160px; }
 .chart-box--batpower { height: 150px; }
+.chart-box--monthprice { height: 170px; }
 @media (min-width: 1024px) {
   .chart-box { height: 280px; }
   .chart-box--tall { height: 320px; }
   .chart-box--soc { height: 180px; }
   .chart-box--batpower { height: 170px; }
+  .chart-box--monthprice { height: 190px; }
+  /* Profiil ja kuud on kõrvuti; kuude kaardil on kaks graafikut: profiili graafik täidab sama rea kõrguse (flex-basis 0, et
+     lõuend ise kasti ei suurendaks; min-height alistab flex-üksuse min-height: auto) */
+  .chart-box--profile { flex: 1 1 0; height: auto; min-height: 280px; }
 }
 .chart-box__fallback { margin: 0; padding: var(--s4) 0; font-size: var(--fs-small); color: var(--muted); }
 
@@ -71,13 +76,27 @@
 /* ---------- 4b. Hinnagraafiku legend: börsihind + tasud ühe tulbana; värviskaala päeva odavaimast kalleimani ---------- */
 .legend__swatch--split { background: linear-gradient(to top, var(--cat-kollane) 0 50%, var(--plot) 50% 66%, color-mix(in srgb, var(--cat-kollane) 55%, var(--plot)) 66% 100%); }
 .legend__swatch--scale { width: 28px; background: linear-gradient(to right, var(--cat-roheline), var(--cat-kollane), var(--cat-punane)); }
-#price-note:empty { display: none; }
+#price-note:empty, #profile-res-note:empty { display: none; }
 /* Legendi värvid klassidega (CSP style-src 'self' ei luba HTML-i style-atribuute) */
 .swatch--solar { --swatch: var(--solar); }
 .swatch--grid { --swatch: var(--grid); }
 .swatch--home { --swatch: var(--home); }
 .swatch--battery { --swatch: var(--battery); }
 .legend__swatch--line { height: 3px; }   /* joonseeria (maja, aku, puhkepäev) */
+
+/* ---------- 4c. Kaardi teine graafik (kuu keskmine hind): alampealkiri peenikese eraldusjoonega ---------- */
+.card__subhead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s1) var(--s3);
+  min-width: 0;
+  margin-top: var(--s1);
+  padding-top: var(--s3);
+  border-top: 1px solid var(--hairline);
+}
+.card__subtitle { margin: 0; font-size: var(--fs-secondary); font-weight: 700; line-height: 1.25; color: var(--text); }
 
 /* ---------- 5. Plaatide numbrid: tabelnumbrid, et loendamise animatsioon ei väriseks ---------- */
 .stat__value[data-count] { font-variant-numeric: tabular-nums; }   /* ainult loendamise ajal; lõppväärtus proportsionaalsete numbritega */

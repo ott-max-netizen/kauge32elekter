@@ -21,7 +21,7 @@
 <!-- Külastuste loendus (GoatCounter, küpsisteta; README „Külastuste statistika“). Skript on repo sees, sest CSP lubab ainult
      sama saidi skripte; loendus läheb sendBeacon-iga (connect-src). Saadetakse lehe nimi, ekraani laius ja tulek, mitte andmeid. -->
 <script data-goatcounter="https://kauge32.goatcounter.com/count" data-goatcounter-settings='{"no_events":true,"path":"/graafikud.html","title":"Graafikud"}' async src="js/vendor/goatcounter-count.js?v=c031008-k32c"></script>
-<link rel="stylesheet" href="css/graafikud.css?v=20261103b">
+<link rel="stylesheet" href="css/graafikud.css?v=20261122b">
 <!-- Raamimise kaitse ja teema enne esimest joonistamist (ilma defer'ita) -->
 <script src="js/teema.js?v=20261103b"></script>
 <!-- Chart.js 4.5.1 (globaal Chart): defer, init() käivitub DOMContentLoaded-il, mil teek on juba täidetud -->
@@ -196,13 +196,21 @@
       </div>
     </section>
 
-    <!-- 6. Maja tarbimine kellaaja järgi (tööpäev / puhkepäev) -->
+    <!-- 6. Maja tarbimine kellaaja järgi (tööpäev / puhkepäev; 1 h või 15 min) -->
     <section class="card reveal" id="section-profile" aria-labelledby="h-profile" data-chart="profile">
       <div class="card__head">
         <h2 id="h-profile" class="card__title"><svg class="icon" aria-hidden="true" focusable="false"><use href="img/icons.svg?v=20261023#i-clock"></use></svg>Tarbimine kellaaja järgi</h2>
         <span class="card__hint" id="profile-note">keskmine võimsus</span>
       </div>
-      <div class="chart-box"><canvas id="c-profile" role="img" aria-label="Tarbimise tunniprofiili graafik"></canvas></div>
+      <div class="card__controls">
+        <fieldset class="segmented segmented--small" id="profile-res">
+          <legend class="visually-hidden">Samm</legend>
+          <input type="radio" name="profile-res" id="profile-60" value="60"><label for="profile-60">1 h</label>
+          <input type="radio" name="profile-res" id="profile-15" value="15"><label for="profile-15">15 min</label>
+        </fieldset>
+        <p class="card__hint" id="profile-res-note"></p>
+      </div>
+      <div class="chart-box chart-box--profile"><canvas id="c-profile" role="img" aria-label="Tarbimise profiili graafik"></canvas></div>
       <div class="legend" aria-hidden="true">
         <span class="legend__item"><span class="legend__swatch legend__swatch--area swatch--home"></span>tööpäev</span>
         <span class="legend__item"><span class="legend__swatch swatch--battery legend__swatch--line"></span>puhkepäev</span>
@@ -228,11 +236,21 @@
         <span class="legend__item"><span class="legend__swatch swatch--grid"></span>kuu</span>
         <span class="legend__item"><span class="legend__swatch legend__swatch--past swatch--grid"></span>aasta varem</span>
       </div>
+      <!-- 7b. Sama 12 kuu keskmine hind (kuu € / kWh): eraldi graafik, kuud tulpadega samas veerus (ühelgi graafikul pole kahte y-telge) -->
+      <div class="card__subhead">
+        <h3 id="h-monthprice" class="card__subtitle">Keskmine hind</h3>
+        <span class="card__hint">s/kWh koos tasude, kuutasude ja KM-ga (hinnang)</span>
+      </div>
+      <div class="chart-box chart-box--monthprice"><canvas id="c-monthprice" role="img" aria-label="Kuu keskmise hinna graafik"></canvas></div>
+      <div class="legend" aria-hidden="true">
+        <span class="legend__item"><span class="legend__swatch swatch--grid legend__swatch--line"></span>keskmine hind</span>
+        <span class="legend__item"><span class="legend__swatch swatch--grid legend__swatch--line legend__swatch--past"></span>aasta varem</span>
+      </div>
     </section>
   </main>
 
   <footer class="app-footer">
-    <p><strong>Andmed:</strong> elektri hind — Elering (Nord Pool, Eesti hinnapiirkond) börsihind ilma KM-ta + müüja marginaal + võrgutasu (päeva- või öötariif) + taastuvenergia- ja varustuskindluse tasu + aktsiis + tasakaalustamisvõimsuse kulu, kogu summale käibemaks (kuutasud pole sees); tasud on hinnad.json-is töövoo kasutatud elektriinfo lehe seaded; päike, aku, maja tarbimine ja ost võrgust päevade lõikes — inverter (Solarman); maja üldelekter kuude kaupa — võrguarvesti (Elering Estfeed), eurod koos fikseeritud kuutasudega (hinnang). Värvid hinnagraafikul on päeva sees suhtelised (odavaim → kalleim), mitte elektriinfo lehe hinnaklassid.</p>
+    <p><strong>Andmed:</strong> elektri hind — Elering (Nord Pool, Eesti hinnapiirkond) börsihind ilma KM-ta + müüja marginaal + võrgutasu (päeva- või öötariif) + taastuvenergia- ja varustuskindluse tasu + aktsiis + tasakaalustamisvõimsuse kulu, kogu summale käibemaks (kuutasud pole sees); tasud on hinnad.json-is töövoo kasutatud elektriinfo lehe seaded; päike, aku, maja tarbimine ja ost võrgust päevade lõikes — inverter (Solarman); tarbimine kellaaja järgi — inverteri päevakokkuvõtted (viimased 14 päeva, tunni või 15 min keskmine võimsus); maja üldelekter kuude kaupa — võrguarvesti (Elering Estfeed), eurod koos fikseeritud kuutasudega (hinnang), keskmine hind = kuu eurod / kWh. Värvid hinnagraafikul on päeva sees suhtelised (odavaim → kalleim), mitte elektriinfo lehe hinnaklassid.</p>
     <div class="app-footer__meta">
       <p id="footer-version"></p>
       <p>Külastusi loendatakse anonüümselt (GoatCounter), küpsiseid ei kasutata.</p>
@@ -253,12 +271,12 @@ const CONFIG = {
   paevadeFail: "paevad.json",   // inverteri päevakokkuvõtted
   kaibemaks: 24,                // varuväärtus, %: eelistatakse hinnad.json meta.tariffs.kaibemaks-i (töövoog loeb selle index.html-ist)
   kokkuvotePaevi: 30,           // plaatide ja rõnga periood, päeva (lõppenud päevad)
-  profiiliPaevi: 14,            // tunniprofiili periood, päeva (paevad.json loadH on viimase 14 päeva kirjetel)
+  profiiliPaevi: 14,            // tarbimise profiili periood, päeva (paevad.json loadH ja 15-min loadQ on viimase 14 päeva kirjetel)
   uuendusMinutites: 15          // vahelehele naastes laaditakse andmed uuesti, kui need on sellest vanemad
 };
 </script>
 <!-- Mõlema lehe ühine skriptikood (aeg, vormindamine, DOM-abi, graafikute ühisosa); peab laadima enne põhiskripti -->
 <script src="js/common.js?v=20261122a"></script>
-<script src="js/graafikud.js?v=20261122a"></script>
+<script src="js/graafikud.js?v=20261122b"></script>
 </body>
 </html>
