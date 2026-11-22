@@ -27,7 +27,8 @@
     "voog voog voog voog voog voog voog voog voog voog voog voog"
     "aku aku aku aku aku aku aku aku aku aku aku aku"
     "paevad paevad paevad paevad paevad paevad paevad paevad paevad paevad paevad paevad"
-    "profiil profiil profiil profiil profiil profiil kuud kuud kuud kuud kuud kuud"; }
+    "profiil profiil profiil profiil profiil profiil profiil profiil profiil profiil profiil profiil"
+    "kuud kuud kuud kuud kuud kuud kuud kuud kuud kuud kuud kuud"; }
 }
 
 /* ---------- 2. Kaardi juhtnupud (pealkirja all: lüliti vasakul, vihje paremal) ---------- */
@@ -46,9 +47,6 @@
   .chart-box--soc { height: 180px; }
   .chart-box--batpower { height: 170px; }
   .chart-box--monthprice { height: 190px; }
-  /* Profiil ja kuud on kõrvuti; kuude kaardil on kaks graafikut: profiili graafik täidab sama rea kõrguse (flex-basis 0, et
-     lõuend ise kasti ei suurendaks; min-height alistab flex-üksuse min-height: auto) */
-  .chart-box--profile { flex: 1 1 0; height: auto; min-height: 280px; }
 }
 .chart-box__fallback { margin: 0; padding: var(--s4) 0; font-size: var(--fs-small); color: var(--muted); }
 
@@ -84,7 +82,17 @@
 .swatch--battery { --swatch: var(--battery); }
 .legend__swatch--line { height: 3px; }   /* joonseeria (maja, aku, puhkepäev) */
 
-/* ---------- 4c. Kaardi teine graafik (kuu keskmine hind): alampealkiri peenikese eraldusjoonega ---------- */
+/* ---------- 4c. Kahe graafikuga kaart (kuud: tulbad ja ostetud kWh keskmine hind) ----------
+   Rühmad (.card__group) on kitsal kaardil üksteise all (teine alampealkirja ja eraldusjoonega), laial kaardil (kaardi
+   sisulaius ≥ 720 px, konteineripäring) kõrvuti võrdse laiusega. Kõrvuti venivad graafikukastid sama kõrguseni, et
+   legendid oleksid samal joonel. Peidetud rühm (keskmise hinna andmeteta) annab kogu laiuse teisele. */
+.card__charts { display: flex; flex-wrap: wrap; gap: var(--s3) var(--s5); min-width: 0; }
+.card__group { display: flex; flex-direction: column; gap: var(--s3); flex: 1 1 100%; min-width: 0; }
+@container (min-width: 720px) {
+  .card__group { flex-basis: 0; }
+  .card__group > .chart-box { flex: 1 0 auto; }
+  .card__group > .card__subhead { min-height: var(--tap); margin-top: 0; padding-top: 0; border-top: 0; }   /* lüliti rea kõrgune */
+}
 .card__subhead {
   display: flex;
   flex-wrap: wrap;

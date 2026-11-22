@@ -21,7 +21,7 @@
 <!-- Külastuste loendus (GoatCounter, küpsisteta; README „Külastuste statistika“). Skript on repo sees, sest CSP lubab ainult
      sama saidi skripte; loendus läheb sendBeacon-iga (connect-src). Saadetakse lehe nimi, ekraani laius ja tulek, mitte andmeid. -->
 <script data-goatcounter="https://kauge32.goatcounter.com/count" data-goatcounter-settings='{"no_events":true,"path":"/graafikud.html","title":"Graafikud"}' async src="js/vendor/goatcounter-count.js?v=c031008-k32c"></script>
-<link rel="stylesheet" href="css/graafikud.css?v=20261122b">
+<link rel="stylesheet" href="css/graafikud.css?v=20261122d">
 <!-- Raamimise kaitse ja teema enne esimest joonistamist (ilma defer'ita) -->
 <script src="js/teema.js?v=20261103b"></script>
 <!-- Chart.js 4.5.1 (globaal Chart): defer, init() käivitub DOMContentLoaded-il, mil teek on juba täidetud -->
@@ -210,7 +210,7 @@
         </fieldset>
         <p class="card__hint" id="profile-res-note"></p>
       </div>
-      <div class="chart-box chart-box--profile"><canvas id="c-profile" role="img" aria-label="Tarbimise profiili graafik"></canvas></div>
+      <div class="chart-box"><canvas id="c-profile" role="img" aria-label="Tarbimise profiili graafik"></canvas></div>
       <div class="legend" aria-hidden="true">
         <span class="legend__item"><span class="legend__swatch legend__swatch--area swatch--home"></span>tööpäev</span>
         <span class="legend__item"><span class="legend__swatch swatch--battery legend__swatch--line"></span>puhkepäev</span>
@@ -223,29 +223,36 @@
         <h2 id="h-months" class="card__title"><svg class="icon" aria-hidden="true" focusable="false"><use href="img/icons.svg?v=20261023#i-receipt"></use></svg>Maja üldelekter kuude kaupa</h2>
         <span class="card__hint">ost võrgust (arvesti); € koos kuutasudega (hinnang)</span>
       </div>
-      <div class="card__controls">
-        <fieldset class="segmented segmented--small" id="months-metric">
-          <legend class="visually-hidden">Näitaja</legend>
-          <input type="radio" name="months-metric" id="months-kwh" value="kwh" checked><label for="months-kwh">kWh</label>
-          <input type="radio" name="months-metric" id="months-eur" value="eur"><label for="months-eur">€</label>
-        </fieldset>
-        <p class="card__hint" id="months-note"></p>
-      </div>
-      <div class="chart-box"><canvas id="c-months" role="img" aria-label="Kuude graafik"></canvas></div>
-      <div class="legend" aria-hidden="true">
-        <span class="legend__item"><span class="legend__swatch swatch--grid"></span>kuu</span>
-        <span class="legend__item"><span class="legend__swatch legend__swatch--past swatch--grid"></span>aasta varem</span>
-      </div>
-      <!-- 7b. Sama 12 kuu ostetud kWh keskmine hind (kuu € / kWh): eraldi graafik, kuud tulpadega samas veerus (ühelgi graafikul
-           pole kahte y-telge). Mitte segi ajada energialehe „Keskmine ostuhinnaga“ (maja tarbimise kWh kohta, ilma kuutasudeta). -->
-      <div class="card__subhead">
-        <h3 id="h-monthprice" class="card__subtitle">Ostetud kWh keskmine hind</h3>
-        <span class="card__hint">s/kWh koos tasude, kuutasude ja KM-ga (hinnang)</span>
-      </div>
-      <div class="chart-box chart-box--monthprice"><canvas id="c-monthprice" role="img" aria-label="Kuu keskmise hinna graafik"></canvas></div>
-      <div class="legend" aria-hidden="true">
-        <span class="legend__item"><span class="legend__swatch swatch--grid legend__swatch--line"></span>kuu</span>
-        <span class="legend__item"><span class="legend__swatch swatch--grid legend__swatch--line legend__swatch--past"></span>aasta varem</span>
+      <!-- Kaks rühma: laial kaardil (≥ 720 px) kõrvuti, kitsal üksteise all (kuud siis samas veerus) -->
+      <div class="card__charts">
+        <div class="card__group">
+          <div class="card__controls">
+            <fieldset class="segmented segmented--small" id="months-metric">
+              <legend class="visually-hidden">Näitaja</legend>
+              <input type="radio" name="months-metric" id="months-kwh" value="kwh" checked><label for="months-kwh">kWh</label>
+              <input type="radio" name="months-metric" id="months-eur" value="eur"><label for="months-eur">€</label>
+            </fieldset>
+            <p class="card__hint" id="months-note"></p>
+          </div>
+          <div class="chart-box"><canvas id="c-months" role="img" aria-label="Kuude graafik"></canvas></div>
+          <div class="legend" aria-hidden="true">
+            <span class="legend__item"><span class="legend__swatch swatch--grid"></span>kuu</span>
+            <span class="legend__item"><span class="legend__swatch legend__swatch--past swatch--grid"></span>aasta varem</span>
+          </div>
+        </div>
+        <!-- 7b. Sama 12 kuu ostetud kWh keskmine hind (kuu € / kWh): eraldi graafik (ühelgi graafikul pole kahte y-telge).
+             Mitte segi ajada energialehe „Keskmine ostuhinnaga“ (maja tarbimise kWh kohta, ilma kuutasudeta). -->
+        <div class="card__group" id="monthprice-group">
+          <div class="card__subhead">
+            <h3 id="h-monthprice" class="card__subtitle">Ostetud kWh keskmine hind</h3>
+            <span class="card__hint">s/kWh koos tasude, kuutasude ja KM-ga (hinnang)</span>
+          </div>
+          <div class="chart-box chart-box--monthprice"><canvas id="c-monthprice" role="img" aria-label="Kuu keskmise hinna graafik"></canvas></div>
+          <div class="legend" aria-hidden="true">
+            <span class="legend__item"><span class="legend__swatch swatch--grid legend__swatch--line"></span>kuu</span>
+            <span class="legend__item"><span class="legend__swatch swatch--grid legend__swatch--line legend__swatch--past"></span>aasta varem</span>
+          </div>
+        </div>
       </div>
     </section>
   </main>
@@ -278,6 +285,6 @@ const CONFIG = {
 </script>
 <!-- Mõlema lehe ühine skriptikood (aeg, vormindamine, DOM-abi, graafikute ühisosa); peab laadima enne põhiskripti -->
 <script src="js/common.js?v=20261122a"></script>
-<script src="js/graafikud.js?v=20261122c"></script>
+<script src="js/graafikud.js?v=20261122d"></script>
 </body>
 </html>

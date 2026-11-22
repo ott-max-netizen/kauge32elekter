@@ -4,6 +4,20 @@ See fail kirjeldab rakenduse `index.html` versioonimuudatusi, arhitektuurilisi k
 
 ---
 
+## graafikud.html [1.7.2] — 2026-11-22 · profiil ja kuud kumbki oma real
+
+- Arvutis (≥ 1024 px) olid „Tarbimine kellaaja järgi“ ja „Maja üldelekter kuude kaupa“ kõrvuti; kuude kaart oli kahe
+  graafikuga kõrgem ja profiili graafik venis ~560 px kõrguseks. Nüüd on mõlemad oma täislaiuses real (bento `profiil` ja
+  `kuud`); profiili graafik on tavakõrgusega (280 px) ning 1.7.0 venitamise reegel (`.chart-box--profile`) on eemaldatud.
+- Kuude kaardi kaks graafikut on rühmades (`.card__charts` > `.card__group`, `css/graafikud.css` 4c): kaardi sisulaiusel
+  ≥ 720 px (konteineripäring) kõrvuti võrdse laiusega – vasakul kWh/€ tulbad lülitiga, paremal ostetud kWh keskmine hind –
+  ning graafikukastid venivad sama kõrguseni (legendid samal joonel); kitsamal üksteise all nagu varem (eraldusjoon, kuud
+  samas veerus). Keskmise hinna andmeteta peidetakse parem rühm ja tulbad saavad kogu laiuse. `cardNotice` peidab rühmade
+  ümbrise (`.card__charts`).
+- `?v=20261122d`: `css/graafikud.css`, `js/graafikud.js`.
+- **Kontroll:** Chrome 1280 / 900 px – kõrvuti (rühmad 539 / 401 px, sama kõrgus, plot-alade ülaserv sama), 768 / 390 px –
+  üksteise all; profiil ja kuud täislaiuses (1152 px); kuude andmeteta kaart näitab teadet „Kuude andmeid pole.“. Skriptivigu pole.
+
 ## graafikud.html [1.7.1] — 2026-11-22 · „Ostetud kWh keskmine hind“
 
 - Kuude kaardi joongraafiku pealkiri „Keskmine hind“ → **„Ostetud kWh keskmine hind“**: nimi oli liiga sarnane energialehe

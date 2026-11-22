@@ -7,7 +7,7 @@
 
 const CONFIG = readPageConfig();
 
-const APP_VERSION = '1.7.1';
+const APP_VERSION = '1.7.2';
 const BATTERY_IDLE_KW = 0.2;     // väiksem aku võimsus = „ootel“ (hoidevool), nagu energialehel
 const TARIFF_KEYS = ['marginaal', 'vorgutasuPaev', 'vorgutasuOo', 'taastuvenergiaTasu', 'aktsiis', 'kaibemaks', 'algus', 'lopp'];
 const MAX_PERIOD_MINUTES = 60;   // common.js nõue (pikim hinnaperiood)
@@ -521,9 +521,9 @@ function upsert(id, config, recreate = false) {
 /** Kaardi teade (andmed puuduvad või laadimine ebaõnnestus); null eemaldab selle. Peidab kaardi kõik graafikud ja legendid. */
 function cardNotice(sectionId, text) {
   const section = byId(sectionId);
-  const box = section.querySelector(':scope > .chart-box, :scope > .mix');
+  const box = section.querySelector(':scope > .chart-box, :scope > .mix, :scope > .card__charts');
   let notice = section.querySelector(':scope > .notice');
-  for (const node of section.querySelectorAll(':scope > .chart-box, :scope > .legend, :scope > .mix, :scope > .card__subhead')) node.hidden = Boolean(text);
+  for (const node of section.querySelectorAll(':scope > .chart-box, :scope > .legend, :scope > .mix, :scope > .card__charts')) node.hidden = Boolean(text);
   if (!text) { if (notice) notice.remove(); return; }
   if (!notice) {
     notice = el('p', { class: 'notice' });
@@ -944,8 +944,8 @@ function drawProfile() {
 }
 
 /** Maja üldelekter: viimased 12 kuud (arvesti, hinnad.json majaElekter) ja aasta varasem sama kuu; kWh või € tulpadena ning
- *  nende kuude ostetud kWh keskmine hind joonena eraldi graafikul all (drawMonthPrice). Mõlema graafiku y-telg on sama laiusega, et
- *  kuud oleksid üksteise all. */
+ *  nende kuude ostetud kWh keskmine hind joonena eraldi graafikul (drawMonthPrice): laial kaardil kõrval, kitsal all. Mõlema
+ *  graafiku y-telg on sama laiusega, et kitsal kaardil oleksid kuud üksteise all. */
 function drawMonths() {
   if (!state.months.length) { cardNotice('section-months', state.errors.prices || 'Kuude andmeid pole.'); return; }
   cardNotice('section-months', null);
@@ -1011,7 +1011,7 @@ function drawMonths() {
   });
 }
 
-const MONTHS_Y_W = 48;   // kuude kahe graafiku y-telje laius (mahub „12 000“): plot-alad ja kuud on üksteise all
+const MONTHS_Y_W = 48;   // kuude kahe graafiku y-telje laius (mahub „12 000“): kitsal kaardil on plot-alad ja kuud üksteise all
 
 /** Ostetud kWh keskmine hind s/kWh = kuu eurod / võrgust ostetud kWh (koos tasude, fikseeritud kuutasude ja KM-ga; sama alus
  *  mis €-tulpadel ja energialehe aasta vaate „Ost võrgust“ ploki „Keskmine hind“), samad 12 kuud mis tulpadel; aasta varasem
@@ -1029,10 +1029,8 @@ function drawMonthPrice(months, labels, partial) {
   };
   const cur = months.map(m => cents(m.cur));
   const prev = months.map(m => cents(m.prev));
-  const canvas = byId('c-monthprice');
-  const box = canvas.parentElement;
   const hasData = cur.some(v => v != null);
-  for (const node of [box, box.nextElementSibling, box.previousElementSibling]) node.hidden = !hasData;
+  byId('monthprice-group').hidden = !hasData;   // peidetud rühm annab kogu laiuse tulpadele
   if (!hasData) return;
   const key = JSON.stringify([labels, cur, prev, partial]);
   if (state.charts.has('c-monthprice') && state.monthPriceKey === key) return;
