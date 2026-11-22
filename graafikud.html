@@ -21,7 +21,7 @@
 <!-- Külastuste loendus (GoatCounter, küpsisteta; README „Külastuste statistika“). Skript on repo sees, sest CSP lubab ainult
      sama saidi skripte; loendus läheb sendBeacon-iga (connect-src). Saadetakse lehe nimi, ekraani laius ja tulek, mitte andmeid. -->
 <script data-goatcounter="https://kauge32.goatcounter.com/count" data-goatcounter-settings='{"no_events":true,"path":"/graafikud.html","title":"Graafikud"}' async src="js/vendor/goatcounter-count.js?v=c031008-k32c"></script>
-<link rel="stylesheet" href="css/graafikud.css?v=20261122d">
+<link rel="stylesheet" href="css/graafikud.css?v=20261122e">
 <!-- Raamimise kaitse ja teema enne esimest joonistamist (ilma defer'ita) -->
 <script src="js/teema.js?v=20261103b"></script>
 <!-- Chart.js 4.5.1 (globaal Chart): defer, init() käivitub DOMContentLoaded-il, mil teek on juba täidetud -->
@@ -221,11 +221,16 @@
     <section class="card reveal" id="section-months" aria-labelledby="h-months" data-chart="months">
       <div class="card__head">
         <h2 id="h-months" class="card__title"><svg class="icon" aria-hidden="true" focusable="false"><use href="img/icons.svg?v=20261023#i-receipt"></use></svg>Maja üldelekter kuude kaupa</h2>
-        <span class="card__hint">ost võrgust (arvesti); € koos kuutasudega (hinnang)</span>
+        <span class="card__hint">võrguarvesti (Elering) ja inverter</span>
       </div>
-      <!-- Kaks rühma: laial kaardil (≥ 720 px) kõrvuti, kitsal üksteise all (kuud siis samas veerus) -->
+      <!-- Kaks rühma, kumbki: alampealkiri, lülitirida, graafik, legend. Laial kaardil (≥ 720 px) kõrvuti ja read joondatud
+           (subgrid), kitsal üksteise all (kuud siis samas veerus). -->
       <div class="card__charts">
         <div class="card__group">
+          <div class="card__subhead">
+            <h3 id="h-monthbuy" class="card__subtitle">Ost võrgust</h3>
+            <span class="card__hint">arvesti; € koos kuutasudega (hinnang)</span>
+          </div>
           <div class="card__controls">
             <fieldset class="segmented segmented--small" id="months-metric">
               <legend class="visually-hidden">Näitaja</legend>
@@ -240,17 +245,26 @@
             <span class="legend__item"><span class="legend__swatch legend__swatch--past swatch--grid"></span>aasta varem</span>
           </div>
         </div>
-        <!-- 7b. Sama 12 kuu ostetud kWh keskmine hind (kuu € / kWh): eraldi graafik (ühelgi graafikul pole kahte y-telge).
-             Mitte segi ajada energialehe „Keskmine ostuhinnaga“ (maja tarbimise kWh kohta, ilma kuutasudeta). -->
+        <!-- 7b. Samade 12 kuu ostetud ja tarbitud kWh hind: samad arve eurod jagatud Eleringi ostetud kWh-ga ja inverteri
+             tarbitud kWh-ga; eraldi graafik (ühelgi graafikul pole kahte y-telge). Mitte segi ajada energialehe „Keskmise
+             ostuhinna“ ja „Maja maksis“ arvuga (inverteri eurod, ilma kuutasudeta). -->
         <div class="card__group" id="monthprice-group">
           <div class="card__subhead">
-            <h3 id="h-monthprice" class="card__subtitle">Ostetud kWh keskmine hind</h3>
-            <span class="card__hint">s/kWh koos tasude, kuutasude ja KM-ga (hinnang)</span>
+            <h3 id="h-monthprice" class="card__subtitle">Ostetud ja tarbitud kWh hind</h3>
+            <span class="card__hint">samad arve eurod; s/kWh koos tasude ja KM-ga (hinnang)</span>
           </div>
-          <div class="chart-box chart-box--monthprice"><canvas id="c-monthprice" role="img" aria-label="Kuu keskmise hinna graafik"></canvas></div>
+          <div class="card__controls">
+            <fieldset class="segmented segmented--small" id="months-fixed">
+              <legend class="visually-hidden">Kuutasud</legend>
+              <input type="radio" name="months-fixed" id="months-fixed-on" value="koos" checked><label for="months-fixed-on">Koos kuutasudega</label>
+              <input type="radio" name="months-fixed" id="months-fixed-off" value="ilma"><label for="months-fixed-off">Ilma kuutasudeta</label>
+            </fieldset>
+            <p class="card__hint" id="monthprice-note"></p>
+          </div>
+          <div class="chart-box chart-box--monthprice"><canvas id="c-monthprice" role="img" aria-label="Ostetud ja tarbitud kWh hinna graafik"></canvas></div>
           <div class="legend" aria-hidden="true">
-            <span class="legend__item"><span class="legend__swatch swatch--grid legend__swatch--line"></span>kuu</span>
-            <span class="legend__item"><span class="legend__swatch swatch--grid legend__swatch--line legend__swatch--past"></span>aasta varem</span>
+            <span class="legend__item"><span class="legend__swatch swatch--grid legend__swatch--line"></span>ostetud kWh (Elering)</span>
+            <span class="legend__item"><span class="legend__swatch swatch--home legend__swatch--line"></span>tarbitud kWh (inverter)</span>
           </div>
         </div>
       </div>
@@ -258,7 +272,7 @@
   </main>
 
   <footer class="app-footer">
-    <p><strong>Andmed:</strong> elektri hind — Elering (Nord Pool, Eesti hinnapiirkond) börsihind ilma KM-ta + müüja marginaal + võrgutasu (päeva- või öötariif) + taastuvenergia- ja varustuskindluse tasu + aktsiis + tasakaalustamisvõimsuse kulu, kogu summale käibemaks (kuutasud pole sees); tasud on hinnad.json-is töövoo kasutatud elektriinfo lehe seaded; päike, aku, maja tarbimine ja ost võrgust päevade lõikes — inverter (Solarman); tarbimine kellaaja järgi — inverteri päevakokkuvõtted (viimased 14 päeva, tunni või 15 min keskmine võimsus); maja üldelekter kuude kaupa — võrguarvesti (Elering Estfeed), eurod koos fikseeritud kuutasudega (hinnang), ostetud kWh keskmine hind = kuu eurod / ostetud kWh (tooltipis ka ilma kuutasudeta). Värvid hinnagraafikul on päeva sees suhtelised (odavaim → kalleim), mitte elektriinfo lehe hinnaklassid.</p>
+    <p><strong>Andmed:</strong> elektri hind — Elering (Nord Pool, Eesti hinnapiirkond) börsihind ilma KM-ta + müüja marginaal + võrgutasu (päeva- või öötariif) + taastuvenergia- ja varustuskindluse tasu + aktsiis + tasakaalustamisvõimsuse kulu, kogu summale käibemaks (kuutasud pole sees); tasud on hinnad.json-is töövoo kasutatud elektriinfo lehe seaded; päike, aku, maja tarbimine ja ost võrgust päevade lõikes — inverter (Solarman); tarbimine kellaaja järgi — inverteri päevakokkuvõtted (viimased 14 päeva, tunni või 15 min keskmine võimsus); maja üldelekter kuude kaupa — võrguarvesti (Elering Estfeed), eurod koos fikseeritud kuutasudega (hinnang), ostetud ja tarbitud kWh hind = kuu eurod (koos või ilma kuutasudeta) / arvesti ostetud kWh ja inverteri tarbitud kWh. Värvid hinnagraafikul on päeva sees suhtelised (odavaim → kalleim), mitte elektriinfo lehe hinnaklassid.</p>
     <div class="app-footer__meta">
       <p id="footer-version"></p>
       <p>Külastusi loendatakse anonüümselt (GoatCounter), küpsiseid ei kasutata.</p>
@@ -285,6 +299,6 @@ const CONFIG = {
 </script>
 <!-- Mõlema lehe ühine skriptikood (aeg, vormindamine, DOM-abi, graafikute ühisosa); peab laadima enne põhiskripti -->
 <script src="js/common.js?v=20261122a"></script>
-<script src="js/graafikud.js?v=20261122d"></script>
+<script src="js/graafikud.js?v=20261122e"></script>
 </body>
 </html>

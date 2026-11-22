@@ -7,7 +7,7 @@
 
 const CONFIG = readPageConfig();
 
-const APP_VERSION = '1.7.2';
+const APP_VERSION = '1.8.0';
 const BATTERY_IDLE_KW = 0.2;     // väiksem aku võimsus = „ootel“ (hoidevool), nagu energialehel
 const TARIFF_KEYS = ['marginaal', 'vorgutasuPaev', 'vorgutasuOo', 'taastuvenergiaTasu', 'aktsiis', 'kaibemaks', 'algus', 'lopp'];
 const MAX_PERIOD_MINUTES = 60;   // common.js nõue (pikim hinnaperiood)
@@ -36,6 +36,7 @@ const state = {
   daysRange: 30,
   profileRes: window.matchMedia && window.matchMedia('(max-width: 767px)').matches ? 60 : 15,   // nagu hinnagraafikul
   monthsMetric: 'kwh',
+  monthsFixed: true,  // ostetud/tarbitud kWh hind koos fikseeritud kuutasudega (lüliti „Koos kuutasudega / Ilma kuutasudeta“)
   monthPriceKey: '', // kuu keskmise hinna graafiku andmed: sama andmestikuga (kWh/€ vahetus, uuestilaadimine) seda üle ei joonistata
   theme: 'auto',
   instant: false     // true = joonista ilma animatsioonita (teema vahetus)
@@ -427,29 +428,37 @@ const BAT_LABELS = {
   }
 };
 
-/** Joone viimase punkti väärtus otse punkti kohal (options.plugins.lastLabel: { dataset, text(v) }); paremas servas
- *  joondatakse sisse, et silt ei jääks plot-alast välja. */
+/** Joonte viimase punkti väärtus otse punkti kohal (options.plugins.lastLabel: { datasets: [indeksid], text(v) }); paremas
+ *  servas joondatakse sisse, et silt ei jääks plot-alast välja; teisega kattuv silt jääb ära (väärtus on tooltipis). */
 const LAST_LABEL = {
   id: 'lastLabel',
   afterDatasetsDraw(chart, args, opts) {
-    if (!opts || opts.dataset == null || typeof opts.text !== 'function') return;
-    const ds = chart.data.datasets[opts.dataset];
-    const meta = chart.getDatasetMeta(opts.dataset);
-    if (!ds || meta.hidden) return;
-    let i = ds.data.length - 1;
-    while (i >= 0 && ds.data[i] == null) i--;
-    const point = i >= 0 ? meta.data[i] : null;
-    if (!point) return;
-    const { x, y } = point.getProps(['x', 'y'], true);
-    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+    if (!opts || !Array.isArray(opts.datasets) || typeof opts.text !== 'function') return;
     const { ctx, chartArea: a } = chart;
-    const text = opts.text(ds.data[i]);
+    const boxes = [];
     ctx.save();
     ctx.font = `700 12px ${C.font}`;
-    const w = ctx.measureText(text).width;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'bottom';
-    haloLabel(ctx, text, Math.min(Math.max(x - w / 2, a.left), a.right - w), Math.max(y - 8, a.top + 12), C.text, 700);
+    for (const index of opts.datasets) {
+      const ds = chart.data.datasets[index];
+      const meta = chart.getDatasetMeta(index);
+      if (!ds || meta.hidden) continue;
+      let i = ds.data.length - 1;
+      while (i >= 0 && ds.data[i] == null) i--;
+      const point = i >= 0 ? meta.data[i] : null;
+      if (!point) continue;
+      const { x, y } = point.getProps(['x', 'y'], true);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+      const text = opts.text(ds.data[i]);
+      const w = ctx.measureText(text).width;
+      const x0 = Math.min(Math.max(x - w / 2, a.left), a.right - w);
+      const py = Math.max(y - 8, a.top + 12);
+      const box = { x0, x1: x0 + w, y0: py - 14, y1: py };
+      if (boxes.some(b => box.x0 < b.x1 + 4 && box.x1 + 4 > b.x0 && box.y0 < b.y1 + 2 && box.y1 + 2 > b.y0)) continue;
+      haloLabel(ctx, text, x0, py, C.text, 700);
+      boxes.push(box);
+    }
     ctx.restore();
   }
 };
@@ -944,7 +953,7 @@ function drawProfile() {
 }
 
 /** Maja üldelekter: viimased 12 kuud (arvesti, hinnad.json majaElekter) ja aasta varasem sama kuu; kWh või € tulpadena ning
- *  nende kuude ostetud kWh keskmine hind joonena eraldi graafikul (drawMonthPrice): laial kaardil kõrval, kitsal all. Mõlema
+ *  nende kuude ostetud ja tarbitud kWh hind joontena eraldi graafikul (drawMonthPrice): laial kaardil kõrval, kitsal all. Mõlema
  *  graafiku y-telg on sama laiusega, et kitsal kaardil oleksid kuud üksteise all. */
 function drawMonths() {
   if (!state.months.length) { cardNotice('section-months', state.errors.prices || 'Kuude andmeid pole.'); return; }
@@ -1013,50 +1022,89 @@ function drawMonths() {
 
 const MONTHS_Y_W = 48;   // kuude kahe graafiku y-telje laius (mahub „12 000“): kitsal kaardil on plot-alad ja kuud üksteise all
 
-/** Ostetud kWh keskmine hind s/kWh = kuu eurod / võrgust ostetud kWh (koos tasude, fikseeritud kuutasude ja KM-ga; sama alus
- *  mis €-tulpadel ja energialehe aasta vaate „Ost võrgust“ ploki „Keskmine hind“), samad 12 kuud mis tulpadel; aasta varasem
- *  sama kuu heledama joonena. Pooleli kuu: katkendlik lõik ja õõnes punkt (kuutasu on arvestatud möödunud osa kaupa).
- *  Tooltipis ka hind ilma kuutasudeta ja kuutasude osa kWh kohta (kuutasud = eur − eurOo − eurPaev, nagu energialehe
- *  normalizeMaja). NB! See pole energialehe „Keskmine ostuhind“ (maja kogu tarbimine selle aja lõpphinnaga, jagatud
- *  tarbitud kWh-ga, ilma kuutasudeta) ega „Maja maksis“ (võrgu netokulu ilma kuutasudeta / tarbitud kWh).
- *  Sama andmestikuga graafikut üle ei joonistata (kWh/€ vahetus). */
+/** Ostetud ja tarbitud kWh hind kuude kaupa (samad 12 kuud mis tulpadel), mõlemas samad arve eurod (võrguarvesti, hinnad.json
+ *  majaElekter; koos tasude ja KM-ga, lülitiga koos fikseeritud kuutasudega `eur` või ilma `eurOo` + `eurPaev`):
+ *  - ostetud kWh hind = eurod / ostetud kWh (Eleringi arvesti `kwh`);
+ *  - tarbitud kWh hind = samad eurod / maja tarbitud kWh (inverter, paevad.json päevade `loadKwh` kuu summa). Vahe näitab,
+ *    kui palju päike ja aku iga tarbitud kWh odavamaks teevad (aku kaod võivad selle ka kallimaks teha).
+ *  Tarbitud kWh hind ainult lõppenud kuule, mille kõigi päevade inverteri kirje on olemas: pooleli kuul on arvesti andmed
+ *  `estfeedUntil`-ini ja inverteri omad eilseni (perioodid ei kattu). Pooleli kuu ostetud hind: katkendlik lõik, õõnes punkt.
+ *  NB! Ei ole energialehe „Keskmine ostuhind“ ega „Maja maksis“ (inverteri eurod, ilma kuutasudeta). Sama andmestiku ja
+ *  lülitiga graafikut üle ei joonistata (kWh/€ vahetus). */
 function drawMonthPrice(months, labels, partial) {
-  const cents = rec => (rec && num(rec.kwh) != null && rec.kwh > 0 && num(rec.eur) != null ? rec.eur / rec.kwh * 100 : null);
-  const fixedCents = rec => {
-    if (!rec || !(rec.kwh > 0) || num(rec.eurOo) == null || num(rec.eurPaev) == null) return null;
-    const fixed = rec.eur - rec.eurOo - rec.eurPaev;
-    return fixed >= 0.02 ? fixed / rec.kwh * 100 : null;   // alla 0,02 € on kolme ümardatud välja ümardusviga
+  const withFixed = state.monthsFixed;
+  const euros = rec => {
+    if (!rec || num(rec.eur) == null) return null;
+    if (withFixed) return rec.eur;
+    return num(rec.eurOo) != null && num(rec.eurPaev) != null ? rec.eurOo + rec.eurPaev : null;   // jaotuseta vana kirje: ei tea
   };
-  const cur = months.map(m => cents(m.cur));
-  const prev = months.map(m => cents(m.prev));
-  const hasData = cur.some(v => v != null);
+  const perKwh = (eur, kwh) => (eur != null && kwh != null && kwh > 0.5 ? eur / kwh * 100 : null);
+  // Inverteri tarbimine kuus: kõigi kalendripäevade loadKwh; puuduv päev -> missing (siis kuu tarbitud hinda ei arvutata)
+  const byDay = new Map(state.days.map(r => [r.paev, r]));
+  const monthLoad = key => {
+    const [y, m] = key.split('-').map(Number);
+    const daysIn = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    let kwh = 0;
+    let missing = 0;
+    let partialDays = 0;
+    for (let d = 1; d <= daysIn; d++) {
+      const rec = byDay.get(`${key}-${String(d).padStart(2, '0')}`);
+      const v = rec ? num(rec.loadKwh) : null;
+      if (v == null) { missing++; continue; }
+      kwh += v;
+      if (rec.complete === false) partialDays++;
+    }
+    return { kwh, missing, daysIn, partialDays };
+  };
+  const rows = months.map((m, i) => {
+    const eur = euros(m.cur);
+    const load = monthLoad(m.key);
+    const bought = m.cur ? num(m.cur.kwh) : null;
+    return {
+      eur, bought, load,
+      buy: perKwh(eur, bought),
+      use: partial[i] || load.missing ? null : perKwh(eur, load.kwh),
+      prev: perKwh(euros(m.prev), m.prev ? num(m.prev.kwh) : null)
+    };
+  });
+  const buy = rows.map(r => r.buy);
+  const use = rows.map(r => r.use);
+  const hasData = buy.some(v => v != null);
   byId('monthprice-group').hidden = !hasData;   // peidetud rühm annab kogu laiuse tulpadele
   if (!hasData) return;
-  const key = JSON.stringify([labels, cur, prev, partial]);
+  const notes = [];
+  if (state.errors.days) notes.push('inverteri andmeid ei saanud laadida');
+  else if (partial.some(Boolean)) notes.push('pooleli kuul ainult ostetud kWh');
+  if (!withFixed && months.some((m, i) => m.cur && buy[i] == null)) notes.push('vanemal kuul jaotus puudub');
+  byId('monthprice-note').textContent = notes.join(' · ');
+  const key = JSON.stringify([labels, buy, use, rows.map(r => r.prev), partial, withFixed]);
   if (state.charts.has('c-monthprice') && state.monthPriceKey === key) return;
   state.monthPriceKey = key;
-  const last = cur.reduce((acc, v, i) => (v != null ? i : acc), -1);
-  const shown = cur.filter(v => v != null);
-  byId('c-monthprice').setAttribute('aria-label', `Võrgust ostetud kWh keskmine hind kuude kaupa (koos tasude, kuutasude ja KM-ga): ${labels[last]} ${fmtCents(cur[last])}${partial[last] ? ' (pooleli)' : ''}${prev[last] != null ? `, aasta varem ${fmtCents(prev[last])}` : ''}; ${shown.length} kuu vahemik ${NF.d2.format(Math.min(...shown))}–${fmtCents(Math.max(...shown))}.`);
-  const point = (color, data, extra = {}) => Object.assign({
+  const what = withFixed ? 'koos kuutasudega' : 'ilma kuutasudeta';
+  const lastIndex = list => list.reduce((acc, v, i) => (v != null ? i : acc), -1);
+  const lb = lastIndex(buy);
+  const lu = lastIndex(use);
+  byId('c-monthprice').setAttribute('aria-label', `Ostetud ja tarbitud kWh hind kuude kaupa (${what}): ostetud kWh ${labels[lb]} ${fmtCents(buy[lb])}${partial[lb] ? ' (pooleli)' : ''}` +
+    (lu >= 0 ? `; ${labels[lu]} ostetud ${fmtCents(buy[lu])}, tarbitud ${fmtCents(use[lu])}.` : '; tarbitud kWh hinda pole (inverteri andmed puuduvad).'));
+  const line = (color, data, extra = {}) => Object.assign({
     data, borderColor: color, backgroundColor: color, borderWidth: LINE_W, cubicInterpolationMode: 'monotone', spanGaps: false,
     pointRadius: 3, pointHoverRadius: 5, pointBorderWidth: 0, pointHoverBorderColor: C.plot, pointHoverBorderWidth: 2
   }, extra);
-  const prevColor = C.past(C.grid);
+  const pct = v => `${NF.pct.format(Math.abs(v))} %`;
   upsert('c-monthprice', {
     type: 'line',
     plugins: [UNIT_PLUGIN, LAST_LABEL],
     data: {
       labels,
       datasets: [
-        point(prevColor, prev, { label: 'Aasta varem', borderWidth: 1.5, pointRadius: 2, order: 2 }),
-        point(C.grid, cur, { label: 'Kuu', order: 1,
+        line(C.grid, buy, { label: 'Ostetud kWh', order: 2,
           // pooleli kuu: lõik sinna katkendlik ja punkt õõnes (plot-ala värvi täide, joone värvi serv)
           segment: { borderDash: ctx => (partial[ctx.p1DataIndex] ? [5, 4] : undefined) },
           pointBackgroundColor: months.map((m, i) => (partial[i] ? C.plot : C.grid)),
           pointBorderWidth: months.map((m, i) => (partial[i] ? 2 : 0)),
           pointHoverBackgroundColor: months.map((m, i) => (partial[i] ? C.plot : C.grid)),
-          pointHoverBorderColor: months.map((m, i) => (partial[i] ? C.grid : C.plot)) })
+          pointHoverBorderColor: months.map((m, i) => (partial[i] ? C.grid : C.plot)) }),
+        line(C.home, use, { label: 'Tarbitud kWh', order: 1 })
       ]
     },
     options: {
@@ -1064,34 +1112,42 @@ function drawMonthPrice(months, labels, partial) {
       maintainAspectRatio: false,
       animations: lineAnimations(months.length, 900),
       animation: motion() ? {} : false,
-      // autoPadding: false – punktide jaoks ei jäeta paremale lisaruumi, plot-ala on sama lai kui tulpadel (kuud üksteise all;
-      // offset: true hoiab äärmised punktid kuu veeru keskel, nii et need ei lõigu)
+      // autoPadding: false – punktide jaoks ei jäeta paremale lisaruumi, plot-ala on sama lai kui tulpadel (kitsal kaardil
+      // kuud üksteise all; offset: true hoiab äärmised punktid kuu veeru keskel, nii et need ei lõigu)
       layout: { autoPadding: false, padding: { top: PAD_TOP } },
       interaction: { mode: 'index', intersect: false },
       plugins: {
         legend: { display: false },
         unitLabel: { text: 's/kWh' },
-        lastLabel: { dataset: 1, text: v => NF.d2.format(v) },
+        lastLabel: { datasets: [0, 1], text: v => NF.d2.format(v) },
         tooltip: tooltip({
           callbacks: {
             // joonevõti joone värvis (punkti värv oleks pooleli kuul plot-ala värv)
             labelColor: item => ({ borderColor: item.dataset.borderColor, backgroundColor: item.dataset.borderColor }),
             title: items => { const m = months[items[0].dataIndex]; return `${monthShort.format(m.date).replace('.', '')} ${m.date.getUTCFullYear()}${partial[items[0].dataIndex] ? ' (pooleli)' : ''}`; },
             label: item => {
-              const v = item.parsed.y;
-              const rec = item.datasetIndex === 1 ? months[item.dataIndex].cur : months[item.dataIndex].prev;
-              const fixed = v != null ? fixedCents(rec) : null;
-              if (fixed == null) return ` ${item.dataset.label}: ${v == null ? '—' : fmtCents(v)}`;
-              // hind ilma kuutasudeta = (eurOo + eurPaev) / kWh (võrreldav lehe hinnagraafikuga) + kuutasud = hind; kuvatud
-              // kuutasud on ümardatud hinna ja ümardatud hinna ilma kuutasudeta vahe, et read liituksid sendi täpsusega
-              const s = priceSplitShown(v - fixed, v);
-              return [` ${item.dataset.label}: ${fmtCents(s.total)}`, `   ilma kuutasudeta ${fmtCents(s.spot)}`, `   kuutasud ${fmtCents(s.fees)}`];
+              const r = rows[item.dataIndex];
+              if (item.datasetIndex === 0) {
+                return r.buy == null ? ' Ostetud kWh: —' : [` Ostetud kWh: ${fmtCents(r.buy)}`, `   ${fmtKwh(r.bought)} (Elering)`];
+              }
+              // tühja väärtusega punkti Chart.js tooltipis ei näita: puudumise põhjus on jaluses
+              return [` Tarbitud kWh: ${fmtCents(r.use)}`, `   ${fmtKwh(r.load.kwh)} (inverter)${r.load.partialDays ? `, ${r.load.partialDays} päeva osaliste mõõtmistega` : ''}`];
             },
             footer: items => {
               const i = items[0].dataIndex;
-              if (cur[i] == null || prev[i] == null || partial[i]) return '';
-              const d = cur[i] - prev[i];
-              return Math.abs(d) < 0.005 ? 'sama mis aasta varem' : `${d < 0 ? '−' : '+'}${fmtCents(Math.abs(d))} võrreldes aasta varasemaga`;
+              const r = rows[i];
+              const out = [];
+              if (r.buy != null && r.use != null) {
+                const d = 1 - r.use / r.buy;
+                if (Math.abs(d) >= 0.005) out.push(`tarbitud kWh ${pct(d * 100)} ${d > 0 ? 'odavam' : 'kallim'} kui ostetud`);
+              } else if (r.use == null) {
+                out.push(`tarbitud kWh: ${partial[i] ? 'lisandub kuu lõppedes'
+                  : r.load.missing === r.load.daysIn ? 'inverteri andmeid pole'
+                    : r.load.missing ? `inverteri andmed puuduvad ${r.load.missing} päeval` : 'andmed puuduvad'}`);
+              }
+              if (r.eur != null) out.push(`kuu eurod ≈ ${fmtEur(r.eur)} (${what})`);
+              if (r.prev != null) out.push(`aasta varem ostetud kWh ${fmtCents(r.prev)}`);
+              return out;
             }
           }
         })
@@ -1292,6 +1348,7 @@ function setupControls() {
   onChange('power-day', v => { state.powerDay = Number(v); drawSection('power'); });
   onChange('days-range', v => { state.daysRange = Number(v); drawSection('days'); });
   onChange('months-metric', v => { state.monthsMetric = v; drawSection('months'); });
+  onChange('months-fixed', v => { state.monthsFixed = v === 'koos'; drawSection('months'); });
   onChange('profile-res', v => { state.profileRes = Number(v); drawSection('profile'); });
   // Vahelehele naastes värsked andmed (graafikud uuenevad animatsiooniga uutele väärtustele)
   document.addEventListener('visibilitychange', () => {

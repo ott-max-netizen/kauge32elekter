@@ -82,17 +82,13 @@
 .swatch--battery { --swatch: var(--battery); }
 .legend__swatch--line { height: 3px; }   /* joonseeria (maja, aku, puhkepäev) */
 
-/* ---------- 4c. Kahe graafikuga kaart (kuud: tulbad ja ostetud kWh keskmine hind) ----------
-   Rühmad (.card__group) on kitsal kaardil üksteise all (teine alampealkirja ja eraldusjoonega), laial kaardil (kaardi
-   sisulaius ≥ 720 px, konteineripäring) kõrvuti võrdse laiusega. Kõrvuti venivad graafikukastid sama kõrguseni, et
-   legendid oleksid samal joonel. Peidetud rühm (keskmise hinna andmeteta) annab kogu laiuse teisele. */
-.card__charts { display: flex; flex-wrap: wrap; gap: var(--s3) var(--s5); min-width: 0; }
-.card__group { display: flex; flex-direction: column; gap: var(--s3); flex: 1 1 100%; min-width: 0; }
-@container (min-width: 720px) {
-  .card__group { flex-basis: 0; }
-  .card__group > .chart-box { flex: 1 0 auto; }
-  .card__group > .card__subhead { min-height: var(--tap); margin-top: 0; padding-top: 0; border-top: 0; }   /* lüliti rea kõrgune */
-}
+/* ---------- 4c. Kahe graafikuga kaart (kuud: ost võrgust ning ostetud ja tarbitud kWh hind) ----------
+   Kumbki rühm (.card__group): alampealkiri, lülitirida, graafik, legend. Kitsal kaardil üksteise all (teine eraldusjoonega).
+   Laial kaardil (kaardi sisulaius ≥ 720 px, konteineripäring) kõrvuti võrdse laiusega ja neli rida on mõlemas samal kõrgusel
+   (subgrid), graafikud 280 px: plot-alad algavad ja lõpevad samal joonel. Peidetud rühm (hinnaandmeteta) annab kogu laiuse
+   teisele. */
+.card__charts { display: flex; flex-direction: column; gap: var(--s3); min-width: 0; }
+.card__group { display: flex; flex-direction: column; gap: var(--s3); min-width: 0; }
 .card__subhead {
   display: flex;
   flex-wrap: wrap;
@@ -100,11 +96,17 @@
   justify-content: space-between;
   gap: var(--s1) var(--s3);
   min-width: 0;
-  margin-top: var(--s1);
-  padding-top: var(--s3);
-  border-top: 1px solid var(--hairline);
 }
+.card__group + .card__group > .card__subhead { margin-top: var(--s1); padding-top: var(--s3); border-top: 1px solid var(--hairline); }
 .card__subtitle { margin: 0; font-size: var(--fs-secondary); font-weight: 700; line-height: 1.25; color: var(--text); }
+#monthprice-note:empty { display: none; }
+@container (min-width: 720px) {
+  .card__charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(4, auto); gap: var(--s3) var(--s5); }
+  .card__charts:has(> .card__group[hidden]) { grid-template-columns: minmax(0, 1fr); }
+  .card__group { display: grid; grid-row: span 4; grid-template-rows: subgrid; }
+  .card__group > .chart-box { height: 280px; }
+  .card__group + .card__group > .card__subhead { margin-top: 0; padding-top: 0; border-top: 0; }
+}
 
 /* ---------- 5. Plaatide numbrid: tabelnumbrid, et loendamise animatsioon ei väriseks ---------- */
 .stat__value[data-count] { font-variant-numeric: tabular-nums; }   /* ainult loendamise ajal; lõppväärtus proportsionaalsete numbritega */

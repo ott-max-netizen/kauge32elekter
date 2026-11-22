@@ -4,6 +4,28 @@ See fail kirjeldab rakenduse `index.html` versioonimuudatusi, arhitektuurilisi k
 
 ---
 
+## graafikud.html [1.8.0] — 2026-11-22 · ostetud ja tarbitud kWh hind
+
+- Kuude kaardi hinnagraafik „Ostetud kWh keskmine hind“ → **„Ostetud ja tarbitud kWh hind“**: kaks joont, mõlemas samad arve
+  eurod (võrguarvesti), erinev on ainult kWh:
+  - **ostetud kWh** (lilla, nagu tulbad) = eurod / Eleringi arvesti ostetud `kwh`;
+  - **tarbitud kWh** (sinine, maja tarbimise värv) = samad eurod / inverteri tarbitud kWh (kuu päevade `paevad.json` `loadKwh`).
+  Näide: arve 1 000 €, osteti 5 000 kWh, tarbiti 6 000 kWh → 20,0 ja 16,7 s/kWh.
+- Lüliti **Koos kuutasudega / Ilma kuutasudeta** (vaikimisi koos): eurod `eur` või `eurOo` + `eurPaev`; jaotuseta vana kuu on
+  ilma kuutasudeta vaates tühi (märkus). 1.7.1 tooltipi read „ilma kuutasudeta / kuutasud“ asendas lüliti.
+- Tarbitud kWh hind ainult lõppenud kuule, mille kõigi kalendripäevade inverteri kirje on olemas (inverter alates 06/2026):
+  pooleli kuul on arvesti andmed `estfeedUntil`-ini, inverteri omad eilseni – perioodid ei kattu (märkus „pooleli kuul ainult
+  ostetud kWh“). Puuduva hinna põhjus on tooltipi jaluses (lisandub kuu lõppedes / inverteri andmeid pole / puuduvad N päeval).
+- „Aasta varem“ joon asendus tarbitud joonega; aasta varasem ostetud kWh hind on tooltipis. Tooltip: hinnad koos kWh-ga
+  (Elering / inverter, osaliste mõõtmistega päevade arv), tarbitud kWh odavam/kallim %, kuu eurod. `LAST_LABEL` märgib
+  mõlema joone viimase väärtuse (kattuv jääb ära).
+- Mõlemal rühmal on nüüd alampealkiri ja lülitirida (vasakul „Ost võrgust“, kaardi vihje „võrguarvesti (Elering) ja
+  inverter“); laial kaardil on rühmade neli rida joondatud (`grid-template-rows: subgrid`, graafikud 280 px), nii et
+  plot-alad algavad ja lõpevad samal joonel. `?v=20261122e`: `css/graafikud.css`, `js/graafikud.js`.
+- **Kontroll:** Chrome 1280 ja 390 px, näidisandmed: sept/okt tarbitud kWh hind = eurod / päevade `loadKwh` summa (Python:
+  okt koos 23,65 / 20,33, ilma 18,45 / 15,86 s/kWh); aug (13 päeva puudu), juuli (inverterita) ja nov (pooleli) ilma tarbitud
+  punktita õige põhjusega; plot-alad 22…252 px mõlemal; lüliti joonistab uuesti. Skriptivigu pole.
+
 ## graafikud.html [1.7.2] — 2026-11-22 · profiil ja kuud kumbki oma real
 
 - Arvutis (≥ 1024 px) olid „Tarbimine kellaaja järgi“ ja „Maja üldelekter kuude kaupa“ kõrvuti; kuude kaart oli kahe
