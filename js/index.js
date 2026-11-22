@@ -9,7 +9,7 @@ const CONFIG = readPageConfig();
 
 /* Tehnilised konstandid — neid ei ole tavakasutuses vaja muuta. Mõlema lehe ühised (TIME_ZONE, API_URL,
    MINUTE_MS, HOUR_MS, DAY_MS) on failis js/common.js. */
-const APP_VERSION = '3.12.0';
+const APP_VERSION = '3.12.1';
 const API_TIMEOUT_MS = 20000;
 const PLANNER_DURATIONS = [60, 120, 180, 240, 300, 360]; // minutit
 const MAX_PERIOD_MINUTES = 60;   // pikim lubatud hinnaperiood
@@ -88,12 +88,13 @@ const MONTH_ELATIVE = ['jaanuarist', 'veebruarist', 'märtsist', 'aprillist', 'm
 const MONTH_ABBR = ['jaan', 'veebr', 'märts', 'apr', 'mai', 'juuni', 'juuli', 'aug', 'sept', 'okt', 'nov', 'dets'];
 const MONTH_ABBR_NARROW = ['jaan', 'veeb', 'märt', 'apr', 'mai', 'juun', 'juul', 'aug', 'sept', 'okt', 'nov', 'dets'];
 const numberFormat = {
-  // useGrouping 'always': ka 4-kohalised summad tuhandeeraldajaga (1 291,70 €), nagu d0
-  d2: new Intl.NumberFormat('et-EE', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: 'always' }),
-  d1: new Intl.NumberFormat('et-EE', { minimumFractionDigits: 1, maximumFractionDigits: 1, useGrouping: 'always' }),
-  d0: new Intl.NumberFormat('et-EE', { maximumFractionDigits: 0, useGrouping: 'always' }),
-  pct: new Intl.NumberFormat('et-EE', { maximumFractionDigits: 0 }),
-  max1: new Intl.NumberFormat('et-EE', { maximumFractionDigits: 1 }),
+  // useGrouping 'always': ka 4-kohalised summad tuhandeeraldajaga (1 291,70 €), nagu d0.
+  // unsignedZeroFormat: nulliks ümarduv arv ilma märgita („0,00“, mitte „−0,00“; common.js)
+  d2: unsignedZeroFormat({ minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: 'always' }),
+  d1: unsignedZeroFormat({ minimumFractionDigits: 1, maximumFractionDigits: 1, useGrouping: 'always' }),
+  d0: unsignedZeroFormat({ maximumFractionDigits: 0, useGrouping: 'always' }),
+  pct: unsignedZeroFormat({ maximumFractionDigits: 0 }),
+  max1: unsignedZeroFormat({ maximumFractionDigits: 1 }),
   signed1: new Intl.NumberFormat('et-EE', { minimumFractionDigits: 1, maximumFractionDigits: 1, signDisplay: 'exceptZero' })
 };
 
@@ -185,8 +186,8 @@ function normalizePrices(rawList) {
       if (gap > 0 && gap <= intervalMinutes) durationMinutes = gap;
     }
     const start = new Date(item.timestamp * 1000);
-    const spotExVatCentsKwh = item.rawEurMwh / 10; // EUR/MWh -> s/kWh
-    const spotIncVatCentsKwh = spotExVatCentsKwh * vat;
+    const spotExVatCentsKwh = denoise(item.rawEurMwh / 10); // EUR/MWh -> s/kWh (müravaba: 1,15 / 10 = 0,11499999999999999)
+    const spotIncVatCentsKwh = withVat(spotExVatCentsKwh, vat);
     const finalCalc = calculateFinalPrice(spotExVatCentsKwh, start);
     const finalCentsKwh = finalCalc.total;
     const kwh = item.kwh;
@@ -671,24 +672,11 @@ function upcomingTariffDetails(now) {
   ]);
 }
 
-/** Lõpphind s/kWh: börsihind ilma KM-ta + tasud (ilma KM-ta), KM lisatakse kogu summale üks kord. */
+/** Lõpphind s/kWh: börsihind ilma KM-ta + tasud (ilma KM-ta), KM lisatakse kogu summale üks kord (ühine valem
+ *  finalPriceParts, common.js; sama mis energia- ja graafikute lehel ning töövoos). */
 function calculateFinalPrice(spotExVatCentsKwh, now) {
-  const fees = feesAt(now);
   const tariff = getNetworkTariff(now);
-  const network = Number(tariff.tariff === 'oo' ? fees.vorgutasuOo : fees.vorgutasuPaev);
-  const components = {
-    spot: spotExVatCentsKwh,
-    marginaal: Number(fees.marginaal),
-    vorgutasu: network,
-    taastuvenergia: Number(fees.taastuvenergiaTasu),
-    varustuskindlus: Number(fees.varustuskindlusTasu) || 0,
-    aktsiis: Number(fees.aktsiis),
-    tasakaalustamine: Number(fees.tasakaalustamisTasu) || 0
-  };
-  const subtotal = components.spot + components.marginaal + components.vorgutasu + components.taastuvenergia + components.varustuskindlus
-    + components.aktsiis + components.tasakaalustamine;
-  const vat = subtotal * Number(fees.kaibemaks) / 100;
-  return { ...components, tariff: tariff.tariff, tariffReason: tariff.reason, subtotal, vat, total: subtotal + vat };
+  return { ...finalPriceParts(spotExVatCentsKwh, feesAt(now), tariff.tariff), tariff: tariff.tariff, tariffReason: tariff.reason };
 }
 
 /** Elektriauto laadimine: vajalik energia, kestus ja odavaim järjestikune laadimisaeg saadaolevate hindade sees. */
@@ -1472,7 +1460,7 @@ function renderCurrentPrice(d, a, rec) {
   const facts = a.facts.filter(f => !rec || f.key !== rec.usedKey);
   // Suur number = maja lõpphind (koos tasude ja KM-ga); hinnaklass, värv ja keskmise võrdlus jäävad börsihinna põhiseks
   // ja on sõnaga „börsihind“ märgitud. Tasud = ümardatud lõpphind − ümardatud börsihind, et rida klapiks numbriga.
-  const split = heroPriceSplit(a.price, finalPrice.total);
+  const split = priceSplitShown(a.price, finalPrice.total);
 
   // filter(Boolean): replaceChildren kirjutaks null-i tekstina „null“ (nt faktide loend on tühi, kui börsihind ≤ 0 on päeva
   // tipp ja soovitus ütleb odavaima akna ise)
@@ -1502,13 +1490,6 @@ function renderCurrentPrice(d, a, rec) {
   ].filter(Boolean));
 }
 
-/** Hero numbrid: börsihind ja lõpphind (mõlemad koos KM-ga, ümardatud) ning tasud nende vahena (summa klapib alati). */
-function heroPriceSplit(spotIncVat, total) {
-  const round2 = v => Math.round(v * 100) / 100;
-  const spot = round2(spotIncVat);
-  const sum = round2(total);
-  return { spot, total: sum, fees: round2(sum - spot) };
-}
 /** Keskmise võrdlus on börsihinna põhine: „Börsihind 5% üle tänase keskmise (24,95 s/kWh)“. */
 function spotComparisonText(text) {
   return text ? `Börsihind ${text.charAt(0).toLowerCase()}${text.slice(1)}` : text;
@@ -2290,10 +2271,11 @@ function renderFinalPrice(d) {
       ? 'Riigipühal kehtib öötariif kogu päeva.'
       : `Öötariif kehtib ${String(CONFIG.ootariif.algus).padStart(2, '0')}:00–${String(CONFIG.ootariif.lopp).padStart(2, '0')}:00${allDay.length ? ` ning ${allDay.join(' ja ')} kogu päeva` : ''}.`;
 
-  // Võrrand: börsihind + tasud = lõpphind, kõik koos KM-ga; tasud = ümardatud lõpphind − ümardatud börsihind, et summa klapiks
-  const round2 = v => Math.round(v * 100) / 100;
-  const spotIncVat = round2(calc.spot * vat);
-  const feesIncVat = round2(round2(calc.total) - spotIncVat);
+  // Võrrand: börsihind + tasud = lõpphind, kõik koos KM-ga; tasud = ümardatud lõpphind − ümardatud börsihind, et summa klapiks.
+  // Sama jaotus mis hero-s (priceSplitShown): suur number, „kokku“ ja koostise jalus näitavad split.total-i.
+  const split = priceSplitShown(withVat(calc.spot, vat), calc.total);
+  const spotIncVat = split.spot;
+  const feesIncVat = split.fees;
   // Märk („+“) on teise liikme sees: kitsal ekraanil murdub rida liikmete vahelt ja märk ei jää rea lõppu rippuma
   const eqTerm = (value, label, testid, op = null) => el('span', { class: 'final-eq__term' }, [
     op ? el('span', { class: 'final-eq__op', text: `${op} ` }) : null,
@@ -2304,7 +2286,7 @@ function renderFinalPrice(d) {
       eqTerm(spotIncVat, 'börsihind', 'final-spot'),
       eqTerm(Math.abs(feesIncVat), 'tasud ja maksud', 'final-fees', feesIncVat < 0 ? '−' : '+')
     ]),
-    el('p', { class: 'final-eq__note', text: `s/kWh, mõlemad koos KM ${vatPercent}% · kokku ${numberFormat.d2.format(calc.total)}` })
+    el('p', { class: 'final-eq__note', text: `s/kWh, mõlemad koos KM ${vatPercent}% · kokku ${numberFormat.d2.format(split.total)}` })
   ]);
 
   // Hinna koostis arvete kaupa (üks loend: komponendid s/kWh ilma KM-ta, osakaal lõpphinnast, kokkuvõte koos KM-ga)
@@ -2316,13 +2298,13 @@ function renderFinalPrice(d) {
     el('div', { class: 'final-grid' }, [
       el('div', { class: 'final-main' }, [
         el('div', { class: 'final-head-row' }, [
-          el('p', { class: 'big-number' }, [el('span', { 'data-testid': 'final-price', text: numberFormat.d2.format(calc.total) }), ' ', el('small', { text: 's/kWh' })]),
+          el('p', { class: 'big-number' }, [el('span', { 'data-testid': 'final-price', text: numberFormat.d2.format(split.total) }), ' ', el('small', { text: 's/kWh' })]),
           el('span', { class: 'badge', 'data-testid': 'final-tariff', text: `Kehtib ${tariffLabel}` })
         ]),
         equation,
         el('p', { class: 'hero-meta', text: `Arvutatud hetke börsihinnast (${formatTimeRange(d.current.start, d.current.end)}). ${tariffNote}` })
       ]),
-      sharesBlock(shareGroups, calc.total, vat, sharesValid)
+      sharesBlock(shareGroups, calc.total, vat, sharesValid, split.total)
     ])
   ];
   const fixedTable = fixedFeesTable(fees);
@@ -2367,8 +2349,9 @@ function sharePercents(values, total) {
 
 /** Hinna koostis: lintdiagramm (canvas, aria-hidden) ja rühmitatud loend, mis on legend ja tabel ühes. Veerud: nimi |
  *  s/kWh ilma KM-ta | osakaal lõpphinnast. Rühma real summa ka koos KM-ga (arvega võrdlemiseks), lõpus kokkuvõte koos KM-ga.
- *  valid = false (börsihind ≤ 0): lint ja protsendid jäävad ära, väärtused näidatakse. */
-function sharesBlock(groups, total, vat, valid = true) {
+ *  valid = false (börsihind ≤ 0): lint ja protsendid jäävad ära, väärtused näidatakse. totalShown = kuvatav lõpphind
+ *  (priceSplitShown; osakaalud arvutatakse täpsest total-ist). */
+function sharesBlock(groups, total, vat, valid = true, totalShown = total) {
   const items = groups.flatMap(g => g.items);
   const pct = valid ? sharePercents(items.map(i => i.value), total) : items.map(() => null);
   items.forEach((item, i) => { item.pct = pct[i]; });
@@ -2404,7 +2387,7 @@ function sharesBlock(groups, total, vat, valid = true) {
       el('ul', { class: 'shares-groups', 'data-testid': 'shares-list' }, groupEls),
       el('p', { class: 'shares-total', 'data-testid': 'final-total' }, [
         el('span', { text: 'Kokku koos KM' }),
-        el('span', { class: 'shares__value', text: num(total) }),
+        el('span', { class: 'shares__value', text: num(totalShown) }),
         el('span', { class: 'shares__pct', text: valid ? '100%' : '' })
       ])
     ]),

@@ -215,6 +215,15 @@ function formatTime(date) { return timeFormatter.format(date) + dstMark(date); }
 
 function formatPercentAbs(value) { return `${numberFormat.pct.format(Math.abs(value))}%`; }
 
+/** et-EE arvuvormindaja (lehtede numberFormat / NF), mis näitab nulliks ümarduvat arvu ilma märgita: Intl jätab negatiivse
+ *  nulli märgi alles ja börsihind −0,01…−0,04 €/MWh oleks „−0,00 s/kWh“ (−0,0012…−0,0050 koos KM-ga). Lävi on pool viimasest
+ *  kuvatud kohast (2 kohta: |v| < 0,005), nii et −0,005 on endiselt „−0,01“. Ainult format(); maximumFractionDigits on kohustuslik. */
+function unsignedZeroFormat(options) {
+  const fmt = new Intl.NumberFormat('et-EE', options);
+  const half = 0.5 / 10 ** options.maximumFractionDigits;
+  return Object.freeze({ format: v => fmt.format(typeof v === 'number' && Math.abs(v) < half ? 0 : v) });
+}
+
 /** Ümardab sajandikeni samamoodi nagu numberFormat.d2 (Intl): lühim kümnendkuju String(v) ja pool nullist eemale
  *  (−19,985 -> −19,99; 1,025 -> 1,03). Math.round(v × 100) / 100 annab ~7 % negatiivsete ja ~0,8 % positiivsete 2-kohaliste
  *  €/MWh hindade korral teise kuvatud arvu. Kasuta, kui kuvatud arvudega arvutatakse edasi ja tulemus peab klappima mujal
@@ -227,6 +236,16 @@ function roundCents(v) {
   const digits = `${frac}000`.slice(0, 3);
   const cents = Number(int) * 100 + Number(digits.slice(0, 2)) + (digits[2] >= '5' ? 1 : 0);
   return cents === 0 ? 0 : (v < 0 ? -cents : cents) / 100;
+}
+
+/** Kuvatav hinnavõrrand „börsihind + tasud = lõpphind“ (kõik s/kWh koos KM-ga): börsi- ja lõpphind ümardatakse roundCents-iga
+ *  (sama mis numberFormat.d2), tasud on nende vahe. Kõik kohad, mis näitavad sama hetke lõpphinda (elektriinfo hero ja
+ *  lõpphinna kaart, energialehe hero, graafikute KPI), kuvavad total-i ja võrrand klapib sendi täpsusega: börsihind
+ *  20,04 €/MWh päevatariifiga on kõikjal 2,48 + 7,60 = 10,08 (varem hero 10,07 ja 7,59, kaart 10,08). */
+function priceSplitShown(spotIncVat, total) {
+  const spot = roundCents(spotIncVat);
+  const sum = roundCents(total);
+  return { spot, total: sum, fees: Math.round((sum - spot) * 100) / 100 };
 }
 
 function formatDuration(minutes) {
@@ -268,6 +287,35 @@ function describeUntil(date, now) {
 /* ==========================================================================
    4. Hinnaandmed ja arvutused
    ========================================================================== */
+/** Eemaldab hinnaarvutuse ujukoma müra (12 tüvenumbrit; hinnad ja tasud on kuni 4 kümnendkohaga): 8,875 × 1,24 annab
+ *  11,004999999999999, kuigi täpne vastus on 11,005. Müraga arv ümardub kuvamisel valesti ja eri järjekorras arvutatud sama
+ *  hind (elektriinfo, energia- ja graafikute leht) võis erineda sendi võrra. Puhastatakse börsihind (ilma ja koos KM-ga) ning
+ *  lõpphinna vahesumma, KM ja lõpphind (finalPriceParts); kuvamisel ümardub siis kõikjal täpne kümnendarv. */
+function denoise(v) { return Number.isFinite(v) && v !== 0 ? Number(v.toPrecision(12)) : v; }
+
+/** Börsihind (s/kWh) koos KM-ga: vatFactor = 1 + KM / 100. */
+function withVat(spotExVat, vatFactor) { return denoise(spotExVat * vatFactor); }
+
+/** Lõpphinna valem (s/kWh) kõigile lehtedele (calculateFinalPrice, graafikute priceParts), sama mis töövoo
+ *  calc_final_cents_kwh: börsihind ilma KM-ta + marginaal + võrgutasu (tariff 'oo' | 'paev') + taastuvenergia- ja
+ *  varustuskindluse tasu + aktsiis + tasakaalustamisvõimsuse kulu; KM (fees.kaibemaks, %) lisatakse kogu summale üks kord.
+ *  Kuutasud pole sees. fees = hetkel kehtivad tasud (tariffsAt). Varem oli valem igal lehel eraldi ja eri järjekorras. */
+function finalPriceParts(spotExVat, fees, tariff) {
+  const components = {
+    spot: spotExVat,
+    marginaal: Number(fees.marginaal),
+    vorgutasu: Number(tariff === 'oo' ? fees.vorgutasuOo : fees.vorgutasuPaev),
+    taastuvenergia: Number(fees.taastuvenergiaTasu),
+    varustuskindlus: Number(fees.varustuskindlusTasu) || 0,
+    aktsiis: Number(fees.aktsiis),
+    tasakaalustamine: Number(fees.tasakaalustamisTasu) || 0
+  };
+  const subtotal = denoise(components.spot + components.marginaal + components.vorgutasu + components.taastuvenergia
+    + components.varustuskindlus + components.aktsiis + components.tasakaalustamine);
+  const vat = denoise(subtotal * Number(fees.kaibemaks) / 100);
+  return { ...components, subtotal, vat, total: denoise(subtotal + vat) };
+}
+
 /* „Võimalusel oota“ lõpphinna järgi: mõlema lehe soovituses sama reegel (elektriinfo hero, energialehe soovitus; README). */
 const WAIT_RULE = Object.freeze({
   nearMinutes: 60,  // lähiaja aken: odavaim 2 h aken, mis algab kuni 60 min pärast (nt tööpäeva öötariif kell 22) ...
@@ -443,7 +491,10 @@ function el(tag, attrs = {}, children = []) {
     if (value == null || value === false) continue;
     if (key === 'class') node.className = value;
     else if (key === 'text') node.textContent = value;
-    else if (key === 'style') node.style.cssText = value;   // CSSOM: CSP style-src 'self' keelab style-atribuudi, mitte CSSOM-i
+    // CSSOM: CSP style-src 'self' keelab style-atribuudi (setAttribute, HTML), mitte CSSOM-i – ka Firefoxis (Gecko kontrollib
+    // CSP-d ainult atribuudi parsimisel; web-platform-tests content-security-policy/style-src/style-src-inline-style-with-
+    // csstext.html). SVG-elemendi stiil enne DOM-i lisamist andis CSP-vea ainult Firefox < 80 (Mozilla bug 1494356).
+    else if (key === 'style') node.style.cssText = value;
     else node.setAttribute(key, value === true ? '' : value);
   }
   for (const child of [].concat(children)) {

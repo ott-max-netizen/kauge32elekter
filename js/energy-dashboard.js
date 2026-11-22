@@ -9,7 +9,7 @@ const CONFIG = readPageConfig();
 
 /* Tehnilised konstandid — neid ei ole tavakasutuses vaja muuta. Mõlema lehe ühised (TIME_ZONE, API_URL,
    MINUTE_MS, HOUR_MS, DAY_MS) on failis js/common.js. */
-const APP_VERSION = '2.13.1';
+const APP_VERSION = '2.13.2';
 const PRICE_TIMEOUT_MS = 20000;
 const SOLAR_TIMEOUT_MS = 30000;
 const TARIFF_TIMEOUT_MS = 5000;
@@ -128,11 +128,12 @@ const dateShortFormatter = new Intl.DateTimeFormat('et-EE', { timeZone: TIME_ZON
 const numberFormat = {
   // useGrouping 'always': ka 4-kohalised arvud tuhandeeraldajaga (4 866,8 kWh), nagu 5-kohalised ja elektriinfo lehel;
   // vaikimisi (min2) jäid 4-kohalised rühmitamata ja samal kaardil oli „4866,8“ kõrval „60 292,3“
-  d2: new Intl.NumberFormat('et-EE', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: 'always' }),
-  d1: new Intl.NumberFormat('et-EE', { minimumFractionDigits: 1, maximumFractionDigits: 1, useGrouping: 'always' }),
-  d0: new Intl.NumberFormat('et-EE', { maximumFractionDigits: 0, useGrouping: 'always' }),
-  pct: new Intl.NumberFormat('et-EE', { maximumFractionDigits: 0 }),
-  max1: new Intl.NumberFormat('et-EE', { maximumFractionDigits: 1 })
+  // unsignedZeroFormat: nulliks ümarduv arv ilma märgita („0,00“, mitte „−0,00“; common.js)
+  d2: unsignedZeroFormat({ minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: 'always' }),
+  d1: unsignedZeroFormat({ minimumFractionDigits: 1, maximumFractionDigits: 1, useGrouping: 'always' }),
+  d0: unsignedZeroFormat({ maximumFractionDigits: 0, useGrouping: 'always' }),
+  pct: unsignedZeroFormat({ maximumFractionDigits: 0 }),
+  max1: unsignedZeroFormat({ maximumFractionDigits: 1 })
 };
 
 /**
@@ -304,13 +305,13 @@ function normalizePrices(rawList) {
       if (gap > 0 && gap <= intervalMinutes) durationMinutes = gap;
     }
     const start = new Date(item.timestamp * 1000);
-    const spotExVatCentsKwh = item.rawEurMwh / 10; // EUR/MWh -> s/kWh
+    const spotExVatCentsKwh = denoise(item.rawEurMwh / 10); // EUR/MWh -> s/kWh (müravaba, nagu elektriinfo lehel)
     return {
       start,
       end: new Date(start.getTime() + durationMinutes * MINUTE_MS),
       timestamp: item.timestamp,
       spotExVatCentsKwh,
-      spotIncVatCentsKwh: spotExVatCentsKwh * vat,
+      spotIncVatCentsKwh: withVat(spotExVatCentsKwh, vat),
       durationMinutes
     };
   });
@@ -552,12 +553,10 @@ function getNetworkTariff(date) {
 
 /** Lõpphind s/kWh: börsihind ilma KM-ta + tasud, KM lisatakse kogu summale üks kord. */
 function calculateFinalPrice(spotExVatCentsKwh, date) {
-  const fees = feesAt(date);
   const tariff = getNetworkTariff(date);
-  const network = Number(tariff === 'oo' ? fees.vorgutasuOo : fees.vorgutasuPaev);
-  const subtotal = spotExVatCentsKwh + Number(fees.marginaal) + network + Number(fees.taastuvenergiaTasu)
-    + (Number(fees.varustuskindlusTasu) || 0) + Number(fees.aktsiis) + (Number(fees.tasakaalustamisTasu) || 0);
-  return { tariff, total: subtotal * (1 + Number(fees.kaibemaks) / 100) };
+  // Ühine valem (common.js finalPriceParts): sama arv mis elektriinfo ja graafikute lehel (varem subtotal × (1 + KM) andis
+  // 8 hinnal 120 000-st elektriinfo lehest sendi võrra erineva lõpphinna)
+  return { ...finalPriceParts(spotExVatCentsKwh, feesAt(date), tariff), tariff };
 }
 /** Perioodi lõpphind (s/kWh koos tasude ja KM-ga), arvutatakse perioodi kohta üks kord: tariifid loetakse enne esimest
  *  laadimist (init → loadTariffs) ja perioodid luuakse igal laadimisel uuesti (normalizePrices). */
@@ -2043,6 +2042,12 @@ function renderBattery(d) {
 }
 
 /* ---------- Täna kokku: aku, võrk, päike, tarbimine, maja energiahind ja kogusummad ---------- */
+/** „+1,5 kWh“ / „−0,8 kWh“; märk ainult siis, kui kuvatud (ühe komakohaga) arv pole null: laetus 18%→18% on „0,0 kWh“,
+ *  mitte „+0,0 kWh“. Võrdlus kuvatud tekstiga, nii et ümardus on sama mis formatKwh-l (Intl). */
+function signedKwh(kwh) {
+  const text = formatKwh(Math.abs(kwh));
+  return text === formatKwh(0) ? text : `${kwh > 0 ? '+' : '−'}${text}`;
+}
 /** „≈ 1,43 €“; signed: „≈ +1,43 €“ / „≈ −0,20 €“ (alla poole sendi ilma märgita). */
 function approxEur(value, signed = false) {
   if (value == null) return '—';
@@ -2432,7 +2437,7 @@ function renderResults(d) {
       ['Laetud', kwh(t.chargeKwh), approxEur(t.chargeEur)],
       ['Tühjendatud', kwh(t.dischargeKwh), approxEur(t.dischargeEur)],
       t.storedChangeKwh != null && t.storedChangeEur != null && (Math.abs(t.storedChangeKwh) >= 0.5 || Math.abs(t.storedChangeEur) >= 0.005)
-        ? [`Laetus ${numberFormat.pct.format(t.socStart)}→${formatPct(t.socEnd)}`, `${t.storedChangeKwh >= 0 ? '+' : '−'}${formatKwh(Math.abs(t.storedChangeKwh))}`, approxEur(t.storedChangeEur, true)]
+        ? [`Laetus ${numberFormat.pct.format(t.socStart)}→${formatPct(t.socEnd)}`, signedKwh(t.storedChangeKwh), approxEur(t.storedChangeEur, true)]
         : null
     ]),
     resultBlock('grid', 'Võrk', approxEur(t.netGridEur), 'netokulu: ost − müük', [
@@ -3319,10 +3324,7 @@ function renderPrice(d) {
 
   // Suur number = maja lõpphind (sama mis elektriinfo lehel); hinnaklass, värv ja keskmise võrdlus on börsihinna põhised
   // ja märgitud sõnaga „börsihind“. Tasud = ümardatud lõpphind − ümardatud börsihind (rida klapib numbriga).
-  const round2 = v => Math.round(v * 100) / 100;
-  const spotShown = round2(price);
-  const totalShown = round2(finalPrice.total);
-  const feesShown = round2(totalShown - spotShown);
+  const { spot: spotShown, total: totalShown, fees: feesShown } = priceSplitShown(price, finalPrice.total);
   const compare = d.todayAvg != null ? compareToDayAverage(price, d.todayAvg) : null;
   setChildren(host,
     el('div', { class: 'hero-top' }, [

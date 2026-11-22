@@ -337,6 +337,8 @@ const CONFIG = {
     muugitasu: 1.054,         // võrku müüdud elektri müügitasu, s/kWh KOOS KM-ga: Sunly marginaal võrku andmisel 8,5 €/MWh + KM 24% = 0,85 × 1,24
                               // (alates 01.11.2026; enne 1.05); müügihind = börsihind ilma KM-ta − müügitasu − tasakaalustamisTasuTootmine × (1 + KM)
     kaibemaks: 24,            // käibemaksu määr, % (kasutatakse kõikjal, ka börsihinna KM-ga näitamisel)
+                              // KM MUUTUMISEL: muuda see number muutuse päeval ja lisa vana määr töövoo KM_AJALUGU-sse.
+                              // Ära kirjuta KM-i allpool "hinnamuudatused" alla: lehed näitaksid siis börsihinda vana KM-ga.
     // Võrguteenuse fikseeritud tasud (Elektrilevi, madalpinge üle 63 A, pakett Võimsus VMA2), ILMA KM-ta. Need ei sõltu
     // kWh-st, seega s/kWh hinnas neid pole: elektriinfo lehe hinna koostise all on need kirjas eraldi. Kuu € arvestusse
     // (Maja üldelekter) lisatakse võrgu kuutasu + läbilaskevõime × peakaitse + kasutusvõimsus × kuu suurim kW (täis-kW-ni
@@ -354,6 +356,7 @@ const CONFIG = {
   // samaks. Kuni kuupäevani kehtivad ülal olevad väärtused, kuupäevast alates kirje omad – lehed ja töövoog
   // (hinnad.json, paevad.json) lähevad uutele hindadele üle ise, vanad hinnad jäävad varasemate perioodide arvestusse.
   // Pärast kuupäeva võib kirje ülal olevatesse väärtustesse tõsta (vana väärtus töövoo TASUDE_AJALUGU-sse), kuid see pole kohustuslik.
+  // Käibemaksu (kaibemaks) siia ei kirjuta: KM muutus tehakse ülal "kaibemaks" real (vt seal).
   hinnamuudatused: [
     {
       // Eleringi tasakaalustamisvõimsuse tasu 2,97 €/MWh alates 01.01.2027 (tarbimisele ja tootmisele)
@@ -443,7 +446,7 @@ const CONFIG = {
 };
 </script>
 <!-- Mõlema lehe ühine skriptikood (aeg, vormindamine, DOM-abi, graafikute ühisosa); peab laadima enne põhiskripti -->
-<script src="js/common.js?v=20261109j"></script>
-<script src="js/index.js?v=20261109j"></script>
+<script src="js/common.js?v=20261122a"></script>
+<script src="js/index.js?v=20261122a"></script>
 </body>
 </html>

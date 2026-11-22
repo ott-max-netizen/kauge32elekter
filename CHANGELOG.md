@@ -4,6 +4,51 @@ See fail kirjeldab rakenduse `index.html` versioonimuudatusi, arhitektuurilisi k
 
 ---
 
+## index.html [3.12.1], energy-dashboard.html [2.13.2], graafikud.html [1.6.1] — 2026-11-22 · hinnad klapivad sendi täpsusega
+
+Koodiülevaatuse (21.11.2026, `8d226d28`) punktid R1–R5; veebianalüütiku hinnangu järel laiendatud.
+
+- **Viga (R1):** sama hetke lõpphind oli samal lehel kahe eri arvuna. Börsihind 20,04 €/MWh tööpäeva päevatariifiga:
+  elektriinfo hero ja energialehe hero **10,07** („2,48 + 7,59“), lõpphinna kaart **10,08** ja selle võrrand
+  „2,48 + 7,59 · kokku 10,08“ ei liitunud; graafikute KPI „10,08 = 2,48 + 7,59“. Põhjused: hero ja võrrand ümardasid
+  `Math.round(v × 100) / 100`-ga (negatiivsel .xx5 hinnal teisiti kui Intl: börsihind −36,25 €/MWh = hero −4,49, mujal
+  −4,50), ülejäänud kohad Intl-iga; lisaks arvutas iga leht lõpphinda eri järjekorras ja ujukoma müra tõttu erinesid lehed
+  120 000 hinnast 8 (energia) ja 91 (graafikud) korral sendi võrra (nt 42,54 €/MWh öösel: kaart 11,00, hero 11,01).
+- **Viga (ülevaatus ei märganud):** börsihind −0,01…−0,04 €/MWh (päikesepäevadel sage) oli kõigil lehtedel
+  „Börsihind −0,00“ (hero, võrrand, päevaplaadid, graafikute KPI): Intl näitab negatiivse nulli märki.
+- **Lahendus (`js/common.js`):**
+  - `finalPriceParts(spotExVat, fees, tariff)` – üks lõpphinna valem kõigile lehtedele (elektriinfo ja energialehe
+    `calculateFinalPrice`, graafikute `priceParts`), sama mis töövoo `calc_final_cents_kwh`.
+  - `denoise` (12 tüvenumbrit) börsihinnale ilma ja koos KM-ga (`withVat`) ning vahesummale, KM-ile ja lõpphinnale: sama
+    hind on igal lehel sama arv ja ümardub nagu täpne kümnendarv (42,54 €/MWh öösel 8,875 × 1,24 = 11,005 → 11,01).
+  - `priceSplitShown(spotIncVat, total)` – võrrand „börsihind + tasud = lõpphind“: tasud = ümardatud lõpphind −
+    ümardatud börsihind. Kasutavad elektriinfo hero, lõpphinna kaart (suur number, „kokku“, koostise jalus), energialehe
+    hero ning graafikute KPI ja hinnagraafiku vihje. `heroPriceSplit` ja kohalikud `round2`-d on eemaldatud.
+  - `unsignedZeroFormat(options)` – lehtede arvuvormindajad (`numberFormat`, graafikutel `NF`) näitavad nulliks ümarduvat
+    arvu ilma märgita (2 kohta: |v| < 0,005 → „0,00“; −0,005 on endiselt „−0,01“). Ei muutnud `signed1`-i.
+- **R2 (energialeht):** aku rida „Laetus 18%→18%“ näitas „+0,0 kWh“; uus `signedKwh` paneb märgi ainult nullist erinevale
+  kuvatud arvule.
+- **R3 (KM muutus):** lehtedel on börsihind koos KM-ga `CONFIG.hinnad.kaibemaks`-i praeguse väärtusega, töövoog arvestab
+  KM-i kuupäeva järgi. `CONFIG`-i kommentaar (`kaibemaks` ja `hinnamuudatused`) ning README „Hinnad ja tariifid“: KM
+  muutub `kaibemaks` real muutuse päeval + vana määr `KM_AJALUGU`-sse, mitte `hinnamuudatused` alla. Kuupäevapõhine KM
+  kõigil lehtedel tehakse siis, kui muutus välja kuulutatakse (praegu 24 % tähtajatult).
+- **R4 (ei muudetud):** ülevaatuse väide, et Firefox blokeerib `node.style.cssText`-i `style-src 'self'` all, ei pea
+  paika: Gecko kontrollib CSP-d ainult `style`-atribuudi parsimisel; web-platform-tests
+  `style-src-inline-style-with-csstext.html` läbib Firefoxis. SVG-elemendi stiil enne DOM-i lisamist andis vea ainult
+  Firefox < 80 (Mozilla bug 1494356). Põhjendus on `el()` kommentaaris. Pakutud `setProperty`-tsükkel oleks läinud katki
+  `data:`-aadressi ja `!important`-iga.
+- **R5:** README versioonirida (energialeht oli v2.12.0) ja `graafikud.js` topeltkommentaar.
+- Arhitektuurireegel 7 (all) täiendatud. `?v=20261122a`: `js/common.js` kõigil lehtedel, `js/index.js`,
+  `js/energy-dashboard.js`, `js/graafikud.js`. Andmefailid, töövood ja CONFIG-i väärtused ei muutunud (ainult kommentaar).
+- **Kontroll:**
+  - Kõik hinnad −100…500 €/MWh 0,01 sammuga, päeva- ja öötariif, praegused ja 2027. aasta tasud (240 004 juhtu):
+    võrrand klapib alati, otse vormindatud lõpphind = võrrandi lõpphind ja = täpne kümnendvastus (BigInt), „−0,00“ ei
+    esine.
+  - Chrome, kõik kolm lehte (Lukk välja, hinnad 20,04 / 42,54 / −36,25 / −0,02 / 87,31 / 312,77 €/MWh): hero,
+    lõpphinna kaart, energialehe hero ja graafikute KPI näitavad sama arvu; 87,31 ja 312,77 €/MWh kuva ei muutunud.
+    Skriptivigu pole; parooliga lehtedel avaneb parooliaken vigadeta. CONFIG loeb nii lehe parser kui ka töövoo
+    `parse_config`.
+
 ## energy-dashboard.html [2.13.1] — 2026-11-21 · laovaru väljad päevakirjetes
 
 - **Viga 2.13.0-s:** `normalizeDays` jättis `paevad.json` kirjetest alles ainult loetletud arvulised väljad, nii et
@@ -1456,7 +1501,7 @@ Versioon `2.0.0` (defineeritud konstandina `APP_VERSION = '2.0.0'` failis `index
 4. **Turvaline DOM:** Kasuta elementide loomiseks ainult `el()` / `svgEl()` ja `textContent`-i, mitte `innerHTML`-i. Uue välise hosti lisamisel uuenda `Content-Security-Policy` meta-silti.
 5. **Ajavöönd:** Kõik kuupäevade ja päeva alguste arvutused käivad läbi `getTallinnDateParts` / `getTallinnDayStart` (`Europe/Tallinn`).
 6. **Mõõtmised vs hinnangud:** Näita mõõtmisi (Estfeed, inverter) ainult mõõtmistena. Tulevikku ei summeerita „tänase“ koguse sisse. Mudel või prognoos peab olema selgelt märgistatud, mitte „(inverter)“. Mõõtmise allikas on siltides väiketähega: „(inverter)“, „ost võrgust (võrguarvesti)“ (legend, tooltip, inspektor), Estfeedi plaadil „võrguarvesti (Estfeed) · kuni HH:MM · arve alus“; täisnimi „inverter (Solarman)“ ainult kaardi vihjes ja jaluses. Müüja nimi („Enefit“) ei ole andmeallika silt. Iga „täna“ kogusega käib allikas ja lõikeaeg („kuni HH:MM“); eri allikate arve (Estfeed ja inverter) ei liideta. Solarmani päevakoguseid (`data.day`) ei kasutata, sest need on ~10× liiga väikesed: kogused arvutatakse 15-min mõõtmistest.
-7. **Hinnad:** Tariif ja KM rakenduvad nii lehtedel (`calculateFinalPrice`) kui ka töövoos (`calc_final_cents_kwh`); hoia need samad. Odavaima aja otsing kasutab hinda koos tasudega (`avgFinal`).
+7. **Hinnad:** Tariif ja KM rakenduvad nii lehtedel (`calculateFinalPrice` → ühine `finalPriceParts` failis `js/common.js`) kui ka töövoos (`calc_final_cents_kwh`); hoia need samad ja ära kirjuta valemit lehel uuesti. Sama hetke börsi- ja lõpphinda koos tasudega näitav võrrand tuleb `priceSplitShown`-ist (tasud = ümardatud lõpphind − ümardatud börsihind); arvuvormindajad on `unsignedZeroFormat` (ei näita „−0,00“). Odavaima aja otsing kasutab hinda koos tasudega (`avgFinal`).
 8. **Päringute sagedus:** Kasutaja algatatud värskendus arvestab ooteaega ja nupp on laadimise ajal keelatud.
 9. **Navigatsioon:** Mõlemal lehel peab olema link teisele lehele.
 10. **Ekraanilugeja teated:** Live-region (`aria-live`) uueneb ainult klaviatuuri ja fookuse rajalt (graafikul püsiv peidetud `#chart-announcer`). Hiire ja sõrme liigutus uuendab ainult nähtavat inspektorit, muidu tekiks iga liigutusega teadete tulv.

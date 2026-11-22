@@ -509,6 +509,15 @@ Solarmani välja nimed ja märgid on failis muutmata; lehed tõlgendavad neid ni
   (`tasakaalustamisTasuTootmine`): müügihind = börsihind ilma KM-ta − müügitasu − tasakaalustamisTasuTootmine × (1 + KM).
   Energialehe müügihinna faktis on börsihind ilma KM-ta sama arv mis elektriinfo lehe hinna koostises (ümardus nagu
   kuvamisel, `roundCents`) ja tasud = börsihind − müügihind.
+- Valem on kõigil kolmel lehel üks funktsioon `finalPriceParts` (`js/common.js`; lehtede `calculateFinalPrice` ja graafikute
+  `priceParts` kutsuvad seda) ja sama mis töövoo `calc_final_cents_kwh`. Börsihind ja lõpphind puhastatakse ujukoma mürast
+  (`denoise`, 12 tüvenumbrit), nii et sama hind on igal lehel sama arv ja ümardub nagu täpne kümnendarv. Võrrand
+  „börsihind + tasud = lõpphind“ (elektriinfo hero ja lõpphinna kaart, energialehe hero, graafikute KPI ja vihje) tuleb
+  `priceSplitShown`-ist: tasud = ümardatud lõpphind − ümardatud börsihind, nii et rida klapib alati suure numbriga.
+  Lehtede arvuvormindajad (`unsignedZeroFormat`) näitavad nulliks ümarduvat arvu ilma märgita („0,00“, mitte „−0,00“).
+- **Käibemaksu muutus:** muuda `CONFIG.hinnad.kaibemaks` muutuse päeval ja lisa vana määr töövoo `KM_AJALUGU`-sse. KM-i ei
+  kirjutata `hinnamuudatused` alla: töövoog arvestaks seda, kuid lehed näitavad börsihinda koos KM-ga `kaibemaks`-i
+  praeguse väärtusega (kuupäevapõhine KM kõigil lehtedel tehakse siis, kui muutus välja kuulutatakse).
   Aku laadimise ja tühjendamise topeltkoguse vabastus (Eleringi juhend, hübriidlahendus) eeldab salvesti eraldi
   mõõtepunkti, seetõttu arvestatakse tasu mõlemas suunas täismahus. Öötariif kehtib tööpäeviti 22–07 ning laupäeval, pühapäeval ja **riigipühadel** kogu
   ööpäeva (`CONFIG.ootariif.riigipuhadOnOo`, Elektrilevi hinnakiri).
@@ -1022,6 +1031,6 @@ tegemisega.
 
 ## Versioon ja muudatuste ajalugu
 
-- Praegune versioon: **v3.12.0** (`APP_VERSION` failis `js/index.js`), energialehel **v2.12.0**
-  (`js/energy-dashboard.js`), graafikute lehel **v1.6.0** (`js/graafikud.js`).
+- Praegune versioon: **v3.12.1** (`APP_VERSION` failis `js/index.js`), energialehel **v2.13.2**
+  (`js/energy-dashboard.js`), graafikute lehel **v1.6.1** (`js/graafikud.js`).
 - Üksikasjalik ülevaade UI/UX muudatustest, komponentide klassidest ja arhitektuurireeglitest (sh juhised Claude AI-le) asub failis [CHANGELOG.md](CHANGELOG.md).

@@ -7,7 +7,7 @@
 
 const CONFIG = readPageConfig();
 
-const APP_VERSION = '1.6.0';
+const APP_VERSION = '1.6.1';
 const BATTERY_IDLE_KW = 0.2;     // väiksem aku võimsus = „ootel“ (hoidevool), nagu energialehel
 const TARIFF_KEYS = ['marginaal', 'vorgutasuPaev', 'vorgutasuOo', 'taastuvenergiaTasu', 'aktsiis', 'kaibemaks', 'algus', 'lopp'];
 const MAX_PERIOD_MINUTES = 60;   // common.js nõue (pikim hinnaperiood)
@@ -54,11 +54,12 @@ function dayKey(date) {
   const p = getTallinnDateParts(date);
   return `${p.year}-${String(p.month).padStart(2, '0')}-${String(p.day).padStart(2, '0')}`;
 }
+// unsignedZeroFormat: nulliks ümarduv arv ilma märgita („0,00“, mitte „−0,00“; common.js)
 const NF = {
-  d0: new Intl.NumberFormat('et-EE', { maximumFractionDigits: 0, useGrouping: 'always' }),
-  d1: new Intl.NumberFormat('et-EE', { minimumFractionDigits: 1, maximumFractionDigits: 1, useGrouping: 'always' }),
-  d2: new Intl.NumberFormat('et-EE', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: 'always' }),
-  pct: new Intl.NumberFormat('et-EE', { maximumFractionDigits: 0 })
+  d0: unsignedZeroFormat({ maximumFractionDigits: 0, useGrouping: 'always' }),
+  d1: unsignedZeroFormat({ minimumFractionDigits: 1, maximumFractionDigits: 1, useGrouping: 'always' }),
+  d2: unsignedZeroFormat({ minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: 'always' }),
+  pct: unsignedZeroFormat({ maximumFractionDigits: 0 })
 };
 const monthShort = new Intl.DateTimeFormat('et-EE', { timeZone: 'UTC', month: 'short' });
 const dateTimeShort = new Intl.DateTimeFormat('et-EE', { timeZone: TIME_ZONE, day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
@@ -86,7 +87,7 @@ function readPrices(json) {
     marginaal: t.marginaal, vorgutasuPaev: t.vorgutasuPaev, vorgutasuOo: t.vorgutasuOo, taastuvenergiaTasu: t.taastuvenergiaTasu,
     aktsiis: t.aktsiis, kaibemaks: t.kaibemaks, algus: t.algus, lopp: t.lopp,
     tasakaalustamisTasu: num(t.tasakaalustamisTasu) ?? 0,
-    varustuskindlusTasu: num(t.varustuskindlusTasu) ?? 0,  // vanemas failis on see taastuvenergiaTasu sees   // puudub vanemas hinnad.json-is (enne töövoo CALC_VERSION 5) -> 0
+    varustuskindlusTasu: num(t.varustuskindlusTasu) ?? 0,  // puudub vanemas hinnad.json-is (enne töövoo CALC_VERSION 5; siis oli see taastuvenergiaTasu sees) -> 0
     nadalavahetusOnOo: t.nadalavahetusOnOo !== false, riigipuhadOnOo: t.riigipuhadOnOo !== false
   } : null;
   state.tariffChanges = state.tariffs ? normalizeTariffChanges(json.meta.tariffChanges, state.tariffs) : [];
@@ -99,7 +100,7 @@ function readPrices(json) {
     const t0 = r.timestamp * 1000;
     const next = rows[i + 1] ? rows[i + 1].timestamp * 1000 : null;
     const step = next && next - t0 <= HOUR_MS ? next - t0 : 15 * MINUTE_MS;   // puuduv periood ei pikenda eelmist
-    return { t: t0, end: t0 + step, spot: r.price / 10 };
+    return { t: t0, end: t0 + step, spot: denoise(r.price / 10) };   // €/MWh -> s/kWh (müravaba, nagu teistel lehtedel)
   });
   state.months = (Array.isArray(json.data.majaElekter) ? json.data.majaElekter : [])
     .filter(m => m && typeof m.kuu === 'string' && /^\d{4}-\d{2}$/.test(m.kuu) && !m.noData && num(m.kwh) != null);
@@ -201,14 +202,15 @@ function networkTariff(date) {
   return (start > end ? (hour >= start || hour < end) : (hour >= start && hour < end)) ? 'oo' : 'paev';
 }
 
-/** Perioodi hind s/kWh koos KM-ga (index.html calculateFinalPrice): börsihind + marginaal + võrgutasu + taastuvenergia-
- *  ja varustuskindluse tasu + aktsiis + tasakaalustamisvõimsuse kulu, KM kogu summale; kuutasud pole sees. Tasudeta (vana fail) ainult börsihind KM-ga. */
+/** Perioodi hind s/kWh koos KM-ga: lõpphind ühise valemiga (common.js finalPriceParts, sama mis elektriinfo ja energialehel):
+ *  börsihind + marginaal + võrgutasu + taastuvenergia- ja varustuskindluse tasu + aktsiis + tasakaalustamisvõimsuse kulu, KM
+ *  kogu summale; kuutasud pole sees. fees = lõpphind − börsihind koos KM-ga. Tasudeta (vana fail) ainult börsihind KM-ga. */
 function priceParts(spot, date) {
-  if (!state.tariffs) return { spot: spot * state.vat, fees: 0, total: spot * state.vat, tariff: null };
-  const f = tariffsAt(state.tariffs, state.tariffChanges, date);
+  const spotIncVat = withVat(spot, state.vat);
+  if (!state.tariffs) return { spot: spotIncVat, fees: 0, total: spotIncVat, tariff: null };
   const tariff = networkTariff(date);
-  const fees = f.marginaal + (tariff === 'oo' ? f.vorgutasuOo : f.vorgutasuPaev) + f.taastuvenergiaTasu + f.varustuskindlusTasu + f.aktsiis + f.tasakaalustamisTasu;
-  return { spot: spot * state.vat, fees: fees * state.vat, total: (spot + fees) * state.vat, tariff };
+  const total = finalPriceParts(spot, tariffsAt(state.tariffs, state.tariffChanges, date), tariff).total;
+  return { spot: spotIncVat, fees: total - spotIncVat, total, tariff };
 }
 
 /** Ühe Tallinna päeva hinnaperioodid: 15 min (nagu andmetes) või tunni kaupa (kestusega kaalutud keskmine). */
@@ -525,9 +527,11 @@ function renderKpis() {
   const nowMs = Date.now();
   const row = state.prices.find(p => p.t <= nowMs && nowMs < p.end);
   const current = row ? priceParts(row.spot, new Date(row.t)) : null;
-  countUp(byId('kpi-price'), current ? current.total : null, v => NF.d2.format(v), 's/kWh');
+  // Kuvatav võrrand nagu elektriinfo lehel (priceSplitShown): börsihind + tasud = suur number sendi täpsusega
+  const split = current ? priceSplitShown(current.spot, current.total) : null;
+  countUp(byId('kpi-price'), split ? split.total : null, v => NF.d2.format(v), 's/kWh');
   byId('kpi-price-sub').textContent = current
-    ? (state.tariffs ? `börsihind ${NF.d2.format(current.spot)} + tasud ${NF.d2.format(current.fees)}` : 'börsihind KM-ga (tasusid ei leitud)')
+    ? (state.tariffs ? `börsihind ${NF.d2.format(split.spot)} + tasud ${NF.d2.format(split.fees)}` : 'börsihind KM-ga (tasusid ei leitud)')
     : (state.errors.prices || '');
 
   const recs = lastDays(CONFIG.kokkuvotePaevi).map(d => d.rec).filter(Boolean);
@@ -628,7 +632,8 @@ function drawPrice() {
             label: item => {
               const i = items[item.dataIndex];
               if (!state.tariffs) return ` Börsihind KM-ga ${fmtCents(i.total)}`;
-              return [` Kokku ${fmtCents(i.total)}`, ` börsihind ${fmtCents(i.spot)}`, ` tasud ${fmtCents(i.fees)} (${i.tariff === 'oo' ? 'öötariif' : 'päevatariif'})`];
+              const s = priceSplitShown(i.spot, i.total);   // börsihind + tasud = kokku sendi täpsusega (nagu KPI)
+              return [` Kokku ${fmtCents(s.total)}`, ` börsihind ${fmtCents(s.spot)}`, ` tasud ${fmtCents(s.fees)} (${i.tariff === 'oo' ? 'öötariif' : 'päevatariif'})`];
             },
             footer: list => {
               const v = items[list[0].dataIndex].total;
